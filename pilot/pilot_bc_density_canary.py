@@ -5,8 +5,12 @@ B — плотность нарушения: для каждой протека�
 моментов сетки, на которых дифференциальная проверка расходится.
 Сетка: месячные моменты 2017-01-01 .. 2018-08-01 (все, где хватает сущностей).
 
-C — канареечный прогон: третий запуск на копии базы, где у строк с временем > t
-возмущены числовые не-ключевые колонки (ключи и все timestamp-колонки нетронуты).
+C — канареечный прогон: третий запуск на копии базы, где возмущено всё, что
+усечение делает недоступным, типовым образом по типам данных (harness-v1,
+oracle.perturb_canary): числа и даты будущих строк — сдвиг, категории/строки —
+sentinel, self-availability каналы (дата доставки и т.п.) — по своему значению
+независимо от времени строки; ключи и timestamp-колонки, определяющие admission
+строки, нетронуты.
   уровень 1 (witness): full vs truncated — точный вердикт;
   уровень 2 (canary):  full vs canary   — «программа прочла будущее», даже если
                         усечение выхода не изменило.
@@ -23,7 +27,7 @@ import pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "prestudy_code"))
 
-from oracle import truncate, frames_equal, TIME_COLS  # noqa: E402
+from oracle import truncate, frames_equal, TIME_COLS, perturb_canary  # noqa: E402
 import p3_baseline_run as H  # noqa: E402  (грузит Olist, даёт labels/DB/_load_program/_call_with_timeout)
 
 GRID = [f"{y}-{m:02d}-01" for y in (2017, 2018) for m in range(1, 13)
@@ -32,35 +36,12 @@ N_ENT = 15
 PER_PROGRAM_BUDGET_S = 360
 MAX_LEAK_PROGRAMS = 20   # по 10 на модель, детерминированно по порядку в корпусе
 N_CLEAN_CONTROL = 3      # негативный контроль из корпуса
-CANARY_SHIFT = 7919.0    # большое простое: сдвиг заметен любой агрегацией
 
-KEY_HINTS = ("_id", "id", "zip", "prefix", "order_item")  # не трогаем идентификаторы
-
-
-def perturb_future(db, seed_time, time_cols=TIME_COLS):
-    """Копия базы: строки с временем > t получают возмущённые числовые значения.
-    Ключи (объектные и *_id) и timestamp-колонки не трогаем."""
-    seed_time = pd.Timestamp(seed_time)
-    out = {}
-    for name, df in db.items():
-        tc = time_cols.get(name)
-        if tc is None or tc not in df.columns:
-            out[name] = df
-            continue
-        fut = df[tc] > seed_time
-        if not fut.any():
-            out[name] = df
-            continue
-        df2 = df.copy()
-        for c in df2.columns:
-            if c == tc or pd.api.types.is_datetime64_any_dtype(df2[c]):
-                continue
-            if any(h in c.lower() for h in KEY_HINTS):
-                continue
-            if pd.api.types.is_numeric_dtype(df2[c]):
-                df2.loc[fut, c] = df2.loc[fut, c] + CANARY_SHIFT
-        out[name] = df2
-    return out
+# Типовое возмущение по типам данных (harness-v1) теперь живёт в oracle.py как
+# perturb_canary — общий модуль, а не локальная копия пилота: тег фиксирует
+# версию оттуда. См. oracle.py за разбором трёх категорий каналов
+# (обычные / self-availability / gatekeeper) и proposals/fse2027_proposal.md,
+# шапка + §11, за определением.
 
 
 def run_three(prog, seed):
@@ -74,7 +55,7 @@ def run_three(prog, seed):
     try:
         full = H._call_with_timeout(prog, H.DB, ents, seed_t, timeout=20)
         trunc = H._call_with_timeout(prog, truncate(H.DB, seed_t), ents, seed_t, timeout=20)
-        can = H._call_with_timeout(prog, perturb_future(H.DB, seed_t), ents, seed_t, timeout=20)
+        can = H._call_with_timeout(prog, perturb_canary(H.DB, seed_t), ents, seed_t, timeout=20)
     except H._Timeout:
         return {"status": "timeout"}
     except Exception as e:
