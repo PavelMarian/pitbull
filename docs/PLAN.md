@@ -46,7 +46,7 @@ negative`, вывод. Отрицательный или нейтральный 
 ## H — Харнесс (общий с ICLR-командой, §11)
 
 ### H1 — Тег `harness-v1`: типовое canary-возмущение + допуск
-- status: in_review
+- status: done by agent; human review required
 - owner: —
 - deps: —
 - source: proposal §11 (обязательство к 6 сентября), §2 (пилотный canary был
@@ -68,7 +68,7 @@ negative`, вывод. Отрицательный или нейтральный 
 ## A — Ярус A (рабочий срок до 14 сентября, отсечение долгов 21-го)
 
 ### A1 — Разметка механизма утечки всех 61 (63) программ
-- status: in_review
+- status: done by agent; human review required
 - owner: —
 - deps: —
 - source: proposal §3 (ярус A), §9 (первый пункт по порядку — стратификация
