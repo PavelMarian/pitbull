@@ -204,6 +204,10 @@ def perturb_canary(db: dict, seed_time, time_cols=TIME_COLS,
                 df2.loc[future_mask, c] = date_target
             elif pd.api.types.is_numeric_dtype(df2[c]):
                 df2.loc[future_mask, c] = df2.loc[future_mask, c] + num_shift
+            elif isinstance(df2[c].dtype, pd.CategoricalDtype):
+                if cat_sentinel not in df2[c].cat.categories:
+                    df2[c] = df2[c].cat.add_categories([cat_sentinel])
+                df2.loc[future_mask, c] = cat_sentinel
             else:
                 df2.loc[future_mask, c] = cat_sentinel
         out[name] = df2
