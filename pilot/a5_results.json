@@ -1,0 +1,248 @@
+{
+  "experiment": "A5 RQ3 density + RelBench baselines + machine time",
+  "status": "complete; in_review",
+  "olist": {
+    "programs": {
+      "leak": 62,
+      "clean": 30,
+      "total": 92
+    },
+    "scheduled_checks": 1840,
+    "check_status": {
+      "ran": 1731,
+      "timeout": 96,
+      "error": 13
+    },
+    "full_20_programs": {
+      "leak": 54,
+      "clean": 23
+    },
+    "curves": {
+      "witness": {
+        "conditional_on_execution": [
+          {
+            "k": 1,
+            "mean_program_detection": 0.9550650820599886
+          },
+          {
+            "k": 2,
+            "mean_program_detection": 1.0
+          },
+          {
+            "k": 3,
+            "mean_program_detection": 1.0
+          },
+          {
+            "k": 4,
+            "mean_program_detection": 1.0
+          },
+          {
+            "k": 5,
+            "mean_program_detection": 1.0
+          }
+        ],
+        "scheduled_conservative": [
+          {
+            "k": 1,
+            "mean_program_detection": 0.9129032258064516
+          },
+          {
+            "k": 2,
+            "mean_program_detection": 0.9764006791171477
+          },
+          {
+            "k": 3,
+            "mean_program_detection": 0.9860780984719864
+          },
+          {
+            "k": 4,
+            "mean_program_detection": 0.991307966310463
+          },
+          {
+            "k": 5,
+            "mean_program_detection": 0.9943625370351875
+          }
+        ],
+        "complete_grid_only": [
+          {
+            "k": 1,
+            "mean_program_detection": 0.9527777777777777
+          },
+          {
+            "k": 2,
+            "mean_program_detection": 1.0
+          },
+          {
+            "k": 3,
+            "mean_program_detection": 1.0
+          },
+          {
+            "k": 4,
+            "mean_program_detection": 1.0
+          },
+          {
+            "k": 5,
+            "mean_program_detection": 1.0
+          }
+        ]
+      },
+      "canary": {
+        "conditional_on_execution": [
+          {
+            "k": 1,
+            "mean_program_detection": 0.9701188455008489
+          },
+          {
+            "k": 2,
+            "mean_program_detection": 1.0
+          },
+          {
+            "k": 3,
+            "mean_program_detection": 1.0
+          },
+          {
+            "k": 4,
+            "mean_program_detection": 1.0
+          },
+          {
+            "k": 5,
+            "mean_program_detection": 1.0
+          }
+        ],
+        "scheduled_conservative": [
+          {
+            "k": 1,
+            "mean_program_detection": 0.9266129032258064
+          },
+          {
+            "k": 2,
+            "mean_program_detection": 0.9779286926994906
+          },
+          {
+            "k": 3,
+            "mean_program_detection": 0.9871109224674589
+          },
+          {
+            "k": 4,
+            "mean_program_detection": 0.9918938713006425
+          },
+          {
+            "k": 5,
+            "mean_program_detection": 0.9946538250274642
+          }
+        ],
+        "complete_grid_only": [
+          {
+            "k": 1,
+            "mean_program_detection": 0.9666666666666666
+          },
+          {
+            "k": 2,
+            "mean_program_detection": 1.0
+          },
+          {
+            "k": 3,
+            "mean_program_detection": 1.0
+          },
+          {
+            "k": 4,
+            "mean_program_detection": 1.0
+          },
+          {
+            "k": 5,
+            "mean_program_detection": 1.0
+          }
+        ]
+      }
+    },
+    "clean_program_false_positive": {
+      "witness": {
+        "all_attempted_programs": {
+          "programs_fired": 0,
+          "programs": 30,
+          "rate": 0.0,
+          "rule_of_three_upper95": 0.1,
+          "exact_zero_upper95": 0.09503385285530419
+        },
+        "complete_grid_only": {
+          "programs_fired": 0,
+          "programs": 23,
+          "rate": 0.0,
+          "rule_of_three_upper95": 0.13043478260869565,
+          "exact_zero_upper95": 0.12212338890652308
+        }
+      },
+      "canary": {
+        "all_attempted_programs": {
+          "programs_fired": 4,
+          "programs": 30,
+          "rate": 0.13333333333333333,
+          "rule_of_three_upper95": null,
+          "exact_zero_upper95": null
+        },
+        "complete_grid_only": {
+          "programs_fired": 3,
+          "programs": 23,
+          "rate": 0.13043478260869565,
+          "rule_of_three_upper95": null,
+          "exact_zero_upper95": null
+        }
+      }
+    },
+    "recorded_program_wall_seconds_lower_bound": 12162.038
+  },
+  "rel_event": {
+    "rows": 9,
+    "phases": {
+      "determinism": {
+        "DETERMINISTIC": 3
+      },
+      "negative_control": {
+        "CLEAN": 3
+      },
+      "main": {
+        "LEAK": 3
+      }
+    },
+    "evaluated_seeds": [
+      "2012-06-20 00:00:00",
+      "2012-07-11 00:00:00"
+    ],
+    "official_test_label_timestamps": {
+      "user-attendance": [
+        "2012-11-29 00:00:00"
+      ],
+      "user-ignore": [
+        "2012-11-29 00:00:00"
+      ],
+      "user-repeat": [
+        "2012-11-29 00:00:00"
+      ]
+    },
+    "is_exact_benchmark_test_timestamp": false,
+    "seconds_total": 5741.8,
+    "seconds_main": 1248.6
+  },
+  "rel_f1": {
+    "rows": 21,
+    "phases": {
+      "determinism": {
+        "DETERMINISTIC": 9
+      },
+      "negative_control": {
+        "CLEAN": 3
+      },
+      "main": {
+        "LEAK": 9
+      }
+    },
+    "seconds_total": 6.9,
+    "seconds_main": 3.0
+  },
+  "notes": [
+    "Olist timeout/error checks are misses in scheduled_conservative curves.",
+    "Program-level FP is reported both for all attempted controls and 20/20 complete grids.",
+    "Recorded Olist program time is a lower bound because resumed partial attempts were overwritten.",
+    "The rel-event run used informative pre-test label moments, not the official 2012-11-29 test timestamp."
+  ]
+}

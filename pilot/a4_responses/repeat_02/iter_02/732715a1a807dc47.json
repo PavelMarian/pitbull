@@ -1,0 +1,54 @@
+{
+ "program_uid": "732715a1a807dc47",
+ "program": "deepseek-v4-flash-0731#58",
+ "repeat": 2,
+ "iteration": 2,
+ "repair_model": "z-ai/glm-5.3-flash",
+ "source_code_sha256": "584f4e15739485f5c0b9ea735ae4059432a3c8f3d044487fcdccadcf96e02f95",
+ "prompt_sha256": "910c6a58d95befd20ab3a29c43c5b6de35adf84a250864816c7b6eaa72cc2ba8",
+ "attempts": [
+  {
+   "attempt": 1,
+   "status": "ok",
+   "finish_reason": "stop",
+   "raw_response": "```python\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    orders = db['orders']\n    order_items = db['order_items']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    seed_time = pd.Timestamp(seed_time)\n\n    # --- Фильтруем каждую таблицу только по информации, доступной на seed_time ---\n    orders_hist = orders[orders['order_purchase_timestamp'] <= seed_time]\n\n    items = order_items[order_items['ts'] <= seed_time]\n    items = items[items['product_id'].isin(entity_ids)]\n\n    merged = items.merge(\n        orders_hist[['order_id', 'customer_id', 'order_purchase_timestamp',\n                     'order_delivered_customer_date']],\n        on='order_id',\n        how='left'\n    )\n\n    # Защита от утечки: дата доставки видна только если доставка уже произошла\n    merged.loc[merged['order_delivered_customer_date'] > seed_time,\n               'order_delivered_customer_date'] = pd.NaT\n\n    reviews_hist = reviews[reviews['review_creation_date'] <= seed_time]\n    payments_hist = payments[payments['ts'] <= seed_time]\n\n    features = pd.DataFrame(index=pd.Index(entity_ids, name='product_id'))\n\n    merged['days_since_purchase'] = (seed_time - merged['order_purchase_timestamp']).dt.days\n\n    g = merged.groupby('product_id')\n\n    features['num_orders'] = g['order_id'].nunique()\n    features['num_items'] = g.size()\n    features['total_price'] = g['price'].sum()\n    features['total_freight'] = g['freight_value'].sum()\n    features['avg_price'] = g['price'].mean()\n    features['max_price'] = g['price'].max()\n    features['num_customers'] = g['customer_id'].nunique()\n    features['num_sellers'] = g['seller_id'].nunique()\n\n    features['days_since_last_order'] = g['days_since_purchase'].min()\n    features['days_since_first_order'] = g['days_since_purchase'].max()\n    features['avg_days_since'] = g['days_since_purchase'].mean()\n\n    for window in [30, 60, 90]:\n        recent = merged[merged['days_since_purchase'] <= window]\n        rg = recent.groupby('product_id')\n        features[f'num_orders_{window}d'] = rg['order_id'].nunique()\n        features[f'total_price_{window}d'] = rg['price'].sum()\n\n    recent30 = merged[merged['days_since_purchase'] <= 30].groupby('product_id')['order_id'].nunique()\n    prev30 = merged[(merged['days_since_purchase'] > 30) & (merged['days_since_purchase'] <= 60)].groupby('product_id')['order_id'].nunique()\n    features['orders_ratio_30_60'] = recent30 / (prev30 + 1)\n\n    # Время доставки: только по заказам, доставленным до seed_time\n    delivered = merged.dropna(subset=['order_delivered_customer_date'])\n    if len(delivered) > 0:\n        delivery_time = (delivered['order_delivered_customer_date'] - delivered['order_purchase_timestamp']).dt.days\n        delivered = delivered.assign(delivery_time=delivery_time)\n        features['avg_delivery_days'] = delivered.groupby('product_id')['delivery_time'].mean()\n        features['num_delivered'] = delivered.groupby('product_id')['delivery_time'].size()\n    else:\n        features['avg_delivery_days'] = np.nan\n        features['num_delivered'] = np.nan\n\n    # --- Отзывы ---\n    prod_orders = merged[['product_id', 'order_id']].drop_duplicates()\n    merged_rev = prod_orders.merge(\n        reviews_hist[['order_id', 'review_score']],\n        on='order_id',\n        how='left'\n    )\n    rgrp = merged_rev.groupby('product_id')['review_score']\n    features['avg_review_score'] = rgrp.mean()\n    features['num_reviews'] = rgrp.count()\n    features['bad_review_ratio'] = (merged_rev.assign(is_bad=(merged_rev['review_score'] <= 2).astype(int))\n                                    .groupby('product_id')['is_bad'].mean())\n\n    # --- Платежи ---\n    merged_pay = prod_orders.merge(\n        payments_hist[['order_id', 'payment_type', 'payment_installments', 'payment_value']],\n        on='order_id',\n        how='left'\n    )\n    pgrp = merged_pay.groupby('product_id')['payment_value']\n    features['avg_payment_value'] = pgrp.mean()\n    features['total_payment_sum'] = pgrp.sum()\n    features['payment_transactions_count'] = pgrp.count()\n    features['avg_payment_installments'] = merged_pay.groupby('product_id')['payment_installments'].mean()\n    credit_ratio = (merged_pay.assign(is_credit=(merged_pay['payment_type'] == 'credit_card').astype(int))\n                    .groupby('product_id')['is_credit'].mean())\n    features['credit_card_ratio'] = credit_ratio\n\n    features['has_sales'] = (features['num_orders'] > 0).astype(int)\n\n    features = features.fillna(0)\n    features = features.reindex(entity_ids)\n\n    return features\n```",
+   "usage": {
+    "completion_tokens": 1201,
+    "prompt_tokens": 3205,
+    "total_tokens": 4406,
+    "completion_tokens_details": {
+     "accepted_prediction_tokens": null,
+     "audio_tokens": 0,
+     "reasoning_tokens": 94,
+     "rejected_prediction_tokens": null,
+     "text_tokens": null,
+     "image_tokens": 0
+    },
+    "prompt_tokens_details": {
+     "audio_tokens": 0,
+     "cached_tokens": 0,
+     "text_tokens": null,
+     "image_tokens": null,
+     "cache_write_tokens": 0,
+     "video_tokens": 0
+    },
+    "cost": 0.00108125,
+    "is_byok": false,
+    "cost_details": {
+     "upstream_inference_cost": 0.00108125,
+     "upstream_inference_prompt_cost": 0.00048075,
+     "upstream_inference_completions_cost": 0.0006005
+    }
+   }
+  }
+ ],
+ "status": "ok",
+ "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    orders = db['orders']\n    order_items = db['order_items']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    seed_time = pd.Timestamp(seed_time)\n\n    # --- Фильтруем каждую таблицу только по информации, доступной на seed_time ---\n    orders_hist = orders[orders['order_purchase_timestamp'] <= seed_time]\n\n    items = order_items[order_items['ts'] <= seed_time]\n    items = items[items['product_id'].isin(entity_ids)]\n\n    merged = items.merge(\n        orders_hist[['order_id', 'customer_id', 'order_purchase_timestamp',\n                     'order_delivered_customer_date']],\n        on='order_id',\n        how='left'\n    )\n\n    # Защита от утечки: дата доставки видна только если доставка уже произошла\n    merged.loc[merged['order_delivered_customer_date'] > seed_time,\n               'order_delivered_customer_date'] = pd.NaT\n\n    reviews_hist = reviews[reviews['review_creation_date'] <= seed_time]\n    payments_hist = payments[payments['ts'] <= seed_time]\n\n    features = pd.DataFrame(index=pd.Index(entity_ids, name='product_id'))\n\n    merged['days_since_purchase'] = (seed_time - merged['order_purchase_timestamp']).dt.days\n\n    g = merged.groupby('product_id')\n\n    features['num_orders'] = g['order_id'].nunique()\n    features['num_items'] = g.size()\n    features['total_price'] = g['price'].sum()\n    features['total_freight'] = g['freight_value'].sum()\n    features['avg_price'] = g['price'].mean()\n    features['max_price'] = g['price'].max()\n    features['num_customers'] = g['customer_id'].nunique()\n    features['num_sellers'] = g['seller_id'].nunique()\n\n    features['days_since_last_order'] = g['days_since_purchase'].min()\n    features['days_since_first_order'] = g['days_since_purchase'].max()\n    features['avg_days_since'] = g['days_since_purchase'].mean()\n\n    for window in [30, 60, 90]:\n        recent = merged[merged['days_since_purchase'] <= window]\n        rg = recent.groupby('product_id')\n        features[f'num_orders_{window}d'] = rg['order_id'].nunique()\n        features[f'total_price_{window}d'] = rg['price'].sum()\n\n    recent30 = merged[merged['days_since_purchase'] <= 30].groupby('product_id')['order_id'].nunique()\n    prev30 = merged[(merged['days_since_purchase'] > 30) & (merged['days_since_purchase'] <= 60)].groupby('product_id')['order_id'].nunique()\n    features['orders_ratio_30_60'] = recent30 / (prev30 + 1)\n\n    # Время доставки: только по заказам, доставленным до seed_time\n    delivered = merged.dropna(subset=['order_delivered_customer_date'])\n    if len(delivered) > 0:\n        delivery_time = (delivered['order_delivered_customer_date'] - delivered['order_purchase_timestamp']).dt.days\n        delivered = delivered.assign(delivery_time=delivery_time)\n        features['avg_delivery_days'] = delivered.groupby('product_id')['delivery_time'].mean()\n        features['num_delivered'] = delivered.groupby('product_id')['delivery_time'].size()\n    else:\n        features['avg_delivery_days'] = np.nan\n        features['num_delivered'] = np.nan\n\n    # --- Отзывы ---\n    prod_orders = merged[['product_id', 'order_id']].drop_duplicates()\n    merged_rev = prod_orders.merge(\n        reviews_hist[['order_id', 'review_score']],\n        on='order_id',\n        how='left'\n    )\n    rgrp = merged_rev.groupby('product_id')['review_score']\n    features['avg_review_score'] = rgrp.mean()\n    features['num_reviews'] = rgrp.count()\n    features['bad_review_ratio'] = (merged_rev.assign(is_bad=(merged_rev['review_score'] <= 2).astype(int))\n                                    .groupby('product_id')['is_bad'].mean())\n\n    # --- Платежи ---\n    merged_pay = prod_orders.merge(\n        payments_hist[['order_id', 'payment_type', 'payment_installments', 'payment_value']],\n        on='order_id',\n        how='left'\n    )\n    pgrp = merged_pay.groupby('product_id')['payment_value']\n    features['avg_payment_value'] = pgrp.mean()\n    features['total_payment_sum'] = pgrp.sum()\n    features['payment_transactions_count'] = pgrp.count()\n    features['avg_payment_installments'] = merged_pay.groupby('product_id')['payment_installments'].mean()\n    credit_ratio = (merged_pay.assign(is_credit=(merged_pay['payment_type'] == 'credit_card').astype(int))\n                    .groupby('product_id')['is_credit'].mean())\n    features['credit_card_ratio'] = credit_ratio\n\n    features['has_sales'] = (features['num_orders'] > 0).astype(int)\n\n    features = features.fillna(0)\n    features = features.reindex(entity_ids)\n\n    return features",
+ "usage": {
+  "prompt_tokens": 3205,
+  "completion_tokens": 1201,
+  "total_tokens": 4406,
+  "cost": 0.00108125
+ },
+ "wall_seconds": 10.7
+}

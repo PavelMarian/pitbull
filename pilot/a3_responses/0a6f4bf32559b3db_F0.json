@@ -1,0 +1,41 @@
+{
+ "item_id": "0a6f4bf32559b3db",
+ "pair_id": "a2-01e9c111a8d06f59",
+ "category": "checker_pair",
+ "arm": "F0",
+ "model": "z-ai/glm-5.3-flash",
+ "code_sha256": "4b21a39ff36f369d9bd842b7fd20be5b1cfd54b7b52b2cfa219f36068bb1f2bd",
+ "prompt_sha256": "7dfe1b7f02926bc1bc8f343ed3b892a8a77a824992035ab4b5437b0fb04bf5a8",
+ "status": "ok",
+ "finish_reason": "stop",
+ "raw_response": "{\"verdict\": \"LEAK\", \"rationale\": \"count_canceled_orders/count_unavailable_orders (and status_counts generally) use the current order_status snapshot without checking the status change occurred before seed_time, so post-seed cancellations/unavailability can leak into features.\"}",
+ "usage": {
+  "completion_tokens": 287,
+  "prompt_tokens": 2286,
+  "total_tokens": 2573,
+  "completion_tokens_details": {
+   "accepted_prediction_tokens": null,
+   "audio_tokens": 0,
+   "reasoning_tokens": 228,
+   "rejected_prediction_tokens": null,
+   "text_tokens": null,
+   "image_tokens": 0
+  },
+  "prompt_tokens_details": {
+   "audio_tokens": 0,
+   "cached_tokens": 64,
+   "text_tokens": null,
+   "image_tokens": null,
+   "cache_write_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost": 0.00035856128,
+  "is_byok": false,
+  "cost_details": {
+   "upstream_inference_cost": 0.00035856128,
+   "upstream_inference_prompt_cost": 0.00025107978,
+   "upstream_inference_completions_cost": 0.0001074815
+  }
+ },
+ "wall_seconds": 5.1
+}

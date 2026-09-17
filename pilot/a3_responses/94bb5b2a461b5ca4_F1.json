@@ -1,0 +1,41 @@
+{
+ "item_id": "94bb5b2a461b5ca4",
+ "pair_id": "a2-732715a1a807dc47",
+ "category": "checker_pair",
+ "arm": "F1",
+ "model": "z-ai/glm-5.3-flash",
+ "code_sha256": "732715a1a807dc47a4d068ef902942844bb05ca3d1ad2317f038333d5b00a0a3",
+ "prompt_sha256": "e5a82dcc8b1c2f9d1e43775ad3d590d598cff4b729a7410dfd498de6a5b89f5a",
+ "status": "ok",
+ "finish_reason": "stop",
+ "raw_response": "{\"verdict\": \"LEAK\", \"rationale\": \"Delivery dates, review scores, and payment data are joined and aggregated without any availability-time cutoff, so orders purchased before seed_time can contribute delivery/review/payment values recorded after seed_time (e.g., future review scores and payments inflate features).\"}",
+ "usage": {
+  "completion_tokens": 84,
+  "prompt_tokens": 1556,
+  "total_tokens": 1640,
+  "completion_tokens_details": {
+   "accepted_prediction_tokens": null,
+   "audio_tokens": 0,
+   "reasoning_tokens": 20,
+   "rejected_prediction_tokens": null,
+   "text_tokens": null,
+   "image_tokens": 0
+  },
+  "prompt_tokens_details": {
+   "audio_tokens": 0,
+   "cached_tokens": 0,
+   "text_tokens": null,
+   "image_tokens": null,
+   "cache_write_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost": 0.00020655,
+  "is_byok": false,
+  "cost_details": {
+   "upstream_inference_cost": 0.00020655,
+   "upstream_inference_prompt_cost": 0.00017505,
+   "upstream_inference_completions_cost": 3.15e-05
+  }
+ },
+ "wall_seconds": 4.1
+}

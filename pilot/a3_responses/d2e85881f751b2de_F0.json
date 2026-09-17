@@ -1,0 +1,41 @@
+{
+ "item_id": "d2e85881f751b2de",
+ "pair_id": "a2-2ab5b139602be24b",
+ "category": "checker_pair",
+ "arm": "F0",
+ "model": "z-ai/glm-5.3-flash",
+ "code_sha256": "2ab5b139602be24b93418b6d88e7d5192dd172a726e175eefa503b7c25497d22",
+ "prompt_sha256": "49cdf674efa3fce52a792e527cf0955bf90011f6f21425aa0065d228f31c0487",
+ "status": "ok",
+ "finish_reason": "stop",
+ "raw_response": "{\"verdict\": \"LEAK\", \"rationale\": \"While order_items are filtered to the historical window, the merged orders/reviews/payments data are not time-restricted, so delivery dates, order_status, review scores, and payment values can reflect information occurring after seed_time.\"}",
+ "usage": {
+  "completion_tokens": 150,
+  "prompt_tokens": 1054,
+  "total_tokens": 1204,
+  "completion_tokens_details": {
+   "accepted_prediction_tokens": null,
+   "audio_tokens": 0,
+   "reasoning_tokens": 90,
+   "rejected_prediction_tokens": null,
+   "text_tokens": null,
+   "image_tokens": 0
+  },
+  "prompt_tokens_details": {
+   "audio_tokens": 0,
+   "cached_tokens": 0,
+   "text_tokens": null,
+   "image_tokens": null,
+   "cache_write_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost": 0.0002331,
+  "is_byok": false,
+  "cost_details": {
+   "upstream_inference_cost": 0.0002331,
+   "upstream_inference_prompt_cost": 0.0001581,
+   "upstream_inference_completions_cost": 7.5e-05
+  }
+ },
+ "wall_seconds": 9.0
+}

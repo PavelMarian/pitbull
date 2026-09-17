@@ -1,0 +1,54 @@
+{
+ "program_uid": "e836c2f6b64089ba",
+ "program": "deepseek-v4-flash-0731#58",
+ "repeat": 2,
+ "iteration": 1,
+ "repair_model": "z-ai/glm-5.3-flash",
+ "source_code_sha256": "e836c2f6b64089ba36b653c2e60cfe4d5379a95ec631eda3794542b8789ef725",
+ "prompt_sha256": "af415cc31e0d52d4b74711e078737093d2cfd7f2c264d2dc34cc6bb2f9ef4916",
+ "attempts": [
+  {
+   "attempt": 1,
+   "status": "ok",
+   "finish_reason": "stop",
+   "raw_response": "```python\nimport pandas as pd\nimport numpy as np\n\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    \"\"\"\n    Признаки для product_id на момент seed_time.\n    Используются только события, уже произошедшие к seed_time:\n    покупки (order_purchase_timestamp) и написанные отзывы (review_creation_date).\n    \"\"\"\n    ids = list(entity_ids)\n\n    orders = db['orders']\n    items = db['order_items']\n    reviews = db['reviews']\n\n    # --- покупки строго до seed_time ---\n    items_filt = items[items['product_id'].isin(ids)].copy()\n    orders_sub = orders[['order_id', 'order_purchase_timestamp']]\n    df = items_filt.merge(orders_sub, on='order_id', how='left')\n    df = df[df['order_purchase_timestamp'] < seed_time].copy()\n\n    # --- отзывы: берём только те, что уже написаны к seed_time ---\n    rev_ok = reviews[reviews['review_creation_date'] < seed_time]\n    rev_agg = rev_ok.groupby('order_id', as_index=False)['review_score'].mean()\n    rev_agg = rev_agg.rename(columns={'review_score': 'ord_review_score'})\n    df = df.merge(rev_agg, on='order_id', how='left')\n\n    df['days_since'] = (seed_time - df['order_purchase_timestamp']).dt.days\n    df['revenue'] = df['price'] + df['freight_value']\n\n    # окна активности\n    for w in [30, 60, 90, 180]:\n        df[f'in{w}'] = (df['days_since'] <= w).astype(int)\n        df[f'rev_in{w}'] = df['price'] * df[f'in{w}']\n\n    # тренд: продажи в последних 90 днях vs предыдущие 90\n    df['in_prev90'] = ((df['days_since'] > 90) & (df['days_since'] <= 180)).astype(int)\n\n    agg_dict = {\n        'price': ['count', 'sum', 'mean', 'max'],\n        'freight_value': ['mean'],\n        'revenue': ['sum'],\n        'order_id': ['nunique'],\n        'days_since': ['min', 'mean', 'max'],\n        'in30': ['sum'], 'in60': ['sum'], 'in90': ['sum'], 'in180': ['sum'],\n        'rev_in30': ['sum'], 'rev_in60': ['sum'], 'rev_in90': ['sum'], 'rev_in180': ['sum'],\n        'in_prev90': ['sum'],\n        'ord_review_score': ['mean', 'count'],\n    }\n\n    feat = df.groupby('product_id').agg(agg_dict)\n    feat.columns = [f'{c[0]}_{c[1]}' for c in feat.columns]\n\n    # производные признаки\n    feat['sales_rate_90'] = feat['in90_sum'] / 90.0\n    feat['trend_90vprev'] = feat['in90_sum'] - feat['in_prev90_sum']\n    feat['avg_price_overall'] = feat['price_sum'] / feat['price_count'].replace(0, np.nan)\n    feat['review_coverage'] = feat['ord_review_score_count'] / feat['price_count'].replace(0, np.nan)\n    feat['days_since_min'] = feat['days_since_min']\n\n    feat = feat.replace([np.inf, -np.inf], np.nan)\n    result = feat.reindex(ids).fillna(0)\n    result.index.name = 'product_id'\n    return result\n```",
+   "usage": {
+    "completion_tokens": 825,
+    "prompt_tokens": 2626,
+    "total_tokens": 3451,
+    "completion_tokens_details": {
+     "accepted_prediction_tokens": null,
+     "audio_tokens": 0,
+     "reasoning_tokens": 55,
+     "rejected_prediction_tokens": null,
+     "text_tokens": null,
+     "image_tokens": 0
+    },
+    "prompt_tokens_details": {
+     "audio_tokens": 0,
+     "cached_tokens": 1920,
+     "text_tokens": null,
+     "image_tokens": null,
+     "cache_write_tokens": 0,
+     "video_tokens": 0
+    },
+    "cost": 0.000576,
+    "is_byok": false,
+    "cost_details": {
+     "upstream_inference_cost": 0.000576,
+     "upstream_inference_prompt_cost": 0.0001635,
+     "upstream_inference_completions_cost": 0.0004125
+    }
+   }
+  }
+ ],
+ "status": "ok",
+ "code": "import pandas as pd\nimport numpy as np\n\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    \"\"\"\n    Признаки для product_id на момент seed_time.\n    Используются только события, уже произошедшие к seed_time:\n    покупки (order_purchase_timestamp) и написанные отзывы (review_creation_date).\n    \"\"\"\n    ids = list(entity_ids)\n\n    orders = db['orders']\n    items = db['order_items']\n    reviews = db['reviews']\n\n    # --- покупки строго до seed_time ---\n    items_filt = items[items['product_id'].isin(ids)].copy()\n    orders_sub = orders[['order_id', 'order_purchase_timestamp']]\n    df = items_filt.merge(orders_sub, on='order_id', how='left')\n    df = df[df['order_purchase_timestamp'] < seed_time].copy()\n\n    # --- отзывы: берём только те, что уже написаны к seed_time ---\n    rev_ok = reviews[reviews['review_creation_date'] < seed_time]\n    rev_agg = rev_ok.groupby('order_id', as_index=False)['review_score'].mean()\n    rev_agg = rev_agg.rename(columns={'review_score': 'ord_review_score'})\n    df = df.merge(rev_agg, on='order_id', how='left')\n\n    df['days_since'] = (seed_time - df['order_purchase_timestamp']).dt.days\n    df['revenue'] = df['price'] + df['freight_value']\n\n    # окна активности\n    for w in [30, 60, 90, 180]:\n        df[f'in{w}'] = (df['days_since'] <= w).astype(int)\n        df[f'rev_in{w}'] = df['price'] * df[f'in{w}']\n\n    # тренд: продажи в последних 90 днях vs предыдущие 90\n    df['in_prev90'] = ((df['days_since'] > 90) & (df['days_since'] <= 180)).astype(int)\n\n    agg_dict = {\n        'price': ['count', 'sum', 'mean', 'max'],\n        'freight_value': ['mean'],\n        'revenue': ['sum'],\n        'order_id': ['nunique'],\n        'days_since': ['min', 'mean', 'max'],\n        'in30': ['sum'], 'in60': ['sum'], 'in90': ['sum'], 'in180': ['sum'],\n        'rev_in30': ['sum'], 'rev_in60': ['sum'], 'rev_in90': ['sum'], 'rev_in180': ['sum'],\n        'in_prev90': ['sum'],\n        'ord_review_score': ['mean', 'count'],\n    }\n\n    feat = df.groupby('product_id').agg(agg_dict)\n    feat.columns = [f'{c[0]}_{c[1]}' for c in feat.columns]\n\n    # производные признаки\n    feat['sales_rate_90'] = feat['in90_sum'] / 90.0\n    feat['trend_90vprev'] = feat['in90_sum'] - feat['in_prev90_sum']\n    feat['avg_price_overall'] = feat['price_sum'] / feat['price_count'].replace(0, np.nan)\n    feat['review_coverage'] = feat['ord_review_score_count'] / feat['price_count'].replace(0, np.nan)\n    feat['days_since_min'] = feat['days_since_min']\n\n    feat = feat.replace([np.inf, -np.inf], np.nan)\n    result = feat.reindex(ids).fillna(0)\n    result.index.name = 'product_id'\n    return result",
+ "usage": {
+  "prompt_tokens": 2626,
+  "completion_tokens": 825,
+  "total_tokens": 3451,
+  "cost": 0.000576
+ },
+ "wall_seconds": 7.1
+}

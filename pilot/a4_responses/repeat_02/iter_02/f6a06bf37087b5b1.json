@@ -1,0 +1,54 @@
+{
+ "program_uid": "f6a06bf37087b5b1",
+ "program": "deepseek-v4-flash-0731#35",
+ "repeat": 2,
+ "iteration": 2,
+ "repair_model": "z-ai/glm-5.3-flash",
+ "source_code_sha256": "cf1fdf658ce15f160560d5c310325a5e8b7dbcd9a25fdacdeec87c771fa294f5",
+ "prompt_sha256": "df0942878ec1ae499f3740b099dfac576b93f60459564b28555ee3726637b1e9",
+ "attempts": [
+  {
+   "attempt": 1,
+   "status": "ok",
+   "finish_reason": "stop",
+   "raw_response": "```python\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    orders = db['orders']\n    order_items = db['order_items']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    entity_ids = list(pd.Index(entity_ids))\n\n    # --- Заказы, существующие на момент seed_time ---\n    orders_hist = orders[orders['order_purchase_timestamp'] <= seed_time]\n\n    # --- Позиции заказов, сделанных не позже seed_time ---\n    items = order_items[order_items['product_id'].isin(entity_ids)].copy()\n    items = items[items['ts'] <= seed_time]\n    items = items.merge(\n        orders_hist[['order_id', 'order_purchase_timestamp', 'order_status']],\n        on='order_id', how='left'\n    )\n    items = items[items['order_purchase_timestamp'].notna()]\n\n    # --- Отзывы: видимы только если они уже написаны к seed_time ---\n    reviews_hist = reviews[reviews['review_creation_date'] <= seed_time]\n    review_agg = reviews_hist.groupby('order_id').agg(\n        avg_review_score=('review_score', 'mean'),\n        review_count=('review_id', 'count')\n    ).reset_index()\n\n    # --- Платежи: уже произведены на момент покупки (ts <= seed_time) ---\n    payments_hist = payments[payments['ts'] <= seed_time]\n    payment_agg = payments_hist.groupby('order_id').agg(\n        total_payment=('payment_value', 'sum'),\n        payment_count=('payment_value', 'count'),\n        avg_payment=('payment_value', 'mean')\n    ).reset_index()\n\n    items = items.merge(review_agg, on='order_id', how='left')\n    items = items.merge(payment_agg, on='order_id', how='left')\n\n    periods = {\n        'all': None,\n        '30d': seed_time - pd.Timedelta(days=30),\n        '60d': seed_time - pd.Timedelta(days=60),\n        '90d': seed_time - pd.Timedelta(days=90)\n    }\n\n    feature_dfs = []\n\n    for suffix, start_time in periods.items():\n        if start_time is None:\n            mask = pd.Series(True, index=items.index)\n        else:\n            mask = items['order_purchase_timestamp'] >= start_time\n\n        sub = items[mask]\n\n        agg = sub.groupby('product_id').agg(\n            **{\n                f'order_count_{suffix}': ('order_id', 'count'),\n                f'total_price_{suffix}': ('price', 'sum'),\n                f'avg_price_{suffix}': ('price', 'mean'),\n                f'total_freight_{suffix}': ('freight_value', 'sum'),\n                f'avg_freight_{suffix}': ('freight_value', 'mean'),\n                f'avg_review_score_{suffix}': ('avg_review_score', 'mean'),\n                f'review_count_{suffix}': ('review_count', 'sum'),\n                f'total_payment_{suffix}': ('total_payment', 'sum'),\n                f'avg_payment_{suffix}': ('avg_payment', 'mean'),\n                f'payment_count_{suffix}': ('payment_count', 'sum'),\n                f'unique_sellers_{suffix}': ('seller_id', 'nunique'),\n                f'unique_orders_{suffix}': ('order_id', 'nunique'),\n            }\n        ).reset_index()\n        agg.set_index('product_id', inplace=True)\n        feature_dfs.append(agg)\n\n    if feature_dfs:\n        result = feature_dfs[0]\n        for df in feature_dfs[1:]:\n            result = result.join(df, how='outer')\n    else:\n        result = pd.DataFrame(index=pd.Index(entity_ids, name='product_id'))\n\n    # recency / age по истории до seed_time\n    if not items.empty:\n        last_order = items.groupby('product_id')['order_purchase_timestamp'].max()\n        recency = (seed_time - last_order).dt.days\n        first_order = items.groupby('product_id')['order_purchase_timestamp'].min()\n        age = (seed_time - first_order).dt.days\n    else:\n        recency = pd.Series(dtype='float64')\n        age = pd.Series(dtype='float64')\n    result['recency_days'] = recency\n    result['age_days'] = age\n\n    # --- Признаки по товару: ТОЛЬКО по информации, доступной к seed_time ---\n    prod_static_items = order_items[order_items['ts'] <= seed_time]\n    prod_static = prod_static_items[prod_static_items['product_id'].isin(entity_ids)].groupby('product_id').agg(\n        avg_price_ever=('price', 'mean'),\n        avg_freight_ever=('freight_value', 'mean'),\n        price_std_ever=('price', 'std'),\n        n_sellers_ever=('seller_id', 'nunique'),\n        n_items_ever=('order_item_id', 'count'),\n    )\n    result = result.join(prod_static, how='left')\n\n    result = result.fillna(0)\n    result = result.reindex(entity_ids)\n    result = result.fillna(0)\n\n    # гарантия числовых признаков и отсутствия NaN/inf\n    result = result.replace([np.inf, -np.inf], 0).fillna(0)\n\n    return result\n```",
+   "usage": {
+    "completion_tokens": 1205,
+    "prompt_tokens": 3076,
+    "total_tokens": 4281,
+    "completion_tokens_details": {
+     "accepted_prediction_tokens": null,
+     "audio_tokens": 0,
+     "reasoning_tokens": 84,
+     "rejected_prediction_tokens": null,
+     "text_tokens": null,
+     "image_tokens": 0
+    },
+    "prompt_tokens_details": {
+     "audio_tokens": 0,
+     "cached_tokens": 0,
+     "text_tokens": null,
+     "image_tokens": null,
+     "cache_write_tokens": 0,
+     "video_tokens": 0
+    },
+    "cost": 0.0010639,
+    "is_byok": false,
+    "cost_details": {
+     "upstream_inference_cost": 0.0010639,
+     "upstream_inference_prompt_cost": 0.0004614,
+     "upstream_inference_completions_cost": 0.0006025
+    }
+   }
+  }
+ ],
+ "status": "ok",
+ "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    orders = db['orders']\n    order_items = db['order_items']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    entity_ids = list(pd.Index(entity_ids))\n\n    # --- Заказы, существующие на момент seed_time ---\n    orders_hist = orders[orders['order_purchase_timestamp'] <= seed_time]\n\n    # --- Позиции заказов, сделанных не позже seed_time ---\n    items = order_items[order_items['product_id'].isin(entity_ids)].copy()\n    items = items[items['ts'] <= seed_time]\n    items = items.merge(\n        orders_hist[['order_id', 'order_purchase_timestamp', 'order_status']],\n        on='order_id', how='left'\n    )\n    items = items[items['order_purchase_timestamp'].notna()]\n\n    # --- Отзывы: видимы только если они уже написаны к seed_time ---\n    reviews_hist = reviews[reviews['review_creation_date'] <= seed_time]\n    review_agg = reviews_hist.groupby('order_id').agg(\n        avg_review_score=('review_score', 'mean'),\n        review_count=('review_id', 'count')\n    ).reset_index()\n\n    # --- Платежи: уже произведены на момент покупки (ts <= seed_time) ---\n    payments_hist = payments[payments['ts'] <= seed_time]\n    payment_agg = payments_hist.groupby('order_id').agg(\n        total_payment=('payment_value', 'sum'),\n        payment_count=('payment_value', 'count'),\n        avg_payment=('payment_value', 'mean')\n    ).reset_index()\n\n    items = items.merge(review_agg, on='order_id', how='left')\n    items = items.merge(payment_agg, on='order_id', how='left')\n\n    periods = {\n        'all': None,\n        '30d': seed_time - pd.Timedelta(days=30),\n        '60d': seed_time - pd.Timedelta(days=60),\n        '90d': seed_time - pd.Timedelta(days=90)\n    }\n\n    feature_dfs = []\n\n    for suffix, start_time in periods.items():\n        if start_time is None:\n            mask = pd.Series(True, index=items.index)\n        else:\n            mask = items['order_purchase_timestamp'] >= start_time\n\n        sub = items[mask]\n\n        agg = sub.groupby('product_id').agg(\n            **{\n                f'order_count_{suffix}': ('order_id', 'count'),\n                f'total_price_{suffix}': ('price', 'sum'),\n                f'avg_price_{suffix}': ('price', 'mean'),\n                f'total_freight_{suffix}': ('freight_value', 'sum'),\n                f'avg_freight_{suffix}': ('freight_value', 'mean'),\n                f'avg_review_score_{suffix}': ('avg_review_score', 'mean'),\n                f'review_count_{suffix}': ('review_count', 'sum'),\n                f'total_payment_{suffix}': ('total_payment', 'sum'),\n                f'avg_payment_{suffix}': ('avg_payment', 'mean'),\n                f'payment_count_{suffix}': ('payment_count', 'sum'),\n                f'unique_sellers_{suffix}': ('seller_id', 'nunique'),\n                f'unique_orders_{suffix}': ('order_id', 'nunique'),\n            }\n        ).reset_index()\n        agg.set_index('product_id', inplace=True)\n        feature_dfs.append(agg)\n\n    if feature_dfs:\n        result = feature_dfs[0]\n        for df in feature_dfs[1:]:\n            result = result.join(df, how='outer')\n    else:\n        result = pd.DataFrame(index=pd.Index(entity_ids, name='product_id'))\n\n    # recency / age по истории до seed_time\n    if not items.empty:\n        last_order = items.groupby('product_id')['order_purchase_timestamp'].max()\n        recency = (seed_time - last_order).dt.days\n        first_order = items.groupby('product_id')['order_purchase_timestamp'].min()\n        age = (seed_time - first_order).dt.days\n    else:\n        recency = pd.Series(dtype='float64')\n        age = pd.Series(dtype='float64')\n    result['recency_days'] = recency\n    result['age_days'] = age\n\n    # --- Признаки по товару: ТОЛЬКО по информации, доступной к seed_time ---\n    prod_static_items = order_items[order_items['ts'] <= seed_time]\n    prod_static = prod_static_items[prod_static_items['product_id'].isin(entity_ids)].groupby('product_id').agg(\n        avg_price_ever=('price', 'mean'),\n        avg_freight_ever=('freight_value', 'mean'),\n        price_std_ever=('price', 'std'),\n        n_sellers_ever=('seller_id', 'nunique'),\n        n_items_ever=('order_item_id', 'count'),\n    )\n    result = result.join(prod_static, how='left')\n\n    result = result.fillna(0)\n    result = result.reindex(entity_ids)\n    result = result.fillna(0)\n\n    # гарантия числовых признаков и отсутствия NaN/inf\n    result = result.replace([np.inf, -np.inf], 0).fillna(0)\n\n    return result",
+ "usage": {
+  "prompt_tokens": 3076,
+  "completion_tokens": 1205,
+  "total_tokens": 4281,
+  "cost": 0.0010639
+ },
+ "wall_seconds": 10.4
+}

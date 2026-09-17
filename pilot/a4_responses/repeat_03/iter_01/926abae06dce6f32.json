@@ -1,0 +1,54 @@
+{
+ "program_uid": "926abae06dce6f32",
+ "program": "seed-2.0-code#12",
+ "repeat": 3,
+ "iteration": 1,
+ "repair_model": "z-ai/glm-5.3-flash",
+ "source_code_sha256": "926abae06dce6f32b0b66b8f4513e1dd529232437142f205f63359f6020de6cb",
+ "prompt_sha256": "e9967605888dbdfa1a07650de46db239ed1b35f49e54fd9f4c93cfb2bb7f5135",
+ "attempts": [
+  {
+   "attempt": 1,
+   "status": "ok",
+   "finish_reason": "stop",
+   "raw_response": "```python\nimport pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    # Только позиции, купленные до seed_time\n    items_hist = order_items[order_items[\"ts\"] <= seed_time].copy()\n    items_hist[\"total_value\"] = items_hist[\"price\"] + items_hist[\"freight_value\"]\n\n    windows = {\n        \"7d\": 7,\n        \"30d\": 30,\n        \"90d\": 90,\n        \"365d\": 365,\n        \"all_time\": 100000,\n    }\n\n    base = pd.DataFrame(index=pd.Index(entity_ids, name=\"product_id\"))\n\n    for window_name, days in windows.items():\n        if window_name == \"all_time\":\n            window_data = items_hist\n        else:\n            cutoff = seed_time - pd.Timedelta(days=days)\n            window_data = items_hist[items_hist[\"ts\"] >= cutoff]\n\n        agg_params = {\n            \"order_id\": [\"count\", \"nunique\"],\n            \"price\": [\"mean\", \"sum\", \"min\", \"max\", \"std\"],\n            \"freight_value\": [\"mean\", \"sum\"],\n            \"total_value\": [\"mean\", \"sum\"],\n            \"seller_id\": \"nunique\",\n            \"order_item_id\": \"max\",\n        }\n        if len(window_data) == 0:\n            continue\n        window_agg = window_data.groupby(\"product_id\").agg(agg_params)\n        window_agg.columns = [f\"{window_name}_{c1}_{c2}\" for c1, c2 in window_agg.columns]\n        base = base.join(window_agg, how=\"left\")\n\n    # Временные признаки\n    if len(items_hist) > 0:\n        time_metrics = items_hist.groupby(\"product_id\")[\"ts\"].agg([\"min\", \"max\"])\n        time_metrics[\"days_since_first_purchase\"] = (seed_time - time_metrics[\"min\"]).dt.days\n        time_metrics[\"days_since_last_purchase\"] = (seed_time - time_metrics[\"max\"]).dt.days\n        # Тренд: доля продаж в последних 30 днях от всех продаж\n        recent = items_hist[items_hist[\"ts\"] >= seed_time - pd.Timedelta(days=30)]\n        recent_cnt = recent.groupby(\"product_id\").size()\n        total_cnt = items_hist.groupby(\"product_id\").size()\n        ratio = (recent_cnt / total_cnt).rename(\"recent_sales_ratio\")\n        time_metrics = time_metrics.join(ratio, how=\"left\")\n        base = base.join(\n            time_metrics[[\"days_since_first_purchase\", \"days_since_last_purchase\", \"recent_sales_ratio\"]],\n            how=\"left\",\n        )\n\n    # Признаки по отзывам: только отзывы, уже созданные к seed_time\n    if len(items_hist) > 0:\n        prod_orders = items_hist[[\"product_id\", \"order_id\"]].drop_duplicates()\n        rev = reviews[reviews[\"review_creation_date\"] <= seed_time]\n        product_reviews = prod_orders.merge(rev, on=\"order_id\", how=\"inner\")\n        if len(product_reviews) > 0:\n            grp = product_reviews.groupby(\"product_id\")[\"review_score\"]\n            review_agg = grp.agg([\"count\", \"mean\", \"min\", \"max\", \"std\"])\n            review_agg[\"five_star_ratio\"] = (product_reviews[\"review_score\"] == 5).groupby(product_reviews[\"product_id\"]).mean()\n            review_agg[\"one_star_ratio\"] = (product_reviews[\"review_score\"] == 1).groupby(product_reviews[\"product_id\"]).mean()\n            review_agg.columns = [f\"review_{c}\" for c in review_agg.columns]\n            base = base.join(review_agg, how=\"left\")\n\n    # Признаки по платежам: только платежи, совершённые к seed_time\n    if len(items_hist) > 0:\n        prod_orders = items_hist[[\"product_id\", \"order_id\"]].drop_duplicates()\n        pay = payments[payments[\"ts\"] <= seed_time]\n        product_payments = prod_orders.merge(pay, on=\"order_id\", how=\"inner\")\n        if len(product_payments) > 0:\n            pay_agg = product_payments.groupby(\"product_id\").agg(\n                payment_count=(\"payment_sequential\", \"count\"),\n                payment_avg_installments=(\"payment_installments\", \"mean\"),\n                payment_max_installments=(\"payment_installments\", \"max\"),\n                payment_avg_value=(\"payment_value\", \"mean\"),\n                payment_total_value=(\"payment_value\", \"sum\"),\n            )\n            pay_agg[\"payment_credit_ratio\"] = (product_payments[\"payment_type\"] == \"credit_card\").groupby(product_payments[\"product_id\"]).mean()\n            base = base.join(pay_agg, how=\"left\")\n\n    base = base.fillna(0)\n    base = base.loc[:, ~base.columns.duplicated()]\n    base = base.reindex(entity_ids)\n    return base\n```",
+   "usage": {
+    "completion_tokens": 1116,
+    "prompt_tokens": 3483,
+    "total_tokens": 4599,
+    "completion_tokens_details": {
+     "accepted_prediction_tokens": null,
+     "audio_tokens": 0,
+     "reasoning_tokens": 66,
+     "rejected_prediction_tokens": null,
+     "text_tokens": null,
+     "image_tokens": 0
+    },
+    "prompt_tokens_details": {
+     "audio_tokens": 0,
+     "cached_tokens": 1856,
+     "text_tokens": null,
+     "image_tokens": null,
+     "cache_write_tokens": 0,
+     "video_tokens": 0
+    },
+    "cost": 0.000514638,
+    "is_byok": false,
+    "cost_details": {
+     "upstream_inference_cost": 0.000514638,
+     "upstream_inference_prompt_cost": 0.000179838,
+     "upstream_inference_completions_cost": 0.0003348
+    }
+   }
+  }
+ ],
+ "status": "ok",
+ "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    # Только позиции, купленные до seed_time\n    items_hist = order_items[order_items[\"ts\"] <= seed_time].copy()\n    items_hist[\"total_value\"] = items_hist[\"price\"] + items_hist[\"freight_value\"]\n\n    windows = {\n        \"7d\": 7,\n        \"30d\": 30,\n        \"90d\": 90,\n        \"365d\": 365,\n        \"all_time\": 100000,\n    }\n\n    base = pd.DataFrame(index=pd.Index(entity_ids, name=\"product_id\"))\n\n    for window_name, days in windows.items():\n        if window_name == \"all_time\":\n            window_data = items_hist\n        else:\n            cutoff = seed_time - pd.Timedelta(days=days)\n            window_data = items_hist[items_hist[\"ts\"] >= cutoff]\n\n        agg_params = {\n            \"order_id\": [\"count\", \"nunique\"],\n            \"price\": [\"mean\", \"sum\", \"min\", \"max\", \"std\"],\n            \"freight_value\": [\"mean\", \"sum\"],\n            \"total_value\": [\"mean\", \"sum\"],\n            \"seller_id\": \"nunique\",\n            \"order_item_id\": \"max\",\n        }\n        if len(window_data) == 0:\n            continue\n        window_agg = window_data.groupby(\"product_id\").agg(agg_params)\n        window_agg.columns = [f\"{window_name}_{c1}_{c2}\" for c1, c2 in window_agg.columns]\n        base = base.join(window_agg, how=\"left\")\n\n    # Временные признаки\n    if len(items_hist) > 0:\n        time_metrics = items_hist.groupby(\"product_id\")[\"ts\"].agg([\"min\", \"max\"])\n        time_metrics[\"days_since_first_purchase\"] = (seed_time - time_metrics[\"min\"]).dt.days\n        time_metrics[\"days_since_last_purchase\"] = (seed_time - time_metrics[\"max\"]).dt.days\n        # Тренд: доля продаж в последних 30 днях от всех продаж\n        recent = items_hist[items_hist[\"ts\"] >= seed_time - pd.Timedelta(days=30)]\n        recent_cnt = recent.groupby(\"product_id\").size()\n        total_cnt = items_hist.groupby(\"product_id\").size()\n        ratio = (recent_cnt / total_cnt).rename(\"recent_sales_ratio\")\n        time_metrics = time_metrics.join(ratio, how=\"left\")\n        base = base.join(\n            time_metrics[[\"days_since_first_purchase\", \"days_since_last_purchase\", \"recent_sales_ratio\"]],\n            how=\"left\",\n        )\n\n    # Признаки по отзывам: только отзывы, уже созданные к seed_time\n    if len(items_hist) > 0:\n        prod_orders = items_hist[[\"product_id\", \"order_id\"]].drop_duplicates()\n        rev = reviews[reviews[\"review_creation_date\"] <= seed_time]\n        product_reviews = prod_orders.merge(rev, on=\"order_id\", how=\"inner\")\n        if len(product_reviews) > 0:\n            grp = product_reviews.groupby(\"product_id\")[\"review_score\"]\n            review_agg = grp.agg([\"count\", \"mean\", \"min\", \"max\", \"std\"])\n            review_agg[\"five_star_ratio\"] = (product_reviews[\"review_score\"] == 5).groupby(product_reviews[\"product_id\"]).mean()\n            review_agg[\"one_star_ratio\"] = (product_reviews[\"review_score\"] == 1).groupby(product_reviews[\"product_id\"]).mean()\n            review_agg.columns = [f\"review_{c}\" for c in review_agg.columns]\n            base = base.join(review_agg, how=\"left\")\n\n    # Признаки по платежам: только платежи, совершённые к seed_time\n    if len(items_hist) > 0:\n        prod_orders = items_hist[[\"product_id\", \"order_id\"]].drop_duplicates()\n        pay = payments[payments[\"ts\"] <= seed_time]\n        product_payments = prod_orders.merge(pay, on=\"order_id\", how=\"inner\")\n        if len(product_payments) > 0:\n            pay_agg = product_payments.groupby(\"product_id\").agg(\n                payment_count=(\"payment_sequential\", \"count\"),\n                payment_avg_installments=(\"payment_installments\", \"mean\"),\n                payment_max_installments=(\"payment_installments\", \"max\"),\n                payment_avg_value=(\"payment_value\", \"mean\"),\n                payment_total_value=(\"payment_value\", \"sum\"),\n            )\n            pay_agg[\"payment_credit_ratio\"] = (product_payments[\"payment_type\"] == \"credit_card\").groupby(product_payments[\"product_id\"]).mean()\n            base = base.join(pay_agg, how=\"left\")\n\n    base = base.fillna(0)\n    base = base.loc[:, ~base.columns.duplicated()]\n    base = base.reindex(entity_ids)\n    return base",
+ "usage": {
+  "prompt_tokens": 3483,
+  "completion_tokens": 1116,
+  "total_tokens": 4599,
+  "cost": 0.000514638
+ },
+ "wall_seconds": 28.2
+}

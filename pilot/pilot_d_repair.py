@@ -24,18 +24,23 @@ import numpy as np
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "prestudy_code"))
+ROOT = os.path.dirname(HERE)
+_prestudy_code = os.path.join(HERE, "prestudy_code")
+if not os.path.isdir(_prestudy_code):
+    _prestudy_code = os.path.join(ROOT, "prestudy")
+sys.path.insert(0, _prestudy_code)
 
 import litellm  # noqa: E402
 from oracle import truncate  # noqa: E402
 import p3_baseline_run as H  # noqa: E402
 
-N_PER_MODEL = 6
-MAX_ITERS = 3
+N_PER_MODEL = int(os.environ.get("PILOT_N_PER_MODEL", "6"))
+MAX_ITERS = int(os.environ.get("PILOT_MAX_ITERS", "3"))
 TEMPERATURE = 0.2
 ARMS = tuple(os.environ.get("PILOT_ARMS", "F1,F3").split(","))
+REPAIR_MODEL = os.environ.get("PILOT_REPAIR_MODEL")
 _tag = "" if ARMS == ("F1", "F3") else "_" + "_".join(ARMS)
-OUT = os.path.join(HERE, f"pilot_d_results{_tag}.json")
+OUT = os.environ.get("PILOT_OUT", os.path.join(HERE, f"pilot_d_results{_tag}.json"))
 
 F0_TEXT = """Проверь свой код на ошибки и верни финальную версию функции get_features
 (та же сигнатура), в одном блоке ```python ...```, без пояснений."""
@@ -72,7 +77,7 @@ def repair_call(model_id, code, feedback):
               + "\n\nВот текущая версия кода:\n```python\n" + code + "\n```\n\n"
               + feedback)
     resp = litellm.completion(
-        model=f"openrouter/{model_id}",
+        model=f"openrouter/{REPAIR_MODEL or model_id}",
         messages=[{"role": "user", "content": prompt}],
         temperature=TEMPERATURE, max_tokens=14000, timeout=300,
         extra_body={"reasoning": {"max_tokens": 1500}},
@@ -135,7 +140,11 @@ def run_arm(rec, arm):
 
 
 def main():
-    rows = [json.loads(l) for l in open(os.path.join(HERE, "results.jsonl"))]
+    results_in = os.environ.get(
+        "PILOT_RESULTS_IN",
+        os.path.join(ROOT, "prestudy", "p3_out", "baseline", "results.jsonl"),
+    )
+    rows = [json.loads(l) for l in open(results_in)]
     leak = [r for r in rows if r.get("status") == "ok" and r.get("verdict") == "LEAK"]
     sel, per_model = [], {}
     for r in leak:
@@ -158,7 +167,9 @@ def main():
         for arm in ARMS:
             t0 = time.time()
             r = run_arm(rec, arm)
-            r.update({"program": pid, "model": rec["model"], "wall": round(time.time() - t0, 1)})
+            r.update({"program": pid, "model": rec["model"],
+                      "repair_model": REPAIR_MODEL or rec["model"],
+                      "wall": round(time.time() - t0, 1)})
             results.append(r)
             print(f"  {pid} {arm}: clean={r['clean']} iters={r['iters_used']} "
                   f"cols {r['orig_n_cols']}->{r['new_n_cols']} kept={r['diverging_kept_in_output']} "

@@ -1,0 +1,41 @@
+{
+ "program_uid": "e836c2f6b64089ba",
+ "program": "deepseek-v4-flash-0731#58",
+ "iteration": 1,
+ "repair_model": "z-ai/glm-5.3-flash",
+ "source_code_sha256": "e836c2f6b64089ba36b653c2e60cfe4d5379a95ec631eda3794542b8789ef725",
+ "prompt_sha256": "af415cc31e0d52d4b74711e078737093d2cfd7f2c264d2dc34cc6bb2f9ef4916",
+ "status": "ok",
+ "finish_reason": "stop",
+ "raw_response": "```python\nimport pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    \"\"\"\n    Строит матрицу признаков для каждого product_id на основе истории\n    заказов до seed_time. Используются таблицы orders, order_items, reviews, payments.\n    Все события фильтруются по времени их фактического появления:\n    - заказы: order_purchase_timestamp < seed_time\n    - отзывы: review_creation_date < seed_time (отзыв появляется позже покупки)\n    - платежи: ts < seed_time\n    \"\"\"\n    ids = list(entity_ids)\n\n    orders = db['orders']\n    items = db['order_items']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    # --- заказы, совершённые до seed_time ---\n    orders_hist = orders[orders['order_purchase_timestamp'] < seed_time][\n        ['order_id', 'customer_id', 'order_purchase_timestamp']\n    ]\n\n    # --- позиции по интересующим товарам, только в исторических заказах ---\n    items_filt = items[items['product_id'].isin(ids)].copy()\n    df = items_filt.merge(orders_hist, on='order_id', how='inner')\n\n    # --- отзывы: только те, что уже созданы к моменту seed_time ---\n    rev_hist = reviews[reviews['review_creation_date'] < seed_time]\n    rev_agg = rev_hist.groupby('order_id', as_index=False)['review_score'].mean()\n    df = df.merge(rev_agg, on='order_id', how='left')\n\n    # --- платежи: только уже совершённые к моменту seed_time ---\n    pay_hist = payments[payments['ts'] < seed_time]\n    pay_agg = pay_hist.groupby('order_id', as_index=False).agg(\n        pay_value=('payment_value', 'sum'),\n        pay_installments=('payment_installments', 'max'),\n    )\n    df = df.merge(pay_agg, on='order_id', how='left')\n\n    # --- временные признаки ---\n    df['days_since'] = (seed_time - df['order_purchase_timestamp']).dt.days\n\n    for w in [30, 60, 90, 180, 365]:\n        df[f'last{w}'] = (df['days_since'] <= w).astype(int)\n        df[f'revenue_last{w}'] = df['price'] * df[f'last{w}']\n        df[f'orders_last{w}'] = df[f'last{w}']\n\n    # --- агрегации по товару ---\n    agg_dict = {\n        'price': ['count', 'sum', 'mean', 'min', 'max', 'std'],\n        'freight_value': ['sum', 'mean'],\n        'order_id': ['nunique'],\n        'customer_id': ['nunique'],\n        'review_score': ['mean', 'count'],\n        'days_since': ['min', 'max', 'mean'],\n        'pay_value': ['sum', 'mean'],\n        'pay_installments': ['max'],\n    }\n    for w in [30, 60, 90, 180, 365]:\n        agg_dict[f'last{w}'] = ['sum']\n        agg_dict[f'revenue_last{w}'] = ['sum']\n\n    feat = df.groupby('product_id').agg(agg_dict)\n    feat.columns = [f'{col[0]}_{col[1]}' for col in feat.columns]\n\n    # средний интервал между покупками товара\n    last_purchase = df.groupby('product_id')['order_purchase_timestamp'].max()\n    first_purchase = df.groupby('product_id')['order_purchase_timestamp'].min()\n    n_orders = df.groupby('product_id')['order_id'].nunique()\n    span_days = (last_purchase - first_purchase).dt.days\n    feat['purchase_span_days'] = span_days\n    feat['avg_days_between_orders'] = span_days / n_orders.clip(lower=1)\n\n    # доля заказов с отзывом и средний скор недавних отзывов\n    feat['review_coverage'] = feat['review_score_count'] / feat['order_id_nunique'].clip(lower=1)\n\n    result = feat.reindex(ids)\n    result = result.fillna(0)\n    result = result.replace([np.inf, -np.inf], 0)\n\n    result.index.name = 'product_id'\n    return result\n```",
+ "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    \"\"\"\n    Строит матрицу признаков для каждого product_id на основе истории\n    заказов до seed_time. Используются таблицы orders, order_items, reviews, payments.\n    Все события фильтруются по времени их фактического появления:\n    - заказы: order_purchase_timestamp < seed_time\n    - отзывы: review_creation_date < seed_time (отзыв появляется позже покупки)\n    - платежи: ts < seed_time\n    \"\"\"\n    ids = list(entity_ids)\n\n    orders = db['orders']\n    items = db['order_items']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    # --- заказы, совершённые до seed_time ---\n    orders_hist = orders[orders['order_purchase_timestamp'] < seed_time][\n        ['order_id', 'customer_id', 'order_purchase_timestamp']\n    ]\n\n    # --- позиции по интересующим товарам, только в исторических заказах ---\n    items_filt = items[items['product_id'].isin(ids)].copy()\n    df = items_filt.merge(orders_hist, on='order_id', how='inner')\n\n    # --- отзывы: только те, что уже созданы к моменту seed_time ---\n    rev_hist = reviews[reviews['review_creation_date'] < seed_time]\n    rev_agg = rev_hist.groupby('order_id', as_index=False)['review_score'].mean()\n    df = df.merge(rev_agg, on='order_id', how='left')\n\n    # --- платежи: только уже совершённые к моменту seed_time ---\n    pay_hist = payments[payments['ts'] < seed_time]\n    pay_agg = pay_hist.groupby('order_id', as_index=False).agg(\n        pay_value=('payment_value', 'sum'),\n        pay_installments=('payment_installments', 'max'),\n    )\n    df = df.merge(pay_agg, on='order_id', how='left')\n\n    # --- временные признаки ---\n    df['days_since'] = (seed_time - df['order_purchase_timestamp']).dt.days\n\n    for w in [30, 60, 90, 180, 365]:\n        df[f'last{w}'] = (df['days_since'] <= w).astype(int)\n        df[f'revenue_last{w}'] = df['price'] * df[f'last{w}']\n        df[f'orders_last{w}'] = df[f'last{w}']\n\n    # --- агрегации по товару ---\n    agg_dict = {\n        'price': ['count', 'sum', 'mean', 'min', 'max', 'std'],\n        'freight_value': ['sum', 'mean'],\n        'order_id': ['nunique'],\n        'customer_id': ['nunique'],\n        'review_score': ['mean', 'count'],\n        'days_since': ['min', 'max', 'mean'],\n        'pay_value': ['sum', 'mean'],\n        'pay_installments': ['max'],\n    }\n    for w in [30, 60, 90, 180, 365]:\n        agg_dict[f'last{w}'] = ['sum']\n        agg_dict[f'revenue_last{w}'] = ['sum']\n\n    feat = df.groupby('product_id').agg(agg_dict)\n    feat.columns = [f'{col[0]}_{col[1]}' for col in feat.columns]\n\n    # средний интервал между покупками товара\n    last_purchase = df.groupby('product_id')['order_purchase_timestamp'].max()\n    first_purchase = df.groupby('product_id')['order_purchase_timestamp'].min()\n    n_orders = df.groupby('product_id')['order_id'].nunique()\n    span_days = (last_purchase - first_purchase).dt.days\n    feat['purchase_span_days'] = span_days\n    feat['avg_days_between_orders'] = span_days / n_orders.clip(lower=1)\n\n    # доля заказов с отзывом и средний скор недавних отзывов\n    feat['review_coverage'] = feat['review_score_count'] / feat['order_id_nunique'].clip(lower=1)\n\n    result = feat.reindex(ids)\n    result = result.fillna(0)\n    result = result.replace([np.inf, -np.inf], 0)\n\n    result.index.name = 'product_id'\n    return result",
+ "usage": {
+  "completion_tokens": 983,
+  "prompt_tokens": 2626,
+  "total_tokens": 3609,
+  "completion_tokens_details": {
+   "accepted_prediction_tokens": null,
+   "audio_tokens": 0,
+   "reasoning_tokens": 51,
+   "rejected_prediction_tokens": null,
+   "text_tokens": null,
+   "image_tokens": 0
+  },
+  "prompt_tokens_details": {
+   "audio_tokens": 0,
+   "cached_tokens": 0,
+   "text_tokens": null,
+   "image_tokens": null,
+   "cache_write_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost": 0.0008854,
+  "is_byok": false,
+  "cost_details": {
+   "upstream_inference_cost": 0.0008854,
+   "upstream_inference_prompt_cost": 0.0003939,
+   "upstream_inference_completions_cost": 0.0004915
+  }
+ },
+ "wall_seconds": 8.9
+}

@@ -1,0 +1,252 @@
+{
+  "experiment": "A4 RQ2b F1 held-out CLEAN@k",
+  "status": "complete; in_review",
+  "verdict": "positive",
+  "threshold": "CLEAN@5 >= 0.8",
+  "records": 186,
+  "program_clusters": 62,
+  "repeat_summary": [
+    {
+      "repeat": 1,
+      "clean_at_5": 61,
+      "failed_at_5": 1
+    },
+    {
+      "repeat": 2,
+      "clean_at_5": 60,
+      "failed_at_5": 2
+    },
+    {
+      "repeat": 3,
+      "clean_at_5": 61,
+      "failed_at_5": 1
+    }
+  ],
+  "clean_at_k": [
+    {
+      "k": 1,
+      "all": {
+        "clean": 157,
+        "n": 186,
+        "rate": 0.8440860215053764,
+        "wilson95": [
+          0.7850512199623262,
+          0.8891956004906097
+        ],
+        "cluster_bootstrap95": [
+          0.7849462365591396,
+          0.8978494623655915
+        ]
+      },
+      "executable_by_k": {
+        "clean": 157,
+        "n": 165,
+        "rate": 0.9515151515151515
+      },
+      "majority_clean_programs": 56
+    },
+    {
+      "k": 2,
+      "all": {
+        "clean": 176,
+        "n": 186,
+        "rate": 0.946236559139785,
+        "wilson95": [
+          0.9038759660113429,
+          0.9705378792635586
+        ],
+        "cluster_bootstrap95": [
+          0.9086021505376344,
+          0.9784946236559139
+        ]
+      },
+      "executable_by_k": {
+        "clean": 176,
+        "n": 181,
+        "rate": 0.9723756906077348
+      },
+      "majority_clean_programs": 61
+    },
+    {
+      "k": 3,
+      "all": {
+        "clean": 179,
+        "n": 186,
+        "rate": 0.9623655913978495,
+        "wilson95": [
+          0.9243667724163355,
+          0.9816523925672974
+        ],
+        "cluster_bootstrap95": [
+          0.9301075268817204,
+          0.9892473118279569
+        ]
+      },
+      "executable_by_k": {
+        "clean": 179,
+        "n": 183,
+        "rate": 0.9781420765027322
+      },
+      "majority_clean_programs": 61
+    },
+    {
+      "k": 4,
+      "all": {
+        "clean": 182,
+        "n": 186,
+        "rate": 0.978494623655914,
+        "wilson95": [
+          0.9460185290842833,
+          0.9916059556080807
+        ],
+        "cluster_bootstrap95": [
+          0.9516129032258064,
+          1.0
+        ]
+      },
+      "executable_by_k": {
+        "clean": 182,
+        "n": 186,
+        "rate": 0.978494623655914
+      },
+      "majority_clean_programs": 61
+    },
+    {
+      "k": 5,
+      "all": {
+        "clean": 182,
+        "n": 186,
+        "rate": 0.978494623655914,
+        "wilson95": [
+          0.9460185290842833,
+          0.9916059556080807
+        ],
+        "cluster_bootstrap95": [
+          0.9516129032258064,
+          1.0
+        ]
+      },
+      "executable_by_k": {
+        "clean": 182,
+        "n": 186,
+        "rate": 0.978494623655914
+      },
+      "majority_clean_programs": 61
+    }
+  ],
+  "by_mechanism": {
+    "PAYMENTS_NO_FILTER": [
+      {
+        "k": 1,
+        "clean": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      {
+        "k": 2,
+        "clean": 1,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      {
+        "k": 3,
+        "clean": 1,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      {
+        "k": 4,
+        "clean": 1,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      {
+        "k": 5,
+        "clean": 1,
+        "n": 3,
+        "rate": 0.3333333333333333
+      }
+    ],
+    "REVIEWS_NO_FILTER": [
+      {
+        "k": 1,
+        "clean": 154,
+        "n": 180,
+        "rate": 0.8555555555555555
+      },
+      {
+        "k": 2,
+        "clean": 172,
+        "n": 180,
+        "rate": 0.9555555555555556
+      },
+      {
+        "k": 3,
+        "clean": 175,
+        "n": 180,
+        "rate": 0.9722222222222222
+      },
+      {
+        "k": 4,
+        "clean": 178,
+        "n": 180,
+        "rate": 0.9888888888888889
+      },
+      {
+        "k": 5,
+        "clean": 178,
+        "n": 180,
+        "rate": 0.9888888888888889
+      }
+    ],
+    "VAR_MIXUP": [
+      {
+        "k": 1,
+        "clean": 3,
+        "n": 3,
+        "rate": 1.0
+      },
+      {
+        "k": 2,
+        "clean": 3,
+        "n": 3,
+        "rate": 1.0
+      },
+      {
+        "k": 3,
+        "clean": 3,
+        "n": 3,
+        "rate": 1.0
+      },
+      {
+        "k": 4,
+        "clean": 3,
+        "n": 3,
+        "rate": 1.0
+      },
+      {
+        "k": 5,
+        "clean": 3,
+        "n": 3,
+        "rate": 1.0
+      }
+    ]
+  },
+  "mcnemar_majority_clean_1_vs_5": {
+    "clean_1_not_5": 0,
+    "not_1_clean_5": 5,
+    "exact_two_sided_p": 0.0625
+  },
+  "bootstrap": {
+    "resamples": 100000,
+    "seed": 20260915
+  },
+  "new_a4_network_usage_excluding_reused_a2": {
+    "calls": 164,
+    "prompt_tokens": 549205,
+    "completion_tokens": 321381,
+    "total_tokens": 870586,
+    "cost": 0.201504,
+    "api_errors": 0
+  }
+}

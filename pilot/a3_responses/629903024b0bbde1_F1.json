@@ -1,0 +1,41 @@
+{
+ "item_id": "629903024b0bbde1",
+ "pair_id": "a2-955acbc837d37a98",
+ "category": "checker_pair",
+ "arm": "F1",
+ "model": "z-ai/glm-5.3-flash",
+ "code_sha256": "955acbc837d37a980369f2190803d9b4dcfccf3678b392333f45e6ff47679c7d",
+ "prompt_sha256": "c6c6674f415c73b9a0531ab4fa232cd5afc162e28a4c2f7a9c1d9861a5cdd5ea",
+ "status": "ok",
+ "finish_reason": "stop",
+ "raw_response": "{\"verdict\": \"LEAK\", \"rationale\": \"Orders are filtered only by purchase_timestamp, so delivery/approval dates (and derived delivery_days, estimate_diff) can come from after seed_time, and seller_agg aggregates the entire unfiltered order_items table.\"}",
+ "usage": {
+  "completion_tokens": 138,
+  "prompt_tokens": 2040,
+  "total_tokens": 2178,
+  "completion_tokens_details": {
+   "accepted_prediction_tokens": null,
+   "audio_tokens": 0,
+   "reasoning_tokens": 103,
+   "rejected_prediction_tokens": null,
+   "text_tokens": null,
+   "image_tokens": 0
+  },
+  "prompt_tokens_details": {
+   "audio_tokens": 0,
+   "cached_tokens": 0,
+   "text_tokens": null,
+   "image_tokens": null,
+   "cache_write_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost": 0.000225,
+  "is_byok": false,
+  "cost_details": {
+   "upstream_inference_cost": 0.000225,
+   "upstream_inference_prompt_cost": 0.0001836,
+   "upstream_inference_completions_cost": 4.14e-05
+  }
+ },
+ "wall_seconds": 12.9
+}

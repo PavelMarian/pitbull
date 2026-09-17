@@ -1,0 +1,54 @@
+{
+ "program_uid": "171a1c132e6a3c4d",
+ "program": "deepseek-v4-flash-0731#49",
+ "repeat": 3,
+ "iteration": 1,
+ "repair_model": "z-ai/glm-5.3-flash",
+ "source_code_sha256": "171a1c132e6a3c4d1af239f42d144bd92be250a91dd84c63db7bafa85e30a61a",
+ "prompt_sha256": "c68146fbf1e1ff287c85adebeb25b7775baae2eee2a36f6e765072972a303760",
+ "attempts": [
+  {
+   "attempt": 1,
+   "status": "ok",
+   "finish_reason": "stop",
+   "raw_response": "```python\nimport pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n\n    items = order_items[order_items[\"product_id\"].isin(entity_ids)].copy()\n\n    merged = items.merge(\n        orders[[\"order_id\", \"order_purchase_timestamp\"]],\n        on=\"order_id\",\n        how=\"left\"\n    )\n\n    # Только заказы, совершённые строго до seed_time\n    merged = merged[merged[\"order_purchase_timestamp\"] < seed_time]\n\n    if merged.empty:\n        features = pd.DataFrame(index=list(entity_ids))\n        features[\"has_history\"] = 0\n        features = features.reindex(entity_ids)\n        return features\n\n    merged[\"days_to_seed\"] = (seed_time - merged[\"order_purchase_timestamp\"]).dt.days\n\n    merged[\"in_30\"] = (merged[\"days_to_seed\"] <= 30).astype(int)\n    merged[\"in_60\"] = (merged[\"days_to_seed\"] <= 60).astype(int)\n    merged[\"in_90\"] = (merged[\"days_to_seed\"] <= 90).astype(int)\n\n    group = merged.groupby(\"product_id\")\n\n    total_orders = group[\"order_id\"].nunique()\n    total_items = group.size()\n    total_revenue = group.apply(lambda x: (x[\"price\"] + x[\"freight_value\"]).sum())\n    avg_price = group[\"price\"].mean()\n    avg_freight = group[\"freight_value\"].mean()\n    median_price = group[\"price\"].median()\n    median_freight = group[\"freight_value\"].median()\n    std_price = group[\"price\"].std()\n    std_freight = group[\"freight_value\"].std()\n    min_price = group[\"price\"].min()\n    max_price = group[\"price\"].max()\n    n_sellers = group[\"seller_id\"].nunique()\n\n    avg_days = group[\"days_to_seed\"].mean()\n    min_days = group[\"days_to_seed\"].min()\n    max_days = group[\"days_to_seed\"].max()\n    median_days = group[\"days_to_seed\"].median()\n    std_days = group[\"days_to_seed\"].std()\n\n    span_days = (max_days - min_days + 1).replace({0: np.nan})\n    order_freq = total_orders / span_days\n\n    avg_items_per_order = total_items / total_orders\n    avg_revenue_per_order = total_revenue / total_orders\n\n    features = pd.DataFrame({\n        \"total_orders\": total_orders,\n        \"total_items\": total_items,\n        \"total_revenue\": total_revenue,\n        \"avg_price\": avg_price,\n        \"avg_freight\": avg_freight,\n        \"median_price\": median_price,\n        \"median_freight\": median_freight,\n        \"std_price\": std_price,\n        \"std_freight\": std_freight,\n        \"min_price\": min_price,\n        \"max_price\": max_price,\n        \"n_sellers\": n_sellers,\n        \"avg_days_to_seed\": avg_days,\n        \"min_days_to_seed\": min_days,\n        \"max_days_to_seed\": max_days,\n        \"median_days_to_seed\": median_days,\n        \"std_days_to_seed\": std_days,\n        \"order_freq\": order_freq,\n        \"avg_items_per_order\": avg_items_per_order,\n        \"avg_revenue_per_order\": avg_revenue_per_order,\n        \"has_history\": 1\n    })\n\n    for window, col in [(30, \"orders_30\"), (60, \"orders_60\"), (90, \"orders_90\")]:\n        mask = merged[\"days_to_seed\"] <= window\n        sub = merged[mask]\n        if not sub.empty:\n            features[col] = sub.groupby(\"product_id\")[\"order_id\"].nunique()\n        else:\n            features[col] = 0\n\n    # Отзывы: берём только те, что уже существуют на момент seed_time\n    # (отзыв создаётся позже покупки, поэтому фильтруем по review_creation_date)\n    reviews_known = reviews[reviews[\"review_creation_date\"] < seed_time]\n    reviews_subset = reviews_known[[\"order_id\", \"review_score\"]].drop_duplicates(subset=\"order_id\")\n\n    merged_rev = merged.merge(reviews_subset, on=\"order_id\", how=\"left\")\n\n    if not merged_rev[\"review_score\"].isna().all():\n        group_rev = merged_rev.groupby(\"product_id\")\n        avg_review = group_rev[\"review_score\"].mean()\n        num_reviews = group_rev[\"review_score\"].count()\n        merged_rev[\"positive\"] = (merged_rev[\"review_score\"] >= 4).astype(int)\n        pos_reviews = group_rev[\"positive\"].sum()\n        positive_ratio = pos_reviews / num_reviews.replace(0, np.nan)\n\n        features[\"avg_review_score\"] = avg_review\n        features[\"num_reviews\"] = num_reviews\n        features[\"positive_reviews\"] = pos_reviews\n        features[\"positive_ratio\"] = positive_ratio\n    else:\n        features[\"avg_review_score\"] = 0\n        features[\"num_reviews\"] = 0\n        features[\"positive_reviews\"] = 0\n        features[\"positive_ratio\"] = 0\n\n    features = features.reindex(entity_ids)\n    features = features.fillna(0)\n\n    return features\n```",
+   "usage": {
+    "completion_tokens": 1213,
+    "prompt_tokens": 3344,
+    "total_tokens": 4557,
+    "completion_tokens_details": {
+     "accepted_prediction_tokens": null,
+     "audio_tokens": 0,
+     "reasoning_tokens": 92,
+     "rejected_prediction_tokens": null,
+     "text_tokens": null,
+     "image_tokens": 0
+    },
+    "prompt_tokens_details": {
+     "audio_tokens": 0,
+     "cached_tokens": 0,
+     "text_tokens": null,
+     "image_tokens": null,
+     "cache_write_tokens": 0,
+     "video_tokens": 0
+    },
+    "cost": 0.0011081,
+    "is_byok": false,
+    "cost_details": {
+     "upstream_inference_cost": 0.0011081,
+     "upstream_inference_prompt_cost": 0.0005016,
+     "upstream_inference_completions_cost": 0.0006065
+    }
+   }
+  }
+ ],
+ "status": "ok",
+ "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n\n    items = order_items[order_items[\"product_id\"].isin(entity_ids)].copy()\n\n    merged = items.merge(\n        orders[[\"order_id\", \"order_purchase_timestamp\"]],\n        on=\"order_id\",\n        how=\"left\"\n    )\n\n    # Только заказы, совершённые строго до seed_time\n    merged = merged[merged[\"order_purchase_timestamp\"] < seed_time]\n\n    if merged.empty:\n        features = pd.DataFrame(index=list(entity_ids))\n        features[\"has_history\"] = 0\n        features = features.reindex(entity_ids)\n        return features\n\n    merged[\"days_to_seed\"] = (seed_time - merged[\"order_purchase_timestamp\"]).dt.days\n\n    merged[\"in_30\"] = (merged[\"days_to_seed\"] <= 30).astype(int)\n    merged[\"in_60\"] = (merged[\"days_to_seed\"] <= 60).astype(int)\n    merged[\"in_90\"] = (merged[\"days_to_seed\"] <= 90).astype(int)\n\n    group = merged.groupby(\"product_id\")\n\n    total_orders = group[\"order_id\"].nunique()\n    total_items = group.size()\n    total_revenue = group.apply(lambda x: (x[\"price\"] + x[\"freight_value\"]).sum())\n    avg_price = group[\"price\"].mean()\n    avg_freight = group[\"freight_value\"].mean()\n    median_price = group[\"price\"].median()\n    median_freight = group[\"freight_value\"].median()\n    std_price = group[\"price\"].std()\n    std_freight = group[\"freight_value\"].std()\n    min_price = group[\"price\"].min()\n    max_price = group[\"price\"].max()\n    n_sellers = group[\"seller_id\"].nunique()\n\n    avg_days = group[\"days_to_seed\"].mean()\n    min_days = group[\"days_to_seed\"].min()\n    max_days = group[\"days_to_seed\"].max()\n    median_days = group[\"days_to_seed\"].median()\n    std_days = group[\"days_to_seed\"].std()\n\n    span_days = (max_days - min_days + 1).replace({0: np.nan})\n    order_freq = total_orders / span_days\n\n    avg_items_per_order = total_items / total_orders\n    avg_revenue_per_order = total_revenue / total_orders\n\n    features = pd.DataFrame({\n        \"total_orders\": total_orders,\n        \"total_items\": total_items,\n        \"total_revenue\": total_revenue,\n        \"avg_price\": avg_price,\n        \"avg_freight\": avg_freight,\n        \"median_price\": median_price,\n        \"median_freight\": median_freight,\n        \"std_price\": std_price,\n        \"std_freight\": std_freight,\n        \"min_price\": min_price,\n        \"max_price\": max_price,\n        \"n_sellers\": n_sellers,\n        \"avg_days_to_seed\": avg_days,\n        \"min_days_to_seed\": min_days,\n        \"max_days_to_seed\": max_days,\n        \"median_days_to_seed\": median_days,\n        \"std_days_to_seed\": std_days,\n        \"order_freq\": order_freq,\n        \"avg_items_per_order\": avg_items_per_order,\n        \"avg_revenue_per_order\": avg_revenue_per_order,\n        \"has_history\": 1\n    })\n\n    for window, col in [(30, \"orders_30\"), (60, \"orders_60\"), (90, \"orders_90\")]:\n        mask = merged[\"days_to_seed\"] <= window\n        sub = merged[mask]\n        if not sub.empty:\n            features[col] = sub.groupby(\"product_id\")[\"order_id\"].nunique()\n        else:\n            features[col] = 0\n\n    # Отзывы: берём только те, что уже существуют на момент seed_time\n    # (отзыв создаётся позже покупки, поэтому фильтруем по review_creation_date)\n    reviews_known = reviews[reviews[\"review_creation_date\"] < seed_time]\n    reviews_subset = reviews_known[[\"order_id\", \"review_score\"]].drop_duplicates(subset=\"order_id\")\n\n    merged_rev = merged.merge(reviews_subset, on=\"order_id\", how=\"left\")\n\n    if not merged_rev[\"review_score\"].isna().all():\n        group_rev = merged_rev.groupby(\"product_id\")\n        avg_review = group_rev[\"review_score\"].mean()\n        num_reviews = group_rev[\"review_score\"].count()\n        merged_rev[\"positive\"] = (merged_rev[\"review_score\"] >= 4).astype(int)\n        pos_reviews = group_rev[\"positive\"].sum()\n        positive_ratio = pos_reviews / num_reviews.replace(0, np.nan)\n\n        features[\"avg_review_score\"] = avg_review\n        features[\"num_reviews\"] = num_reviews\n        features[\"positive_reviews\"] = pos_reviews\n        features[\"positive_ratio\"] = positive_ratio\n    else:\n        features[\"avg_review_score\"] = 0\n        features[\"num_reviews\"] = 0\n        features[\"positive_reviews\"] = 0\n        features[\"positive_ratio\"] = 0\n\n    features = features.reindex(entity_ids)\n    features = features.fillna(0)\n\n    return features",
+ "usage": {
+  "prompt_tokens": 3344,
+  "completion_tokens": 1213,
+  "total_tokens": 4557,
+  "cost": 0.0011081
+ },
+ "wall_seconds": 18.4
+}
