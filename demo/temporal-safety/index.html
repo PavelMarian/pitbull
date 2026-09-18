@@ -38,6 +38,13 @@
     }
 
     button { font: inherit; }
+    section[id] { scroll-margin-top: 86px; }
+    .top-nav { position: sticky; top: 0; z-index: 100; border-bottom: 1px solid rgba(145,112,69,.34); background: rgba(250,246,237,.94); backdrop-filter: blur(14px); }
+    .nav-inner { width: min(1460px, calc(100% - 40px)); min-height: 62px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 22px; }
+    .brand { color: var(--ink); font: 700 15px var(--serif); letter-spacing: .05em; text-decoration: none; }
+    .nav-links { display: flex; align-items: center; gap: 6px; }
+    .nav-links a { padding: 8px 11px; border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 700; text-decoration: none; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--ink); background: var(--sand-1); outline: none; }
     .shell { width: min(1460px, calc(100% - 40px)); margin: 0 auto; padding: 28px 0 52px; }
 
     .masthead {
@@ -65,6 +72,17 @@
       letter-spacing: -.045em;
     }
     h1 em { color: var(--clay); font-weight: 400; }
+    .section-intro { margin: 34px 0 16px; }
+    .section-intro h2 { margin: 8px 0 0; font: 400 38px/1 var(--serif); }
+    .motivation { margin: 18px 0 34px; padding: 28px; border: 1px solid rgba(145,112,69,.34); border-radius: 24px; background: var(--paper); box-shadow: var(--shadow); }
+    .motivation-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 34px; align-items: end; }
+    .motivation h2 { margin: 8px 0 12px; font: 400 38px/1.05 var(--serif); max-width: 760px; }
+    .motivation p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+    .motivation-path { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 10px; align-items: center; }
+    .motivation-step { padding: 14px; border: 1px solid var(--sand-2); border-radius: 14px; background: #fffaf1; }
+    .motivation-step span { display: block; color: var(--muted); font: 800 9px var(--mono); letter-spacing: .1em; }
+    .motivation-step b { display: block; margin-top: 5px; font-size: 12px; }
+    .motivation-arrow { color: var(--clay); font: 20px var(--serif); }
     .source-panel {
       display: grid;
       grid-template-columns: minmax(250px, .65fr) minmax(420px, 1.35fr);
@@ -156,7 +174,7 @@
       display: grid;
       grid-template-columns: minmax(0, 1.35fr) minmax(380px, .65fr);
       gap: 18px;
-      align-items: stretch;
+      align-items: start;
     }
     .panel {
       background: var(--paper);
@@ -220,7 +238,7 @@
     .metric.alert { border-color: rgba(169,87,63,.45); background: #fbede4; }
     .metric.ok { border-color: rgba(85,112,93,.42); background: #eef5eb; }
 
-    .control-panel { display: flex; flex-direction: column; min-height: 620px; }
+    .control-panel { display: flex; flex-direction: column; min-height: 0; }
     .case { padding: 19px 20px 16px; border-bottom: 1px solid rgba(145,112,69,.2); }
     .case-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .case h3 { margin: 0; font: 400 23px/1.15 var(--serif); }
@@ -235,8 +253,9 @@
     .badge.clean { background: var(--sage-soft); color: var(--sage); }
     .case p { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
 
-    .trace { flex: 1; padding: 8px 20px; overflow: auto; max-height: 435px; }
+    .trace { flex: 0 0 auto; padding: 8px 20px; overflow: visible; }
     .event {
+      display: none;
       position: relative;
       margin-left: 10px;
       padding: 14px 0 14px 29px;
@@ -245,7 +264,7 @@
       transform: translateY(5px);
       transition: opacity .4s ease, transform .4s ease;
     }
-    .event.visible { opacity: 1; transform: none; }
+    .event.visible { display: block; opacity: 1; transform: none; animation: rise .35s ease both; }
     .event::before {
       content: ""; position: absolute; left: -6px; top: 19px;
       width: 10px; height: 10px; border-radius: 50%;
@@ -367,9 +386,7 @@
     .run-meter i { display: block; width: var(--value); height: 100%; border-radius: inherit; background: var(--sage); }
     .a4-insight { min-height: 44px; margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--sage-soft); color: var(--ink); font-size: 10px; line-height: 1.5; }
 
-    .coverage-control { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; margin-top: 18px; }
-    .coverage-control input { width: 100%; accent-color: var(--clay); cursor: pointer; }
-    .coverage-control span { color: var(--muted); font: 800 9px var(--mono); }
+    .coverage-control { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
     .coverage-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
     .coverage-score { padding: 14px; border: 1px solid var(--sand-2); border-radius: 14px; background: var(--paper); }
     .coverage-score label { color: var(--muted); font: 800 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
@@ -391,24 +408,57 @@
     .conclusion-item span { color: var(--clay); font: 800 9px var(--mono); letter-spacing: .12em; }
     .conclusion-item b { display: block; margin-top: 7px; font: 400 20px/1.1 var(--serif); }
     .conclusion-item p { margin: 7px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+    .findings-section { margin-top: 34px; }
+    .skill-artifact {
+      margin-top: 34px; padding: 28px;
+      border: 1px solid rgba(145,112,69,.34); border-radius: 24px;
+      background: var(--paper); box-shadow: var(--shadow);
+    }
+    .skill-build-grid { display: grid; grid-template-columns: minmax(0, .78fr) minmax(420px, 1.22fr); gap: 28px; align-items: start; }
+    .skill-artifact h2 { margin: 8px 0 12px; font: 400 38px/1 var(--serif); }
+    .skill-artifact .lead { margin: 0; max-width: 610px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+    .skill-rules { display: grid; gap: 8px; margin: 20px 0 0; }
+    .skill-rule { display: flex; justify-content: space-between; gap: 16px; padding: 11px 13px; border: 1px solid var(--sand-2); border-radius: 12px; background: #fffaf1; font-size: 11px; }
+    .skill-rule span { color: var(--muted); }
+    .skill-rule b { text-align: right; font-family: var(--mono); font-size: 10px; }
+    .skill-builder { padding: 18px; border: 1px solid var(--sand-2); border-radius: 18px; background: #fffaf1; }
+    .build-status { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--sand-2); }
+    .build-status label { color: var(--muted); font: 800 9px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .build-status strong { display: block; margin-top: 4px; font: 400 22px var(--serif); }
+    .build-badge { padding: 7px 10px; border-radius: 999px; background: var(--sand-1); color: var(--muted); font: 800 9px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .build-badge.ready { background: var(--sage-soft); color: var(--sage); }
+    .skill-output { display: none; margin-top: 14px; padding: 14px; border: 1px solid rgba(85,112,93,.4); border-radius: 14px; background: #eef5eb; }
+    .skill-output.visible { display: block; animation: rise .35s ease both; }
+    .skill-output-head { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+    .skill-output h3 { margin: 0; font: 400 21px var(--serif); }
+    .skill-output p { margin: 5px 0 0; color: var(--muted); font-size: 10px; }
+    .skill-files { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+    .skill-file { padding: 6px 9px; border-radius: 8px; background: rgba(255,255,255,.64); color: var(--ink); font: 9px var(--mono); }
 
     footer { display: flex; justify-content: space-between; gap: 20px; margin-top: 20px; color: var(--muted); font-size: 10px; }
     @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
     @media (max-width: 980px) {
       .source-panel { grid-template-columns: 1fr; }
+      .motivation-grid { grid-template-columns: 1fr; }
       .workspace { grid-template-columns: 1fr; }
-      .control-panel { min-height: 540px; }
+      .control-panel { min-height: 0; }
       .stagebar { grid-template-columns: repeat(3, 1fr); }
       .stage:nth-child(3) { border-right: 0; }
       .stage:nth-child(-n+3) { border-bottom: 1px solid var(--sand-3); }
       .report.visible { grid-template-columns: 1fr; }
       .stat-grid { grid-template-columns: 1fr 1fr; }
       .story-chapter { grid-template-columns: 1fr; }
+      .skill-build-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 620px) {
       .shell { width: min(100% - 20px, 1460px); padding-top: 16px; }
       .masthead { grid-template-columns: 1fr; }
+      .nav-inner { width: min(100% - 20px, 1460px); min-height: 56px; }
+      .nav-links { gap: 1px; }
+      .nav-links a { padding: 7px 6px; font-size: 10px; }
+      .motivation-path { grid-template-columns: 1fr; }
+      .motivation-arrow { transform: rotate(90deg); text-align: center; }
       .stagebar { grid-template-columns: 1fr 1fr; }
       .drop-zone { grid-template-columns: auto 1fr; }
       .upload-stack { grid-template-columns: 1fr; }
@@ -429,57 +479,47 @@
   </style>
 </head>
 <body>
+  <nav class="top-nav" aria-label="Page sections">
+    <div class="nav-inner">
+      <a class="brand" href="#top">PITBULL</a>
+      <div class="nav-links">
+        <a href="#motivation">Motivation</a>
+        <a href="#demonstration">Demonstration</a>
+        <a href="#experiments">Experiments</a>
+        <a href="#findings">Findings</a>
+        <a href="#skill-artifact">Skill Artifact</a>
+      </div>
+    </div>
+  </nav>
   <main class="shell">
-    <header class="masthead">
+    <header class="masthead" id="top">
       <div>
-        <div class="eyebrow">Temporal Safety Lab · feature validation</div>
+        <div class="eyebrow">Temporal Safety · feature validation</div>
         <h1>Watch a feature <em>see tomorrow</em> — then repair it.</h1>
       </div>
     </header>
 
-    <section class="source-panel" aria-labelledby="source-title">
-      <div class="source-copy">
-        <div class="eyebrow">Input · target case</div>
-        <h2 id="source-title">Configure evaluation</h2>
-        <p>Load the data profile, then add a Python program implementing <code>get_features(db, entity_ids, seed_time)</code>.</p>
-        <span class="profile-state pending" id="input-state">Waiting for data profile and feature code</span>
-      </div>
-      <div class="upload-stack">
+    <section class="motivation" id="motivation" aria-labelledby="motivation-title">
+      <div class="motivation-grid">
         <div>
-          <span class="upload-step">01 · Data profile</span>
-          <div class="drop-zone" id="profile-drop-zone" role="button" tabindex="0" aria-label="Choose or drop a data profile">
-            <input id="profile-input" type="file" accept=".json,.yaml,.yml,application/json" hidden>
-            <span class="upload-icon" id="profile-icon">↑</span>
-            <span class="upload-text">
-              <b id="profile-title">Drop data profile here</b>
-              <small id="profile-detail">.json · .yaml · up to 1 MB</small>
-            </span>
-            <button class="choose-button" type="button" id="choose-profile">Choose profile</button>
-          </div>
+          <div class="eyebrow">Motivation</div>
+          <h2 id="motivation-title">Model can be valid and still learn from the future</h2>
+          <p>Relational feature programs often join records whose values become available at different times. PITBULL turns point-in-time correctness into an executable check, localizes the responsible availability channel, repairs the program, and verifies the candidate on unseen prediction times.</p>
         </div>
-        <div>
-          <span class="upload-step">02 · Feature program</span>
-          <div class="drop-zone" id="drop-zone" role="button" tabindex="0" aria-label="Choose or drop a code file">
-            <input id="file-input" type="file" accept=".py,text/x-python" hidden>
-            <span class="upload-icon" id="upload-icon">↑</span>
-            <span class="upload-text">
-              <b id="upload-title">Drop code file here</b>
-              <small id="upload-detail">Python .py · up to 1 MB</small>
-            </span>
-            <button class="choose-button" type="button" id="choose-file">Choose file</button>
-          </div>
+        <div class="motivation-path" aria-label="Temporal failure and repair path">
+          <div class="motivation-step"><span>VALID CODE</span><b>Pipeline executes</b></div>
+          <span class="motivation-arrow" aria-hidden="true">→</span>
+          <div class="motivation-step"><span>HIDDEN FAILURE</span><b>Future data leaks</b></div>
+          <span class="motivation-arrow" aria-hidden="true">→</span>
+          <div class="motivation-step"><span>EXECUTABLE GATE</span><b>Detect and repair</b></div>
         </div>
       </div>
     </section>
 
-    <section class="stagebar" aria-label="Repair pipeline">
-      <div class="stage active" data-stage="0"><span class="num">01</span><b>Inspect</b><small>candidate code</small></div>
-      <div class="stage" data-stage="1"><span class="num">02</span><b>Detect</b><small>full vs past</small></div>
-      <div class="stage" data-stage="2"><span class="num">03</span><b>Localize</b><small>availability channel</small></div>
-      <div class="stage" data-stage="3"><span class="num">04</span><b>Repair</b><small>agent patch</small></div>
-      <div class="stage" data-stage="4"><span class="num">05</span><b>Revalidate</b><small>development times</small></div>
-      <div class="stage" data-stage="5"><span class="num">06</span><b>Holdout</b><small>hidden times</small></div>
-    </section>
+    <div class="section-intro" id="demonstration">
+      <div class="eyebrow">Live temporal safety run</div>
+      <h2>Demonstration</h2>
+    </div>
 
     <section class="workspace">
       <article class="panel code-panel">
@@ -533,8 +573,8 @@
         </div>
         <div class="trace" aria-live="polite">
           <div class="event visible" data-event="0">
-            <span class="time">WAITING</span><b>Target file required</b>
-            <p>Select a feature program before starting the analysis.</p>
+            <span class="time">READY</span><b>Candidate program loaded</b>
+            <p><code>generated_features.py</code> · 19 output columns · development seed 2018-04-01.</p>
           </div>
           <div class="event bad" data-event="1">
             <span class="time">DETECT</span><b>Temporal witness found</b>
@@ -563,7 +603,7 @@
         </div>
         <div class="actions">
           <button class="primary" id="advance" type="button">Run temporal check</button>
-          <p class="hint" id="hint">Load a data profile and target feature program to begin.</p>
+          <p class="hint" id="hint">The candidate is ready. Start the temporal availability pipeline.</p>
         </div>
       </aside>
     </section>
@@ -592,11 +632,11 @@
       </dl>
     </section>
 
-    <section class="experiment-evidence" aria-labelledby="evidence-title">
+    <section class="experiment-evidence" id="experiments" aria-labelledby="evidence-title">
       <div class="evidence-head">
         <div>
           <div class="eyebrow">Guided evidence story · A1 / A2 / A3</div>
-          <h2 id="evidence-title">Study-level evidence.</h2>
+          <h2 id="evidence-title">Experiments</h2>
         </div>
       </div>
       <p class="story-lead">Start with the repair loop, inspect one concrete change, then ask whether the result repeats and whether the detector remains reliable as temporal coverage grows.</p>
@@ -670,14 +710,21 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
           <span class="story-index">03 · Experiment A3</span>
           <h3 id="a5-title">How much temporal coverage is enough to expose a leak?</h3>
           <p>A3 varies the number of checked prediction times. Witness and canary are two complementary signals for detecting future dependence.</p>
-          <p class="story-answer">Move the slider to see detection strengthen, then run the same witness check on clean controls.</p>
+          <p class="story-answer">Choose the number of prediction times to see detection strengthen, then run the same witness check on clean controls.</p>
         </div>
         <div class="story-visual">
           <div class="story-result">
             <div><label>Prediction times checked</label><strong id="density-count">1 time</strong></div>
             <p id="density-note">A single time already exposes most leaking programs; additional times close the remaining gap.</p>
           </div>
-          <div class="coverage-control"><span>1</span><input id="density-slider" type="range" min="1" max="5" step="1" value="1" aria-label="Prediction times checked"><span>5</span></div>
+          <span class="control-label">Prediction times checked</span>
+          <div class="coverage-control" aria-label="Select number of prediction times">
+            <button class="iteration-button density-button" type="button" data-density="1" aria-pressed="true">k = 1</button>
+            <button class="iteration-button density-button" type="button" data-density="2" aria-pressed="false">k = 2</button>
+            <button class="iteration-button density-button" type="button" data-density="3" aria-pressed="false">k = 3</button>
+            <button class="iteration-button density-button" type="button" data-density="4" aria-pressed="false">k = 4</button>
+            <button class="iteration-button density-button" type="button" data-density="5" aria-pressed="false">k = 5</button>
+          </div>
           <div class="coverage-readout">
             <div class="coverage-score"><label>Witness</label><strong id="witness-score">91.3%</strong><div class="coverage-track"><span id="witness-track" style="--coverage:91.3%;--score-color:var(--clay)"></span></div></div>
             <div class="coverage-score"><label>Canary</label><strong id="canary-score">92.7%</strong><div class="coverage-track"><span id="canary-track" style="--coverage:92.7%;--score-color:var(--ochre)"></span></div></div>
@@ -693,10 +740,49 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
         </div>
       </article>
 
+    </section>
+
+    <section class="findings-section" id="findings" aria-labelledby="findings-title">
+      <div class="section-intro">
+        <div class="eyebrow">Research summary</div>
+        <h2 id="findings-title">Key findings</h2>
+      </div>
       <div class="story-conclusion" aria-label="Study conclusions">
         <div class="conclusion-item"><span>A1 · EFFECTIVENESS</span><b>75 / 76 repaired</b><p>CLEAN@5 = 98.7% · Wilson 95% CI [92.9%, 99.8%]</p></div>
         <div class="conclusion-item"><span>A2 · REPEATABILITY</span><b>182 / 186 clean</b><p>Three independent generations remain tightly aligned.</p></div>
         <div class="conclusion-item"><span>A3 · DETECTION</span><b>0 / 30 false positives</b><p>Coverage approaches 99.5% as more prediction times are checked.</p></div>
+      </div>
+    </section>
+
+    <section class="skill-artifact" id="skill-artifact" aria-labelledby="skill-title">
+      <div class="skill-build-grid">
+        <div>
+          <div class="eyebrow">Practical artifact</div>
+          <h2 id="skill-title">Reusable skill artifact</h2>
+          <p class="lead">The repair loop and study thresholds were packaged as an agent-ready temporal safety skill. The artifact preserves the evidence-backed defaults established by the evaluation.</p>
+          <div class="skill-rules" aria-label="Evidence-backed skill policy">
+            <div class="skill-rule"><span>Repair budget</span><b>up to 5 iterations</b></div>
+            <div class="skill-rule"><span>Detection policy</span><b>witness + canary review</b></div>
+            <div class="skill-rule"><span>Acceptance gate</span><b>held-out revalidation</b></div>
+          </div>
+        </div>
+        <div class="skill-builder">
+          <div class="build-status">
+            <div><label>Artifact status</label><strong>Validated and ready</strong></div>
+            <span class="build-badge ready">Available</span>
+          </div>
+          <div class="skill-output visible" id="skill-output">
+            <div class="skill-output-head">
+              <div><h3>PITBULL temporal-safety skill</h3><p>Packaged from the evaluated workflow · validation passed</p></div>
+              <button class="secondary" id="download-skill" type="button">Download SKILL.md</button>
+            </div>
+            <div class="skill-files" aria-label="Generated skill files">
+              <span class="skill-file">SKILL.md</span>
+              <span class="skill-file">references/availability-contract.md</span>
+              <span class="skill-file">scripts/run_temporal_check.py</span>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -723,11 +809,12 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
 
     let step = 0;
     let running = false;
-    let profileLoaded = false;
-    let profileName = '';
-    let sourceLoaded = false;
-    let sourceName = '';
+    let profileLoaded = true;
+    let profileName = 'olist-profile.json';
+    let sourceLoaded = true;
+    let sourceName = 'generated_features.py';
     let sourceCode = '';
+    const embeddedSourceBase64 = 'ZGVmIGdldF9mZWF0dXJlcyhkYiwgZW50aXR5X2lkcywgc2VlZF90aW1lKToKICAgICIiIgogICAg0JLRi9GH0LjRgdC70Y/QtdGCINC/0YDQuNC30L3QsNC60Lgg0LTQu9GPINC60LDQttC00L7Qs9C+IHByb2R1Y3RfaWQg0L3QsCDQvtGB0L3QvtCy0LUg0LTQsNC90L3Ri9GFINC00L4gc2VlZF90aW1lLgogICAg0JLQvtC30LLRgNCw0YnQsNC10YIgRGF0YUZyYW1lINGBINC40L3QtNC10LrRgdCw0LzQuCBlbnRpdHlfaWRzICjQsiDQuNGB0YXQvtC00L3QvtC8INC/0L7RgNGP0LTQutC1KS4KICAgICIiIgogICAgIyDQoNCw0YHQv9Cw0LrQvtCy0LrQsCDQsdCw0Lcg0LTQsNC90L3Ri9GFCiAgICBvcmRlcnMgPSBkYlsnb3JkZXJzJ10KICAgIGl0ZW1zID0gZGJbJ29yZGVyX2l0ZW1zJ10KICAgIHJldmlld3MgPSBkYlsncmV2aWV3cyddCiAgICBwYXltZW50cyA9IGRiWydwYXltZW50cyddCgogICAgIyDQntGC0LHQuNGA0LDQtdC8INC/0YDQvtC00LDQttC4INGG0LXQu9C10LLRi9GFINGC0L7QstCw0YDQvtCyLCDQv9GA0L7QuNC30L7RiNC10LTRiNC40LUg0L3QtSDQv9C+0LfQtNC90LXQtSBzZWVkX3RpbWUKICAgIGl0ZW1zX3VzZSA9IGl0ZW1zW2l0ZW1zWydwcm9kdWN0X2lkJ10uaXNpbihlbnRpdHlfaWRzKSAmIChpdGVtc1sndHMnXSA8PSBzZWVkX3RpbWUpXQoKICAgICMgLS0tINCQ0LPRgNC10LPQsNGG0LjRjyDQv9C+INGC0L7QstCw0YDQsNC8LCDQtdGB0LvQuCDQtdGB0YLRjCDQuNGB0YLQvtGA0LjRjyDQv9GA0L7QtNCw0LYgLS0tCiAgICBpZiBub3QgaXRlbXNfdXNlLmVtcHR5OgogICAgICAgICMg0J7RgdC90L7QstC90YvQtSDQsNCz0YDQtdCz0LjRgNC+0LLQsNC90L3Ri9C1INC80LXRgtGA0LjQutC4INC/0L4g0LrQsNC20LTQvtC5INC/0L7Qt9C40YbQuNC4INGC0L7QstCw0YDQsAogICAgICAgIGFnZyA9IGl0ZW1zX3VzZS5ncm91cGJ5KCdwcm9kdWN0X2lkJykuYWdnKAogICAgICAgICAgICBzYWxlc19jb3VudD0oJ29yZGVyX2lkJywgJ2NvdW50JyksCiAgICAgICAgICAgIHVuaXF1ZV9vcmRlcnM9KCdvcmRlcl9pZCcsICdudW5pcXVlJyksCiAgICAgICAgICAgIHVuaXF1ZV9zZWxsZXJzPSgnc2VsbGVyX2lkJywgJ251bmlxdWUnKSwKICAgICAgICAgICAgdG90YWxfcHJpY2U9KCdwcmljZScsICdzdW0nKSwKICAgICAgICAgICAgYXZnX3ByaWNlPSgncHJpY2UnLCAnbWVhbicpLAogICAgICAgICAgICBzdGRfcHJpY2U9KCdwcmljZScsICdzdGQnKSwKICAgICAgICAgICAgbWluX3ByaWNlPSgncHJpY2UnLCAnbWluJyksCiAgICAgICAgICAgIG1heF9wcmljZT0oJ3ByaWNlJywgJ21heCcpLAogICAgICAgICAgICB0b3RhbF9mcmVpZ2h0PSgnZnJlaWdodF92YWx1ZScsICdzdW0nKSwKICAgICAgICAgICAgYXZnX2ZyZWlnaHQ9KCdmcmVpZ2h0X3ZhbHVlJywgJ21lYW4nKSwKICAgICAgICAgICAgbGFzdF9zYWxlX3RzPSgndHMnLCAnbWF4JykKICAgICAgICApLnJlc2V0X2luZGV4KCkKCiAgICAgICAgIyDQn9GA0L7QtNCw0LbQuCDQt9CwINC/0L7RgdC70LXQtNC90LjQtSA3IC8gMzAgLyA5MCDQtNC90LXQuQogICAgICAgIGZvciBwZXJpb2QsIHN1ZmZpeCBpbiBbKDcsICc3ZCcpLCAoMzAsICczMGQnKSwgKDkwLCAnOTBkJyldOgogICAgICAgICAgICBtYXNrID0gaXRlbXNfdXNlWyd0cyddID49IHNlZWRfdGltZSAtIHBkLlRpbWVkZWx0YShkYXlzPXBlcmlvZCkKICAgICAgICAgICAgdG1wID0gaXRlbXNfdXNlW21hc2tdLmdyb3VwYnkoJ3Byb2R1Y3RfaWQnKS5hZ2coCiAgICAgICAgICAgICAgICBjbnQ9KCdvcmRlcl9pZCcsICdjb3VudCcpLAogICAgICAgICAgICAgICAgcmV2PSgncHJpY2UnLCAnc3VtJykKICAgICAgICAgICAgKS5yZXNldF9pbmRleCgpCiAgICAgICAgICAgIHRtcC5jb2x1bW5zID0gWydwcm9kdWN0X2lkJywgZidzYWxlc197c3VmZml4fScsIGYncmV2ZW51ZV97c3VmZml4fSddCiAgICAgICAgICAgIGFnZyA9IGFnZy5tZXJnZSh0bXAsIG9uPSdwcm9kdWN0X2lkJywgaG93PSdsZWZ0JykKCiAgICAgICAgIyDQntGC0LfRi9Cy0Ysg0L3QsCDQt9Cw0LrQsNC30YssINGB0L7QtNC10YDQttCw0YnQuNC1INGC0L7QstCw0YAgKNC/0L4gcmV2aWV3X3Njb3JlKQogICAgICAgIHJldiA9IGl0ZW1zX3VzZVtbJ29yZGVyX2lkJywgJ3Byb2R1Y3RfaWQnXV0ubWVyZ2UoCiAgICAgICAgICAgIHJldmlld3NbWydvcmRlcl9pZCcsICdyZXZpZXdfc2NvcmUnXV0sCiAgICAgICAgICAgIG9uPSdvcmRlcl9pZCcsCiAgICAgICAgICAgIGhvdz0nbGVmdCcKICAgICAgICApCiAgICAgICAgcmV2ID0gcmV2LmRyb3BuYShzdWJzZXQ9WydyZXZpZXdfc2NvcmUnXSkKICAgICAgICBpZiBub3QgcmV2LmVtcHR5OgogICAgICAgICAgICByZXZfYWdnID0gcmV2Lmdyb3VwYnkoJ3Byb2R1Y3RfaWQnKS5hZ2coCiAgICAgICAgICAgICAgICBhdmdfcmV2aWV3X3Njb3JlPSgncmV2aWV3X3Njb3JlJywgJ21lYW4nKSwKICAgICAgICAgICAgICAgIHJldmlld19jb3VudD0oJ3Jldmlld19zY29yZScsICdjb3VudCcpCiAgICAgICAgICAgICkucmVzZXRfaW5kZXgoKQogICAgICAgIGVsc2U6CiAgICAgICAgICAgIHJldl9hZ2cgPSBwZC5EYXRhRnJhbWUoY29sdW1ucz1bJ3Byb2R1Y3RfaWQnLCAnYXZnX3Jldmlld19zY29yZScsICdyZXZpZXdfY291bnQnXSkKCiAgICAgICAgYWdnID0gYWdnLm1lcmdlKHJldl9hZ2csIG9uPSdwcm9kdWN0X2lkJywgaG93PSdsZWZ0JykKCiAgICBlbHNlOgogICAgICAgICMg0JXRgdC70Lgg0LjRgdGC0L7RgNC40Y8g0L/Rg9GB0YLQsCDigJMg0YHQvtC30LTQsNGR0Lwg0L/Rg9GB0YLQvtC5INCw0LPRgNC10LPQsNGCINGBINC90YPQttC90YvQvNC4INGB0YLQvtC70LHRhtCw0LzQuAogICAgICAgIGNvbHMgPSBbJ3Byb2R1Y3RfaWQnXSArIFsKICAgICAgICAgICAgJ3NhbGVzX2NvdW50JywgJ3VuaXF1ZV9vcmRlcnMnLCAndW5pcXVlX3NlbGxlcnMnLAogICAgICAgICAgICAndG90YWxfcHJpY2UnLCAnYXZnX3ByaWNlJywgJ3N0ZF9wcmljZScsICdtaW5fcHJpY2UnLCAnbWF4X3ByaWNlJywKICAgICAgICAgICAgJ3RvdGFsX2ZyZWlnaHQnLCAnYXZnX2ZyZWlnaHQnLCAnc2FsZXNfN2QnLCAncmV2ZW51ZV83ZCcsCiAgICAgICAgICAgICdzYWxlc18zMGQnLCAncmV2ZW51ZV8zMGQnLCAnc2FsZXNfOTBkJywgJ3JldmVudWVfOTBkJywKICAgICAgICAgICAgJ2F2Z19yZXZpZXdfc2NvcmUnLCAncmV2aWV3X2NvdW50JwogICAgICAgIF0KICAgICAgICBhZ2cgPSBwZC5EYXRhRnJhbWUoY29sdW1ucz1jb2xzKQoKICAgICMgLS0tINCh0LHQvtGA0LrQsCDRgNC10LfRg9C70YzRgtC40YDRg9GO0YnQtdCz0L4gRGF0YUZyYW1lIC0tLQogICAgIyDQsdCw0LfQvtCy0LDRjyDRgtCw0LHQu9C40YbQsCDRgdC+INCy0YHQtdC80LggcHJvZHVjdF9pZAogICAgcmVzID0gcGQuRGF0YUZyYW1lKHsncHJvZHVjdF9pZCc6IGVudGl0eV9pZHN9KQoKICAgICMg0L/RgNC40YHQvtC10LTQuNC90Y/QtdC8INCw0LPRgNC10LPQuNGA0L7QstCw0L3QvdGL0LUg0L/RgNC40LfQvdCw0LrQuAogICAgaWYgbm90IGFnZy5lbXB0eToKICAgICAgICByZXMgPSByZXMubWVyZ2UoYWdnLCBvbj0ncHJvZHVjdF9pZCcsIGhvdz0nbGVmdCcpCgogICAgIyAtLS0g0J/RgNC40LfQvdCw0LogItC00L3QtdC5INGBINC/0L7RgdC70LXQtNC90LXQuSDQv9GA0L7QtNCw0LbQuCIgLS0tCiAgICBpZiAnbGFzdF9zYWxlX3RzJyBpbiByZXMuY29sdW1uczoKICAgICAgICByZXNbJ2RheXNfc2luY2VfbGFzdF9zYWxlJ10gPSAoc2VlZF90aW1lIC0gcmVzWydsYXN0X3NhbGVfdHMnXSkuZHQuZGF5cwogICAgICAgIHJlc1snZGF5c19zaW5jZV9sYXN0X3NhbGUnXSA9IHJlc1snZGF5c19zaW5jZV9sYXN0X3NhbGUnXS5maWxsbmEoOTk5LjApLmFzdHlwZShmbG9hdCkKICAgICAgICByZXMgPSByZXMuZHJvcChjb2x1bW5zPVsnbGFzdF9zYWxlX3RzJ10pCiAgICBlbHNlOgogICAgICAgIHJlc1snZGF5c19zaW5jZV9sYXN0X3NhbGUnXSA9IDk5OS4wCgogICAgIyAtLS0g0JfQsNC/0L7Qu9C90LXQvdC40LUg0L/RgNC+0L/Rg9GB0LrQvtCyINGH0LjRgdC70L7QstGL0YUg0L/RgNC40LfQvdCw0LrQvtCyINC90YPQu9GP0LzQuCAtLS0KICAgIG51bV9jb2xzID0gWwogICAgICAgICdzYWxlc19jb3VudCcsICd1bmlxdWVfb3JkZXJzJywgJ3VuaXF1ZV9zZWxsZXJzJywKICAgICAgICAndG90YWxfcHJpY2UnLCAnYXZnX3ByaWNlJywgJ3N0ZF9wcmljZScsICdtaW5fcHJpY2UnLCAnbWF4X3ByaWNlJywKICAgICAgICAndG90YWxfZnJlaWdodCcsICdhdmdfZnJlaWdodCcsCiAgICAgICAgJ3NhbGVzXzdkJywgJ3JldmVudWVfN2QnLCAnc2FsZXNfMzBkJywgJ3JldmVudWVfMzBkJywKICAgICAgICAnc2FsZXNfOTBkJywgJ3JldmVudWVfOTBkJywKICAgICAgICAnYXZnX3Jldmlld19zY29yZScsICdyZXZpZXdfY291bnQnCiAgICBdCiAgICBmb3IgY29sIGluIG51bV9jb2xzOgogICAgICAgIGlmIGNvbCBub3QgaW4gcmVzLmNvbHVtbnM6CiAgICAgICAgICAgIHJlc1tjb2xdID0gMC4wCiAgICAgICAgZWxzZToKICAgICAgICAgICAgcmVzW2NvbF0gPSByZXNbY29sXS5maWxsbmEoMC4wKS5hc3R5cGUoZmxvYXQpCgogICAgIyDQn9C10YDQtdC40L3QtNC10LrRgdC40YDRg9C10Lwg0L/QviBlbnRpdHlfaWRzCiAgICByZXMgPSByZXMuc2V0X2luZGV4KCdwcm9kdWN0X2lkJykKICAgIHJlcyA9IHJlcy5yZWluZGV4KGVudGl0eV9pZHMpCgogICAgcmV0dXJuIHJlcwo=';
     let repairReady = false;
     let repairedSourceCode = '';
     let repairedDownloadText = '';
@@ -790,29 +877,19 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
       repairReady = true;
     }
 
+    function loadEmbeddedSourceArtifact() {
+      const bytes = Uint8Array.from(atob(embeddedSourceBase64), character => character.charCodeAt(0));
+      sourceCode = escapeHtml(stripPresentationComments(new TextDecoder().decode(bytes)));
+    }
+
     function renderLineNumbers(text) {
       const count = Math.max(1, text.split('\n').length);
       $('line-nos').textContent = Array.from({ length: count }, (_, index) => index + 1).join('\n');
     }
 
-    function updateSourceEvent() {
-      const event = document.querySelector('[data-event="0"]');
-      event.querySelector('.time').textContent = inputsReady() ? 'READY' : 'WAITING';
-      event.querySelector('b').textContent = inputsReady() ? 'Evaluation inputs loaded' : 'Evaluation inputs required';
-      event.querySelector('p').textContent = inputsReady()
-        ? `${profileName} + ${sourceName} · 19 output columns · development seed 2018-04-01.`
-        : 'Load both the data profile and feature program before starting the analysis.';
-    }
+    function updateSourceEvent() {}
 
-    function updateInputState() {
-      const state = $('input-state');
-      state.classList.toggle('pending', !inputsReady());
-      if (inputsReady()) state.textContent = 'Olist profile and feature code ready';
-      else if (profileLoaded && sourceLoaded) state.textContent = 'Preparing evaluation artifacts';
-      else if (profileLoaded) state.textContent = 'Data profile ready · feature code required';
-      else if (sourceLoaded) state.textContent = 'Feature code ready · data profile required';
-      else state.textContent = 'Waiting for data profile and feature code';
-    }
+    function updateInputState() {}
 
     function selectProfile(file) {
       if (!file || running) return;
@@ -963,6 +1040,32 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
 
     const wait = (milliseconds) => new Promise(resolve => window.setTimeout(resolve, milliseconds));
 
+    const generatedSkill = `---
+name: pitbull-temporal-safety
+description: Detect, localize, repair, and revalidate point-in-time violations in relational feature programs.
+---
+
+# PITBULL Temporal Safety
+
+Use this skill when a coding agent creates or modifies a relational feature program whose outputs must be reproducible at prediction time.
+
+## Workflow
+
+1. Run the candidate on full and past-only database views at development prediction times.
+2. Treat any output divergence as a temporal witness and localize the implicated availability channel.
+3. Repair the candidate using the witness evidence. Allow at most five repair iterations.
+4. Use canary perturbations as an additional review signal, not as the sole rejection criterion.
+5. Accept a candidate only after it remains clean on held-out prediction times.
+6. Report runtime errors, timeouts, and missing outputs as failures, never as clean results.
+
+## Evidence-backed defaults
+
+- Maximum repair iterations: 5
+- Detection signals: witness plus canary review
+- Final gate: held-out temporal revalidation
+- Report: tested times, changed features, implicated channel, repair history, and final verdict
+`;
+
     async function runAnalysis() {
       if (running || step !== 0) return;
       if (!inputsReady()) {
@@ -974,7 +1077,6 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
         return;
       }
       running = true;
-      document.querySelector('.source-panel').classList.add('running');
       $('advance').disabled = true;
       $('advance').textContent = 'Analysis running · 0/6';
       $('run-state').textContent = 'running';
@@ -994,7 +1096,6 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
         advanceStep();
       }
       running = false;
-      document.querySelector('.source-panel').classList.remove('running');
     }
 
     function reset() {
@@ -1020,8 +1121,8 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
       $('advance').textContent = 'Run temporal check';
       $('run-state').textContent = inputsReady() ? 'inputs ready' : 'awaiting inputs';
       $('hint').textContent = inputsReady()
-        ? 'Profile and target loaded. Run the temporal availability pipeline when ready.'
-        : 'Load a data profile and target feature program to begin.';
+        ? 'The candidate is ready. Start the temporal availability pipeline.'
+        : 'The candidate is not available.';
       updateInputState();
       updateSourceEvent();
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1096,7 +1197,7 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
       $('a2-programs').innerHTML = Array.from({ length: 76 }, (_, index) =>
         `<span class="program-dot ${index < result.clean ? 'clean' : 'remaining'}" title="Program ${index + 1}: ${index < result.clean ? 'clean' : 'not clean by this iteration'}"></span>`
       ).join('');
-      document.querySelectorAll('.iteration-button').forEach(button => {
+      document.querySelectorAll('.iteration-button[data-iteration]').forEach(button => {
         button.setAttribute('aria-pressed', String(Number(button.dataset.iteration) === iteration));
       });
     }
@@ -1142,6 +1243,9 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
         : count === 5
           ? 'At five times, both signals detect more than 99% of leaking programs in the density study.'
           : `Adding temporal coverage raises witness detection to ${witness.toFixed(1)}%.`;
+      document.querySelectorAll('.density-button').forEach(button => {
+        button.setAttribute('aria-pressed', String(Number(button.dataset.density) === count));
+      });
     }
 
     async function runCleanControls() {
@@ -1165,54 +1269,6 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
 
     $('advance').addEventListener('click', runAnalysis);
     $('restart').addEventListener('click', reset);
-    $('choose-profile').addEventListener('click', event => {
-      event.stopPropagation();
-      $('profile-input').click();
-    });
-    $('profile-drop-zone').addEventListener('click', () => $('profile-input').click());
-    $('profile-drop-zone').addEventListener('keydown', event => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        $('profile-input').click();
-      }
-    });
-    $('profile-input').addEventListener('change', event => {
-      selectProfile(event.target.files[0]);
-      event.target.value = '';
-    });
-    ['dragenter', 'dragover'].forEach(type => $('profile-drop-zone').addEventListener(type, event => {
-      event.preventDefault();
-      $('profile-drop-zone').classList.add('dragging');
-    }));
-    ['dragleave', 'drop'].forEach(type => $('profile-drop-zone').addEventListener(type, event => {
-      event.preventDefault();
-      $('profile-drop-zone').classList.remove('dragging');
-    }));
-    $('profile-drop-zone').addEventListener('drop', event => selectProfile(event.dataTransfer.files[0]));
-    $('choose-file').addEventListener('click', event => {
-      event.stopPropagation();
-      $('file-input').click();
-    });
-    $('drop-zone').addEventListener('click', () => $('file-input').click());
-    $('drop-zone').addEventListener('keydown', event => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        $('file-input').click();
-      }
-    });
-    $('file-input').addEventListener('change', event => {
-      selectSource(event.target.files[0]);
-      event.target.value = '';
-    });
-    ['dragenter', 'dragover'].forEach(type => $('drop-zone').addEventListener(type, event => {
-      event.preventDefault();
-      $('drop-zone').classList.add('dragging');
-    }));
-    ['dragleave', 'drop'].forEach(type => $('drop-zone').addEventListener(type, event => {
-      event.preventDefault();
-      $('drop-zone').classList.remove('dragging');
-    }));
-    $('drop-zone').addEventListener('drop', event => selectSource(event.dataTransfer.files[0]));
     $('download-source').addEventListener('click', () => {
       downloadText('generated_features.repaired.py', repairedDownloadText, 'text/x-python');
     });
@@ -1222,8 +1278,11 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
     $('download').addEventListener('click', () => {
       downloadText('pitbull-temporal-safety-report.json', JSON.stringify(reportData, null, 2), 'application/json');
     });
+    $('download-skill').addEventListener('click', () => {
+      downloadText('SKILL.md', generatedSkill, 'text/markdown');
+    });
 
-    document.querySelectorAll('.iteration-button').forEach(button => {
+    document.querySelectorAll('.iteration-button[data-iteration]').forEach(button => {
       button.addEventListener('click', () => renderA2(Number(button.dataset.iteration)));
     });
     $('repair-peek-toggle').addEventListener('click', () => {
@@ -1235,7 +1294,9 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
       button.addEventListener('click', () => renderA4(Number(button.dataset.run)));
     });
     $('compare-runs').addEventListener('click', compareA4Runs);
-    $('density-slider').addEventListener('input', event => renderCoverage(Number(event.target.value)));
+    document.querySelectorAll('.density-button').forEach(button => {
+      button.addEventListener('click', () => renderCoverage(Number(button.dataset.density)));
+    });
     $('run-controls').addEventListener('click', runCleanControls);
 
     $('control-matrix').innerHTML = Array.from({ length: 30 }, (_, index) =>
@@ -1244,6 +1305,7 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
     renderA2(1);
     renderA4(1);
     renderCoverage(1);
+    loadEmbeddedSourceArtifact();
     loadEmbeddedRepairArtifact();
     reset();
   </script>
