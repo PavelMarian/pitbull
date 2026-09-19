@@ -40,12 +40,12 @@
     button { font: inherit; }
     section[id] { scroll-margin-top: 86px; }
     .top-nav { position: sticky; top: 0; z-index: 100; border-bottom: 1px solid rgba(145,112,69,.34); background: rgba(250,246,237,.94); backdrop-filter: blur(14px); }
-    .nav-inner { width: min(1460px, calc(100% - 40px)); min-height: 62px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 22px; }
+    .nav-inner { width: min(1240px, calc(100% - 176px)); min-height: 62px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 22px; }
     .brand { color: var(--ink); font: 700 15px var(--serif); letter-spacing: .05em; text-decoration: none; }
     .nav-links { display: flex; align-items: center; gap: 6px; }
     .nav-links a { padding: 8px 11px; border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 700; text-decoration: none; }
     .nav-links a:hover, .nav-links a:focus-visible { color: var(--ink); background: var(--sand-1); outline: none; }
-    .shell { width: min(1460px, calc(100% - 40px)); margin: 0 auto; padding: 28px 0 52px; }
+    .shell { width: min(1240px, calc(100% - 176px)); margin: 0 auto; padding: 28px 0 52px; }
 
     .masthead {
       display: grid;
@@ -72,12 +72,29 @@
       letter-spacing: -.045em;
     }
     h1 em { color: var(--clay); font-weight: 400; }
+    .paper-note { margin-top: 18px; max-width: 760px; }
+    .paper-note p { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .paper-note p b { color: var(--ink); font-weight: 700; }
+    .paper-authors { font-size: 12px; }
+    .paper-scope { font-size: 12px; }
+    .paper-scope a { color: var(--clay); }
+    .limitations-text { margin: 12px 0 0; color: var(--muted); font-size: 16px; line-height: 1.7; }
+    .paper-tag { display: inline-block; padding: 5px 10px; border: 1px solid var(--sand-3); border-radius: 999px; color: var(--ink); font: 700 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
     .section-intro { margin: 34px 0 16px; }
     .section-intro h2 { margin: 8px 0 0; font: 400 38px/1 var(--serif); }
+    .section-lead { margin: 12px 0 0; color: var(--muted); font-size: 16px; line-height: 1.65; }
+    .loop-figure { margin: 22px 0 26px; }
+    .loop-figure svg { display: block; width: 100%; height: auto; }
+    .loop-figure figcaption { margin-top: 10px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .loop-figure figcaption code { font-family: var(--mono); font-size: 12px; }
     .motivation { margin: 18px 0 34px; padding: 28px; border: 1px solid rgba(145,112,69,.34); border-radius: 24px; background: var(--paper); box-shadow: var(--shadow); }
-    .motivation-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 34px; align-items: end; }
-    .motivation h2 { margin: 8px 0 12px; font: 400 38px/1.05 var(--serif); max-width: 760px; }
-    .motivation p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+    .motivation-grid { display: grid; grid-template-columns: 1fr 1.05fr; gap: 34px; align-items: center; }
+    .motivation h2 { margin: 0 0 12px; font: 400 34px/1.05 var(--serif); }
+    .motivation p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.7; }
+    .timeline { margin: 0; min-width: 0; }
+    .timeline svg { display: block; width: 100%; height: auto; }
+    .timeline figcaption { margin-top: 8px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+    .timeline figcaption code { font-family: var(--mono); font-size: 10px; }
     .motivation-path { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 10px; align-items: center; }
     .motivation-step { padding: 14px; border: 1px solid var(--sand-2); border-radius: 14px; background: #fffaf1; }
     .motivation-step span { display: block; color: var(--muted); font: 800 9px var(--mono); letter-spacing: .1em; }
@@ -192,7 +209,15 @@
     .panel-head h2 { margin: 0; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
     .file-meta { color: var(--muted); font: 11px var(--mono); }
 
-    .code-panel { min-height: 620px; }
+    .code-panel { min-height: 0; }
+    .code-panel.collapsed .code-wrap { min-height: 0; max-height: var(--code-collapsed, 320px); overflow: hidden; }
+    .code-expand {
+      position: relative; display: block; width: 100%; height: 56px; margin-top: -56px; padding: 26px 0 0; border: 0;
+      background: linear-gradient(to bottom, rgba(255,250,241,0) 0%, rgba(255,250,241,.85) 55%, var(--paper) 100%);
+      color: var(--ink); cursor: pointer; font: 700 10px var(--mono); letter-spacing: .14em; text-transform: uppercase;
+    }
+    .code-expand:hover { color: var(--clay); }
+    .code-panel:not(.collapsed) .code-expand { height: 34px; margin-top: 0; padding: 10px 0 0; background: var(--paper); border-top: 1px solid rgba(145,112,69,.24); }
     .code-wrap {
       display: grid;
       grid-template-columns: 44px 1fr;
@@ -204,7 +229,7 @@
     .line-nos, pre {
       margin: 0;
       padding: 22px 0;
-      font: 13px/1.78 var(--mono);
+      font: 11.5px/1.75 var(--mono);
       white-space: pre;
     }
     .line-nos { color: #8d8376; text-align: right; padding-right: 12px; user-select: none; }
@@ -308,11 +333,7 @@
     .report-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
     .secondary { border: 1px solid var(--sand-3); border-radius: 10px; padding: 10px 13px; color: var(--ink); background: rgba(255,255,255,.45); cursor: pointer; font-size: 11px; }
 
-    .experiment-evidence {
-      margin-top: 34px; padding: 28px;
-      border: 1px solid rgba(145,112,69,.34); border-radius: 24px;
-      background: var(--paper); box-shadow: var(--shadow);
-    }
+    .experiment-evidence { margin-top: 34px; }
     .evidence-head { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: end; }
     .evidence-head h2 { margin: 8px 0 0; font: 400 38px/1 var(--serif); }
     .evidence-head p { margin: 0; max-width: 560px; color: var(--muted); font-size: 11px; }
@@ -336,7 +357,9 @@
     .bar-track span { display: block; width: var(--value); height: 100%; border-radius: inherit; background: var(--bar, var(--sage)); }
     .evidence-note { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--sand-2); color: var(--muted); font-size: 10px; }
 
-    .story-lead { margin: 24px 0 0; max-width: 720px; color: var(--muted); font-size: 13px; line-height: 1.65; }
+    .story-lead { margin: 16px 0 0; color: var(--muted); font-size: 16px; line-height: 1.65; }
+    .story-lead-list { margin: 10px 0 0; padding-left: 20px; color: var(--muted); font-size: 16px; line-height: 1.7; }
+    .story-lead-list b { color: var(--ink); }
     .story-chapter {
       display: grid; grid-template-columns: minmax(230px, .72fr) minmax(0, 1.28fr); gap: 28px;
       margin-top: 24px; padding: 28px; border: 1px solid var(--sand-2); border-radius: 22px;
@@ -344,9 +367,12 @@
     }
     .story-index { color: var(--clay); font: 800 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; }
     .story-copy h3 { margin: 10px 0 12px; font: 400 31px/1.05 var(--serif); }
-    .story-copy p { margin: 0 0 13px; color: var(--muted); font-size: 12px; line-height: 1.65; }
+    .story-copy p { margin: 0 0 13px; color: var(--muted); font-size: 14px; line-height: 1.65; }
     .story-copy .story-answer { color: var(--ink); font-weight: 700; }
-    .story-visual { min-width: 0; padding: 20px; border: 1px solid var(--sand-2); border-radius: 18px; background: #fffaf1; }
+    .story-visual { min-width: 0; padding: 20px; border: 0; border-radius: 18px; background: rgba(255,255,255,.55); }
+    .story-chapter:nth-of-type(1) { background: #f6efe1; }
+    .story-chapter:nth-of-type(3) { background: #eef3ea; }
+    .story-chapter:nth-of-type(4) { background: #f3ede8; }
     .story-result { display: flex; justify-content: space-between; gap: 18px; align-items: end; padding-bottom: 16px; border-bottom: 1px solid var(--sand-2); }
     .story-result label { display: block; color: var(--muted); font: 800 9px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
     .story-result strong { display: block; margin-top: 5px; font: 400 37px/1 var(--serif); }
@@ -364,6 +390,16 @@
     .program-dot { aspect-ratio: 1; min-width: 5px; border-radius: 3px; background: var(--clay-soft); transition: background .24s ease, transform .24s ease; }
     .program-dot.clean { background: var(--sage); transform: scale(.92); }
     .program-dot.remaining { background: var(--clay); }
+    .why-box { margin-top: 14px; padding: 0; }
+    .why-box summary { cursor: pointer; color: var(--clay); font: 700 11px var(--mono); letter-spacing: .06em; list-style: none; }
+    .why-box summary::-webkit-details-marker { display: none; }
+    .why-box summary::before { content: "+ "; }
+    .why-box[open] summary::before { content: "− "; }
+    .why-box p { margin: 10px 0 0; color: var(--ink); font-size: 14px; line-height: 1.65; }
+    .why-box p code { font-family: var(--mono); font-size: 11px; }
+    .why-box .why-verdict { padding: 9px 12px; border-left: 3px solid var(--clay); background: rgba(169,87,63,.08); }
+    #a2-why { display: none; }
+    #a2-why.visible { display: block; }
     .field-caption { display: flex; justify-content: space-between; gap: 10px; margin-top: 9px; color: var(--muted); font-size: 9px; }
 
     .repair-peek { margin-top: 16px; border: 1px dashed var(--sand-3); border-radius: 18px; background: rgba(255,255,255,.28); overflow: hidden; }
@@ -378,6 +414,8 @@
     .mini-code.good-snippet { box-shadow: inset 3px 0 0 var(--sage); }
 
     .run-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-top: 14px; }
+    .run-cards-4 { grid-template-columns: repeat(4, 1fr); margin-top: 0; }
+    .run-card-all { background: var(--sage-soft); }
     .run-card { padding: 13px; border: 1px solid var(--sand-2); border-radius: 13px; background: var(--paper); cursor: pointer; text-align: left; }
     .run-card[aria-pressed="true"] { border-color: var(--sage); box-shadow: inset 0 0 0 1px var(--sage); }
     .run-card span { display: block; color: var(--muted); font: 800 9px var(--mono); }
@@ -386,7 +424,9 @@
     .run-meter i { display: block; width: var(--value); height: 100%; border-radius: inherit; background: var(--sage); }
     .a4-insight { min-height: 44px; margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--sage-soft); color: var(--ink); font-size: 10px; line-height: 1.5; }
 
-    .coverage-control { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .k-slider { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; }
+    .k-slider input { width: 100%; accent-color: var(--clay); cursor: pointer; }
+    .k-slider span { color: var(--muted); font: 800 10px var(--mono); }
     .coverage-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
     .coverage-score { padding: 14px; border: 1px solid var(--sand-2); border-radius: 14px; background: var(--paper); }
     .coverage-score label { color: var(--muted); font: 800 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
@@ -407,16 +447,31 @@
     .conclusion-item { padding: 19px; background: #fffaf1; }
     .conclusion-item span { color: var(--clay); font: 800 9px var(--mono); letter-spacing: .12em; }
     .conclusion-item b { display: block; margin-top: 7px; font: 400 20px/1.1 var(--serif); }
-    .conclusion-item p { margin: 7px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+    .conclusion-item p { margin: 8px 0 0; color: var(--ink); font-size: 12px; line-height: 1.6; }
+    .conclusion-item p b { display: inline; margin: 0; font: inherit; font-weight: 700; }
     .findings-section { margin-top: 34px; }
+    .findings-list { list-style: none; margin: 18px 0 0; padding: 0; }
+    .findings-list li { display: grid; grid-template-columns: 130px 1fr; gap: 20px; padding: 20px 0; border-top: 1px solid var(--sand-3); }
+    .findings-list li:last-child { border-bottom: 1px solid var(--sand-3); }
+    .findings-list span { padding-top: 5px; color: var(--clay); font: 800 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .findings-list p { margin: 0; color: var(--muted); font-size: 19px; line-height: 1.5; }
+    .findings-list p b { color: var(--ink); font-weight: 700; }
     .skill-artifact {
       margin-top: 34px; padding: 28px;
       border: 1px solid rgba(145,112,69,.34); border-radius: 24px;
       background: var(--paper); box-shadow: var(--shadow);
     }
-    .skill-build-grid { display: grid; grid-template-columns: minmax(0, .78fr) minmax(420px, 1.22fr); gap: 28px; align-items: start; }
+    .skill-plain { max-width: none; }
+    .skill-plain .report-actions { margin-top: 18px; }
+    a.secondary { display: inline-block; text-decoration: none; }
+    .big-button { display: inline-flex; flex-direction: column; gap: 3px; min-width: 260px; padding: 16px 22px; border-radius: 14px; text-decoration: none; transition: transform .15s ease, box-shadow .15s ease; }
+    .big-button b { font-size: 15px; }
+    .big-button small { font-size: 11px; opacity: .85; }
+    .big-button:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(48,44,39,.18); }
+    .big-button-skill { background: var(--ink); color: #fffaf1; }
+    .big-button-data { background: var(--sage); color: #fffaf1; }
     .skill-artifact h2 { margin: 8px 0 12px; font: 400 38px/1 var(--serif); }
-    .skill-artifact .lead { margin: 0; max-width: 610px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+    .skill-artifact .lead { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.7; }
     .skill-rules { display: grid; gap: 8px; margin: 20px 0 0; }
     .skill-rule { display: flex; justify-content: space-between; gap: 16px; padding: 11px 13px; border: 1px solid var(--sand-2); border-radius: 12px; background: #fffaf1; font-size: 11px; }
     .skill-rule span { color: var(--muted); }
@@ -470,7 +525,7 @@
       .stat-grid { grid-template-columns: 1fr; }
       .bar-row { grid-template-columns: 78px 1fr 58px; }
       .repair-peek-details, .story-conclusion { grid-template-columns: 1fr; }
-      .run-cards { grid-template-columns: 1fr; }
+      .run-cards, .run-cards-4 { grid-template-columns: 1fr 1fr; }
       .program-field { grid-template-columns: repeat(10, 1fr); }
       .story-result { align-items: start; flex-direction: column; }
       .story-result p { text-align: left; }
@@ -483,10 +538,11 @@
     <div class="nav-inner">
       <a class="brand" href="#top">PITBULL</a>
       <div class="nav-links">
-        <a href="#motivation">Motivation</a>
-        <a href="#demonstration">Demonstration</a>
+        <a href="#motivation">TL;DR</a>
+        <a href="#demonstration">Workflow</a>
         <a href="#experiments">Experiments</a>
         <a href="#findings">Findings</a>
+        <a href="#limitations">Limitations</a>
         <a href="#skill-artifact">Skill Artifact</a>
       </div>
     </div>
@@ -494,35 +550,176 @@
   <main class="shell">
     <header class="masthead" id="top">
       <div>
-        <div class="eyebrow">Temporal Safety · feature validation</div>
-        <h1>Watch a feature <em>see tomorrow</em> — then repair it.</h1>
+        <h1>Executable temporal safety for <em>agent-written</em> feature code</h1>
+        <div class="paper-note">
+          <span class="paper-tag">AAAI-27 Demonstration Track</span>
+          <p>Demo for the paper <b>PITBULL: Temporal Safety Skill for Coding Agents</b>.</p>
+          <p class="paper-scope">Evidence: one database, one task, one repair model. See <a href="#limitations">Limitations</a>.</p>
+          <p class="paper-authors">Pavel Marian, Stanislav Chumakov, Danil Ezhov, Alexander Boukhanovsky · AI Institute, ITMO University, Saint Petersburg</p>
+        </div>
       </div>
     </header>
 
     <section class="motivation" id="motivation" aria-labelledby="motivation-title">
       <div class="motivation-grid">
         <div>
-          <div class="eyebrow">Motivation</div>
-          <h2 id="motivation-title">Model can be valid and still learn from the future</h2>
-          <p>Relational feature programs often join records whose values become available at different times. PITBULL turns point-in-time correctness into an executable check, localizes the responsible availability channel, repairs the program, and verifies the candidate on unseen prediction times.</p>
+          <h2 id="motivation-title">TL;DR</h2>
+          <p>Relational feature programs often join records whose values become available at different times. PITBULL turns point-in-time correctness into an executable check, names the table and column whose late-arriving values caused the difference, repairs the program, and verifies the candidate on unseen prediction times. The whole loop is packaged as a skill that a coding agent can load and run on its own.</p>
         </div>
-        <div class="motivation-path" aria-label="Temporal failure and repair path">
-          <div class="motivation-step"><span>VALID CODE</span><b>Pipeline executes</b></div>
-          <span class="motivation-arrow" aria-hidden="true">→</span>
-          <div class="motivation-step"><span>HIDDEN FAILURE</span><b>Future data leaks</b></div>
-          <span class="motivation-arrow" aria-hidden="true">→</span>
-          <div class="motivation-step"><span>EXECUTABLE GATE</span><b>Detect and repair</b></div>
-        </div>
+        <figure class="timeline" aria-label="Why a feature can read the future">
+          <svg viewBox="0 0 560 190" role="img">
+            <defs>
+              <marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="currentColor"/></marker>
+            </defs>
+            <!-- feature box -->
+            <rect x="18" y="14" width="196" height="34" rx="9" fill="#302c27"/>
+            <text x="116" y="36" text-anchor="middle" fill="#f7eddc" font-family="var(--mono)" font-size="12">avg_review_score</text>
+            <!-- axis -->
+            <line x1="20" y1="126" x2="536" y2="126" stroke="#8d8376" stroke-width="1.5" marker-end="url(#arr)" color="#8d8376"/>
+            <text x="536" y="150" text-anchor="end" fill="#8d8376" font-size="10">time</text>
+            <!-- seed_time -->
+            <line x1="300" y1="70" x2="300" y2="160" stroke="#302c27" stroke-width="1.5" stroke-dasharray="4 4"/>
+            <text x="300" y="176" text-anchor="middle" fill="#302c27" font-family="var(--mono)" font-size="11" font-weight="700">seed_time</text>
+            <text x="292" y="86" text-anchor="end" fill="#55705d" font-size="10" font-weight="700">known</text>
+            <text x="308" y="86" fill="#a9573f" font-size="10" font-weight="700">not yet</text>
+            <!-- events -->
+            <circle cx="150" cy="126" r="6" fill="#55705d"/>
+            <text x="150" y="150" text-anchor="middle" fill="#302c27" font-size="11">order placed</text>
+            <circle cx="380" cy="126" r="6" fill="#a9573f"/>
+            <text x="380" y="150" text-anchor="middle" fill="#302c27" font-size="11">delivered</text>
+            <circle cx="470" cy="126" r="6" fill="#a9573f"/>
+            <text x="470" y="150" text-anchor="middle" fill="#302c27" font-size="11">review written</text>
+            <!-- reads -->
+            <path d="M150 120 C150 80, 130 60, 120 50" fill="none" stroke="#55705d" stroke-width="2" marker-end="url(#arr)" color="#55705d"/>
+            <path d="M470 120 C440 60, 260 40, 218 34" fill="none" stroke="#a9573f" stroke-width="2.5" marker-end="url(#arr)" color="#a9573f"/>
+            <text x="540" y="38" text-anchor="end" fill="#a9573f" font-size="11" font-weight="700">the feature reads a review</text>
+            <text x="540" y="52" text-anchor="end" fill="#a9573f" font-size="11" font-weight="700">that does not exist yet</text>
+          </svg>
+          <figcaption>Everything left of <code>seed_time</code> is known at prediction time; the review and the delivery date arrive later. PITBULL runs the program with and without the right-hand side and reports every feature that changes.</figcaption>
+        </figure>
       </div>
     </section>
 
     <div class="section-intro" id="demonstration">
-      <div class="eyebrow">Live temporal safety run</div>
-      <h2>Demonstration</h2>
+      <h2>Workflow demonstration</h2>
+      <p class="section-lead">This is the repair loop PITBULL adds to a coding agent. Every step is decided by running the code.</p>
+      <figure class="loop-figure" aria-label="Repair loop">
+        <svg viewBox="0 0 1170 380" role="img">
+          <defs>
+            <marker id="la" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="currentColor"/></marker>
+          </defs>
+          <style>
+            .lf-t { font-family: var(--sans, system-ui, sans-serif); font-size: 11.5px; fill: #302c27; }
+            .lf-m { font-family: var(--mono); font-size: 11px; fill: #302c27; }
+            .lf-h { font-family: var(--serif); font-size: 19px; fill: #302c27; }
+            .lf-mu { fill: #7a6f60; }
+            .lf-box { fill: #fffaf1; stroke: rgba(145,112,69,.5); }
+            .lf-ar { fill: none; stroke: #8d8376; stroke-width: 1.6; color: #8d8376; }
+          </style>
+
+          <!-- 1. program -->
+          <rect class="lf-box" x="20" y="150" width="150" height="80" rx="12"/>
+          <text class="lf-h" x="95" y="180" text-anchor="middle">Program</text>
+          <text class="lf-m" x="95" y="200" text-anchor="middle">get_features(</text>
+          <text class="lf-m" x="95" y="215" text-anchor="middle">db, ids, seed_time)</text>
+
+          <!-- fan-out arrows to three views -->
+          <path class="lf-ar" d="M170 190 C210 190, 210 70, 250 70" marker-end="url(#la)"/>
+          <path class="lf-ar" d="M170 190 L250 190" marker-end="url(#la)"/>
+          <path class="lf-ar" d="M170 190 C210 190, 210 310, 250 310" marker-end="url(#la)"/>
+          <text class="lf-t lf-mu" x="150" y="128" text-anchor="middle">run three times</text>
+
+          <!-- 2. three database views -->
+          <g transform="translate(258,40)">
+            <rect class="lf-box" x="0" y="0" width="150" height="60" rx="10"/>
+            <rect x="12" y="14" width="126" height="32" rx="4" fill="#e9dcc4"/>
+            <text class="lf-t" x="75" y="34" text-anchor="middle" font-weight="700">full database</text>
+          </g>
+          <g transform="translate(258,160)">
+            <rect class="lf-box" x="0" y="0" width="150" height="60" rx="10"/>
+            <rect x="12" y="14" width="66" height="32" rx="4" fill="#e9dcc4"/>
+            <rect x="80" y="14" width="58" height="32" rx="4" fill="none" stroke="#a9573f" stroke-dasharray="3 3"/>
+            <line x1="79" y1="8" x2="79" y2="52" stroke="#302c27" stroke-width="1.5" stroke-dasharray="4 3"/>
+            <text class="lf-t" x="45" y="34" text-anchor="middle" font-weight="700">past only</text>
+            <text class="lf-m" x="79" y="-6" text-anchor="middle">seed_time</text>
+          </g>
+          <g transform="translate(258,280)">
+            <rect class="lf-box" x="0" y="0" width="150" height="60" rx="10"/>
+            <rect x="12" y="14" width="126" height="32" rx="4" fill="#e9dcc4"/>
+            <text class="lf-t" x="75" y="34" text-anchor="middle" font-weight="700">late fields marked</text>
+            <circle cx="120" cy="20" r="4" fill="#b8860b"/><circle cx="130" cy="40" r="4" fill="#b8860b"/><circle cx="24" cy="40" r="4" fill="#b8860b"/>
+          </g>
+
+          <!-- arrows to outputs -->
+          <path class="lf-ar" d="M408 70 L450 70" marker-end="url(#la)"/>
+          <path class="lf-ar" d="M408 190 L450 190" marker-end="url(#la)"/>
+          <path class="lf-ar" d="M408 310 L450 310" marker-end="url(#la)"/>
+
+          <!-- 3. outputs: three feature tables, one column differs -->
+          <g transform="translate(458,48)">
+            <rect x="0" y="0" width="96" height="44" rx="4" fill="#fffaf1" stroke="rgba(145,112,69,.5)"/>
+            <rect x="0" y="0" width="24" height="44" fill="#dfe7db"/><rect x="24" y="0" width="24" height="44" fill="#dfe7db"/><rect x="48" y="0" width="24" height="44" fill="#f2c9bb"/><rect x="72" y="0" width="24" height="44" fill="#dfe7db"/>
+            <text class="lf-m" x="60" y="29" text-anchor="middle" style="fill:#a9573f" font-weight="700">3.9</text>
+          </g>
+          <g transform="translate(458,168)">
+            <rect x="0" y="0" width="96" height="44" rx="4" fill="#fffaf1" stroke="rgba(145,112,69,.5)"/>
+            <rect x="0" y="0" width="24" height="44" fill="#dfe7db"/><rect x="24" y="0" width="24" height="44" fill="#dfe7db"/><rect x="48" y="0" width="24" height="44" fill="#dfe7db"/><rect x="72" y="0" width="24" height="44" fill="#dfe7db"/>
+            <text class="lf-m" x="60" y="29" text-anchor="middle" style="fill:#55705d" font-weight="700">4.5</text>
+          </g>
+          <g transform="translate(458,288)">
+            <rect x="0" y="0" width="96" height="44" rx="4" fill="#fffaf1" stroke="rgba(145,112,69,.5)"/>
+            <rect x="0" y="0" width="24" height="44" fill="#dfe7db"/><rect x="24" y="0" width="24" height="44" fill="#dfe7db"/><rect x="48" y="0" width="24" height="44" fill="#f2c9bb"/><rect x="72" y="0" width="24" height="44" fill="#dfe7db"/>
+            <text class="lf-m" x="60" y="29" text-anchor="middle" style="fill:#a9573f" font-weight="700">?!</text>
+          </g>
+          <text class="lf-t lf-mu" x="506" y="350" text-anchor="middle">feature tables</text>
+
+          <!-- converge to compare -->
+          <path class="lf-ar" d="M554 70 C590 70, 590 175, 620 175" marker-end="url(#la)"/>
+          <path class="lf-ar" d="M554 190 L620 190" marker-end="url(#la)"/>
+          <path class="lf-ar" d="M554 310 C590 310, 590 205, 620 205" marker-end="url(#la)"/>
+
+          <!-- 4. compare + localize -->
+          <rect x="622" y="140" width="195" height="100" rx="12" fill="#fffaf1" stroke="#a9573f" stroke-width="1.5"/>
+          <text class="lf-h" x="719" y="168" text-anchor="middle">Compare</text>
+          <text class="lf-m" x="719" y="190" text-anchor="middle" style="fill:#a9573f" font-weight="700">avg_review_score differs</text>
+          <text class="lf-t" x="719" y="210" text-anchor="middle">source: reviews joined without</text>
+          <text class="lf-t" x="719" y="226" text-anchor="middle">a cut on their creation date</text>
+
+          <!-- leak → agent -->
+          <path class="lf-ar" d="M817 190 L852 190" marker-end="url(#la)" style="color:#a9573f;stroke:#a9573f"/>
+          <text class="lf-t" x="834" y="180" text-anchor="middle" style="fill:#a9573f" font-weight="700">leak</text>
+
+          <!-- 5. agent -->
+          <rect x="860" y="140" width="178" height="100" rx="12" fill="#302c27"/>
+          <text class="lf-h" x="949" y="170" text-anchor="middle" style="fill:#f7eddc">Agent</text>
+          <text class="lf-t" x="949" y="192" text-anchor="middle" style="fill:#d8c9b4">rewrites the program</text>
+          <text class="lf-t" x="949" y="208" text-anchor="middle" style="fill:#d8c9b4">under one fixed instruction:</text>
+          <text class="lf-t" x="949" y="224" text-anchor="middle" style="fill:#d8c9b4">only what exists at seed_time</text>
+
+          <!-- loop back over the top -->
+          <path class="lf-ar" d="M949 140 L949 18 L95 18 L95 148" marker-end="url(#la)" style="color:#302c27;stroke:#302c27" stroke-dasharray="6 4"/>
+          <rect x="420" y="6" width="220" height="24" rx="12" fill="#f3e9d6"/>
+          <text class="lf-m" x="530" y="22" text-anchor="middle" font-weight="700">new candidate · at most 5 rounds</text>
+
+          <!-- clean → gate -->
+          <path class="lf-ar" d="M719 240 L719 290 L1024 290" marker-end="url(#la)" style="color:#55705d;stroke:#55705d"/>
+          <text class="lf-t" x="880" y="282" text-anchor="middle" style="fill:#55705d" font-weight="700">no difference on all 6 prediction times</text>
+
+          <!-- 6. gate -->
+          <rect x="1032" y="255" width="108" height="70" rx="12" fill="#eef5eb" stroke="#55705d" stroke-width="1.5"/>
+          <text class="lf-h" x="1086" y="283" text-anchor="middle" style="fill:#55705d">CLEAN</text>
+          <g transform="translate(1050,299)">
+            <circle cx="6" cy="6" r="5" fill="#55705d"/><circle cx="18" cy="6" r="5" fill="#55705d"/><circle cx="30" cy="6" r="5" fill="#55705d"/>
+            <circle cx="42" cy="6" r="5" fill="none" stroke="#55705d" stroke-width="1.5"/><circle cx="54" cy="6" r="5" fill="none" stroke="#55705d" stroke-width="1.5"/><circle cx="66" cy="6" r="5" fill="none" stroke="#55705d" stroke-width="1.5"/>
+          </g>
+          <text class="lf-t lf-mu" x="1086" y="345" text-anchor="middle">3 dev + 3 held-out</text>
+        </svg>
+        <figcaption>One round of the loop. The program runs on three views of the same database; a feature that changes between them was computed from data that did not exist at <code>seed_time</code>. The agent gets the differing feature and its source, rewrites the program, and the new candidate goes through the same three runs at six prediction times, three of them never shown to the agent.</figcaption>
+      </figure>
     </div>
 
     <section class="workspace">
-      <article class="panel code-panel">
+      <article class="panel code-panel collapsed" id="code-panel">
         <div class="panel-head">
           <h2 id="code-title">Candidate feature program</h2>
           <span class="file-meta" id="code-meta">generated_features.py · original</span>
@@ -535,6 +732,7 @@
           <div class="line-nos" id="line-nos">1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14</div>
           <pre id="code-view"></pre>
         </div>
+        <button class="code-expand" id="code-expand" type="button" aria-expanded="false">Expand</button>
         <div class="evidence-grid">
           <div class="metric" id="metric-full">
             <label>Full database</label>
@@ -610,7 +808,6 @@
 
     <section class="report" id="report" aria-live="polite">
       <div>
-        <div class="eyebrow">Temporal safety report</div>
         <h2>Repair accepted on tested times.</h2>
         <span class="seal">Clean · held-out passed</span>
         <p class="report-note">A clean result is scoped to the declared availability map and six tested prediction times. It is executable evidence, not a proof for every possible database state.</p>
@@ -628,24 +825,28 @@
         <dt>Development gate</dt><dd>CLEAN · 3/3</dd>
         <dt>Held-out gate</dt><dd>CLEAN · 3/3</dd>
         <dt>Witness / canary</dt><dd>0 / 0</dd>
-        <dt>A2 repeatability context</dt><dd>182/186 CLEAN@5</dd>
+        <dt>Repeatability (Experiment 2)</dt><dd>182/186 CLEAN@5</dd>
       </dl>
     </section>
 
     <section class="experiment-evidence" id="experiments" aria-labelledby="evidence-title">
       <div class="evidence-head">
         <div>
-          <div class="eyebrow">Guided evidence story · A1 / A2 / A3</div>
           <h2 id="evidence-title">Experiments</h2>
         </div>
       </div>
-      <p class="story-lead">Start with the repair loop, inspect one concrete change, then ask whether the result repeats and whether the detector remains reliable as temporal coverage grows.</p>
+      <p class="story-lead">Data: the Olist e-commerce database (Brazil, 2016–2018), four tables, one task: will a product be ordered in the 90 days after <code>seed_time</code>? Two code models wrote feature programs from a plain task description; the checker found 76 that read the future.</p>
+      <ul class="story-lead-list">
+        <li><b>Experiment 1</b> repairs all 76 (62 caught by the witness, 14 only by the canary).</li>
+        <li><b>Experiment 2</b> repeats the repair three times on the 62 witness programs.</li>
+        <li><b>Experiment 3</b> measures detection on those 62 plus 30 clean programs as controls.</li>
+      </ul>
 
       <article class="story-chapter" aria-labelledby="a2-title">
         <div class="story-copy">
-          <span class="story-index">01 · Experiment A1</span>
+          <span class="story-index">Experiment 1</span>
           <h3 id="a2-title">Can PITBULL repair a leaking feature program?</h3>
-          <p>A1 measures cumulative repair success. A program counts as <strong>CLEAN@k</strong> when a clean candidate is found within at most <em>k</em> repair iterations.</p>
+          <p>Experiment 1 measures cumulative repair success. A program counts as <strong>CLEAN@k</strong> when a clean candidate is found within at most <em>k</em> repair iterations.</p>
           <p class="story-answer">Choose an iteration to watch the benchmark converge. Most of the gain arrives by iteration two.</p>
         </div>
         <div class="story-visual">
@@ -653,22 +854,23 @@
             <div><label id="a2-result-label">CLEAN@1</label><strong id="a2-result">65 / 76</strong></div>
             <p id="a2-result-note">85.5% of programs are clean after the first repair attempt.</p>
           </div>
-          <span class="control-label">Repair iteration</span>
-          <div class="iteration-control" aria-label="Select A1 repair iteration">
-            <button class="iteration-button" type="button" data-iteration="1" aria-pressed="true">k = 1</button>
-            <button class="iteration-button" type="button" data-iteration="2" aria-pressed="false">k = 2</button>
-            <button class="iteration-button" type="button" data-iteration="3" aria-pressed="false">k = 3</button>
-            <button class="iteration-button" type="button" data-iteration="4" aria-pressed="false">k = 4</button>
-            <button class="iteration-button" type="button" data-iteration="5" aria-pressed="false">k = 5</button>
-          </div>
-          <div class="program-field" id="a2-programs" aria-label="76 A1 benchmark programs"></div>
+          <span class="control-label">Repair iterations allowed, k</span>
+          <div class="k-slider"><span>1</span><input id="a2-slider" type="range" min="1" max="5" step="1" value="1" aria-label="Repair iterations allowed"><span>5</span></div>
+          <div class="program-field" id="a2-programs" aria-label="76 benchmark programs"></div>
           <div class="field-caption"><span>one tile = one program</span><span id="a2-ci">65 clean · 11 not yet clean</span></div>
+          <details class="why-box" id="a2-why">
+            <summary>Why is the last one so stubborn?</summary>
+            <p>The agent fixed the review leak on the first try, but while rewriting it added a new feature: days since the product's last delivery, read from <code>order_delivered_customer_date</code>.</p>
+            <p>The order was placed before <code>seed_time</code>, so the past-only run keeps it and the witness is silent. The delivery date is filled in later, when the parcel arrives. The canary rewrites such late fields, and the feature moves on all six prediction times.</p>
+            <p>The agent kept the feature for four more iterations; it treated an old order as fully known.</p>
+            <p class="why-verdict"><b>The checker still rejects this program.</b> A canary hit blocks acceptance, so the code never counts as clean.</p>
+          </details>
         </div>
       </article>
 
       <article class="repair-peek" id="repair-peek">
         <div class="repair-peek-summary">
-          <div><span class="story-index">Connect the aggregate to one program</span><h3>What changed inside a successful repair?</h3></div>
+          <div><h3>What changed inside a successful repair?</h3></div>
           <button class="story-button" id="repair-peek-toggle" type="button" aria-expanded="false">Open one repair</button>
         </div>
         <div class="repair-peek-details" id="repair-peek-details">
@@ -685,31 +887,35 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
 
       <article class="story-chapter" aria-labelledby="a4-title">
         <div class="story-copy">
-          <span class="story-index">02 · Experiment A2</span>
+          <span class="story-index">Experiment 2</span>
           <h3 id="a4-title">Does the result survive another generation?</h3>
-          <p>A2 repeats repair generation three times. The question is whether success depends on one lucky model response or remains stable across independent runs.</p>
-          <p class="story-answer">Select a repetition, or combine all three to see the aggregate result.</p>
+          <p>Experiment 2 repeats repair generation three times. The question is whether success depends on one lucky model response or remains stable across independent runs.</p>
+          <p class="story-answer">Pick a repetition, or all three together.</p>
         </div>
         <div class="story-visual">
-          <div class="story-result">
-            <div><label id="a4-result-label">Repeat 1</label><strong id="a4-result">61 / 62</strong></div>
-            <p id="a4-result-note">98.4% clean at iteration five.</p>
-          </div>
-          <div class="run-cards" aria-label="A2 independent repetitions">
+          <div class="run-cards run-cards-4" aria-label="Independent repetitions">
             <button class="run-card" type="button" data-run="1" aria-pressed="true"><span>REPEAT 1</span><strong>61 / 62</strong><div class="run-meter"><i style="--value:98.4%"></i></div></button>
             <button class="run-card" type="button" data-run="2" aria-pressed="false"><span>REPEAT 2</span><strong>60 / 62</strong><div class="run-meter"><i style="--value:96.8%"></i></div></button>
             <button class="run-card" type="button" data-run="3" aria-pressed="false"><span>REPEAT 3</span><strong>61 / 62</strong><div class="run-meter"><i style="--value:98.4%"></i></div></button>
+            <button class="run-card run-card-all" type="button" data-run="all" aria-pressed="false"><span>ALL THREE</span><strong>182 / 186</strong><div class="run-meter"><i style="--value:97.8%"></i></div></button>
           </div>
-          <div class="run-control" style="margin-top:12px"><button class="story-button" id="compare-runs" type="button">Compare all runs</button></div>
           <p class="a4-insight" id="a4-insight">Repeat 1 leaves one program unresolved and reaches 61 clean programs.</p>
+          <details class="why-box">
+            <summary>Why does one program fail in two of three runs?</summary>
+            <p>It is the only program that leaks through payments. It creates one output column per payment type found in the <code>payments</code> table.</p>
+            <p>The agent filters the payment rows by <code>seed_time</code> but still reads the list of types from the full table. On the past-only database a type that appears only later is missing, so the set of columns changes. The checker reports a shape difference on every prediction time.</p>
+            <p class="why-verdict"><b>The leak is in the output schema, not in the values.</b> The repair instruction talks about values, so the agent fixed it only in repeat 1, by chance, at iteration 2.</p>
+          </details>
         </div>
       </article>
 
       <article class="story-chapter" aria-labelledby="a5-title">
         <div class="story-copy">
-          <span class="story-index">03 · Experiment A3</span>
+          <span class="story-index">Experiment 3</span>
           <h3 id="a5-title">How much temporal coverage is enough to expose a leak?</h3>
-          <p>A3 varies the number of checked prediction times. Witness and canary are two complementary signals for detecting future dependence.</p>
+          <p>Experiment 3 varies the number of prediction times at which a program is checked, from one to five.</p>
+          <p><b>Witness</b>: the program is run with and without the rows dated after <code>seed_time</code>. A different output proves it read the future.</p>
+          <p><b>Canary</b>: in rows dated before <code>seed_time</code>, fields that get filled in later (delivery date, review) are replaced by marker values. A changed output shows the program read a field that was not yet known.</p>
           <p class="story-answer">Choose the number of prediction times to see detection strengthen, then run the same witness check on clean controls.</p>
         </div>
         <div class="story-visual">
@@ -717,21 +923,14 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
             <div><label>Prediction times checked</label><strong id="density-count">1 time</strong></div>
             <p id="density-note">A single time already exposes most leaking programs; additional times close the remaining gap.</p>
           </div>
-          <span class="control-label">Prediction times checked</span>
-          <div class="coverage-control" aria-label="Select number of prediction times">
-            <button class="iteration-button density-button" type="button" data-density="1" aria-pressed="true">k = 1</button>
-            <button class="iteration-button density-button" type="button" data-density="2" aria-pressed="false">k = 2</button>
-            <button class="iteration-button density-button" type="button" data-density="3" aria-pressed="false">k = 3</button>
-            <button class="iteration-button density-button" type="button" data-density="4" aria-pressed="false">k = 4</button>
-            <button class="iteration-button density-button" type="button" data-density="5" aria-pressed="false">k = 5</button>
-          </div>
+          <div class="k-slider" style="margin-top:18px"><span>1</span><input id="density-slider" type="range" min="1" max="5" step="1" value="1" aria-label="Prediction times checked"><span>5</span></div>
           <div class="coverage-readout">
             <div class="coverage-score"><label>Witness</label><strong id="witness-score">91.3%</strong><div class="coverage-track"><span id="witness-track" style="--coverage:91.3%;--score-color:var(--clay)"></span></div></div>
             <div class="coverage-score"><label>Canary</label><strong id="canary-score">92.7%</strong><div class="coverage-track"><span id="canary-track" style="--coverage:92.7%;--score-color:var(--ochre)"></span></div></div>
           </div>
           <div class="control-check">
             <div class="control-check-head">
-              <div><h4>Clean-control check</h4><p>Will the witness incorrectly flag an already-clean program?</p></div>
+              <div><h4>Clean-control check</h4><p>Does the witness flag any of 30 programs the checker found clean, at this number of prediction times?</p></div>
               <button class="story-button" id="run-controls" type="button">Check 30 controls</button>
             </div>
             <div class="control-matrix" id="control-matrix" aria-label="30 clean control programs"></div>
@@ -744,44 +943,30 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
 
     <section class="findings-section" id="findings" aria-labelledby="findings-title">
       <div class="section-intro">
-        <div class="eyebrow">Research summary</div>
         <h2 id="findings-title">Key findings</h2>
       </div>
-      <div class="story-conclusion" aria-label="Study conclusions">
-        <div class="conclusion-item"><span>A1 · EFFECTIVENESS</span><b>75 / 76 repaired</b><p>CLEAN@5 = 98.7% · Wilson 95% CI [92.9%, 99.8%]</p></div>
-        <div class="conclusion-item"><span>A2 · REPEATABILITY</span><b>182 / 186 clean</b><p>Three independent generations remain tightly aligned.</p></div>
-        <div class="conclusion-item"><span>A3 · DETECTION</span><b>0 / 30 false positives</b><p>Coverage approaches 99.5% as more prediction times are checked.</p></div>
+      <ol class="findings-list" aria-label="Study conclusions">
+        <li><span>Experiment 1</span><p><b>75 of 76 leaking programs were repaired</b> within five iterations, 65 of them at the first one. The last program keeps reading a delivery date that is filled in later; the canary catches it every time, and the checker never accepts it.</p></li>
+        <li><span>Experiment 2</span><p><b>182 of 186 program–run pairs came out clean</b> across three independent repair runs. The result does not depend on one lucky generation.</p></li>
+        <li><span>Experiment 3</span><p><b>The witness gave 0 false positives on 30 clean programs.</b> Two prediction times expose 97.6% of leaks, five expose 99.4%.</p></li>
+        <li><span>Skill</span><p><b>Packaged as a skill, the same loop repaired 76 of 76</b> when an independent coding agent chose it on its own; paired comparison with direct invocation shows no difference.</p></li>
+      </ol>
+    </section>
+
+    <section class="findings-section" id="limitations" aria-labelledby="limitations-title">
+      <div class="section-intro">
+        <h2 id="limitations-title">Limitations</h2>
       </div>
+      <p class="limitations-text">One database and one task (Olist, will a product be ordered in the next 90 days), two author models and one repair model; 60 of the 76 leaks go through reviews, the other mechanisms have one to fourteen programs each. The availability map is written by hand, per table, and the check is only as good as it. CLEAN means no difference on the six tested prediction times under that map, which is evidence and not a proof. The canary flagged 4 of 30 clean programs and blocks acceptance, so canary-only cases need a person to look. The skill run is one pass per program, and inside the agent harness the model could read the checker's source, which direct invocation could not.</p>
     </section>
 
     <section class="skill-artifact" id="skill-artifact" aria-labelledby="skill-title">
-      <div class="skill-build-grid">
-        <div>
-          <div class="eyebrow">Practical artifact</div>
-          <h2 id="skill-title">Reusable skill artifact</h2>
-          <p class="lead">The repair loop and study thresholds were packaged as an agent-ready temporal safety skill. The artifact preserves the evidence-backed defaults established by the evaluation.</p>
-          <div class="skill-rules" aria-label="Evidence-backed skill policy">
-            <div class="skill-rule"><span>Repair budget</span><b>up to 5 iterations</b></div>
-            <div class="skill-rule"><span>Detection policy</span><b>witness + canary review</b></div>
-            <div class="skill-rule"><span>Acceptance gate</span><b>held-out revalidation</b></div>
-          </div>
-        </div>
-        <div class="skill-builder">
-          <div class="build-status">
-            <div><label>Artifact status</label><strong>Validated and ready</strong></div>
-            <span class="build-badge ready">Available</span>
-          </div>
-          <div class="skill-output visible" id="skill-output">
-            <div class="skill-output-head">
-              <div><h3>PITBULL temporal-safety skill</h3><p>Packaged from the evaluated workflow · validation passed</p></div>
-              <button class="secondary" id="download-skill" type="button">Download SKILL.md</button>
-            </div>
-            <div class="skill-files" aria-label="Generated skill files">
-              <span class="skill-file">SKILL.md</span>
-              <span class="skill-file">references/availability-contract.md</span>
-              <span class="skill-file">scripts/run_temporal_check.py</span>
-            </div>
-          </div>
+      <div class="skill-plain">
+        <h2 id="skill-title">Reusable skill</h2>
+        <p class="lead">The same loop, packaged for coding agents. The agent loads the skill, runs the check on a feature program, rewrites it when a leak is found, and repeats until the code is clean on development and held-out prediction times, at most five times. A canary hit blocks acceptance. On the same 76 programs an agent that chose the skill on its own repaired 76 of 76.</p>
+        <div class="report-actions">
+          <a class="big-button big-button-skill" id="download-skill" href="pit-repair/SKILL.md" download="SKILL.md"><b>Download SKILL.md</b><small>PITBULL temporal-safety skill for coding agents</small></a>
+          <a class="big-button big-button-data" id="download-data" href="pitbull-test-data.zip" download><b>Download test data</b><small>76 leaking programs, mechanisms, data profile</small></a>
         </div>
       </div>
     </section>
@@ -1040,31 +1225,6 @@ rev = items_use.merge(reviews_known, ...)</pre></div>
 
     const wait = (milliseconds) => new Promise(resolve => window.setTimeout(resolve, milliseconds));
 
-    const generatedSkill = `---
-name: pitbull-temporal-safety
-description: Detect, localize, repair, and revalidate point-in-time violations in relational feature programs.
----
-
-# PITBULL Temporal Safety
-
-Use this skill when a coding agent creates or modifies a relational feature program whose outputs must be reproducible at prediction time.
-
-## Workflow
-
-1. Run the candidate on full and past-only database views at development prediction times.
-2. Treat any output divergence as a temporal witness and localize the implicated availability channel.
-3. Repair the candidate using the witness evidence. Allow at most five repair iterations.
-4. Use canary perturbations as an additional review signal, not as the sole rejection criterion.
-5. Accept a candidate only after it remains clean on held-out prediction times.
-6. Report runtime errors, timeouts, and missing outputs as failures, never as clean results.
-
-## Evidence-backed defaults
-
-- Maximum repair iterations: 5
-- Detection signals: witness plus canary review
-- Final gate: held-out temporal revalidation
-- Report: tested times, changed features, implicated channel, repair history, and final verdict
-`;
 
     async function runAnalysis() {
       if (running || step !== 0) return;
@@ -1077,6 +1237,7 @@ Use this skill when a coding agent creates or modifies a relational feature prog
         return;
       }
       running = true;
+      setCodeCollapsed(false);
       $('advance').disabled = true;
       $('advance').textContent = 'Analysis running · 0/6';
       $('run-state').textContent = 'running';
@@ -1098,8 +1259,23 @@ Use this skill when a coding agent creates or modifies a relational feature prog
       running = false;
     }
 
+    function setCodeCollapsed(collapsed) {
+      $('code-panel').classList.toggle('collapsed', collapsed);
+      $('code-expand').textContent = collapsed ? 'Expand' : 'Collapse';
+      $('code-expand').setAttribute('aria-expanded', String(!collapsed));
+      if (collapsed) syncCollapsedHeight();
+    }
+
+    function syncCollapsedHeight() {
+      const aside = document.querySelector('.control-panel');
+      const panel = $('code-panel');
+      const asideContent = Array.from(aside.children).reduce((sum, el) => sum + el.offsetHeight, 0);
+      panel.style.setProperty('--code-collapsed', `${Math.max(160, asideContent)}px`);
+    }
+
     function reset() {
       step = 0;
+      setCodeCollapsed(true);
       document.querySelectorAll('.event').forEach((el, index) => el.classList.toggle('visible', index === 0));
       document.querySelectorAll('.metric').forEach(el => el.classList.remove('alert', 'ok'));
       $('code-view').innerHTML = sourceLoaded
@@ -1197,34 +1373,23 @@ Use this skill when a coding agent creates or modifies a relational feature prog
       $('a2-programs').innerHTML = Array.from({ length: 76 }, (_, index) =>
         `<span class="program-dot ${index < result.clean ? 'clean' : 'remaining'}" title="Program ${index + 1}: ${index < result.clean ? 'clean' : 'not clean by this iteration'}"></span>`
       ).join('');
-      document.querySelectorAll('.iteration-button[data-iteration]').forEach(button => {
-        button.setAttribute('aria-pressed', String(Number(button.dataset.iteration) === iteration));
-      });
+      $('a2-slider').value = String(iteration);
+      $('a2-why').classList.toggle('visible', iteration >= 3);
     }
 
     const a4Runs = {
       1: { clean: 61, rate: 98.4, insight: 'Repeat 1 leaves one program unresolved and reaches 61 clean programs.' },
       2: { clean: 60, rate: 96.8, insight: 'Repeat 2 differs by one additional unresolved program, while remaining within 1.6 percentage points of the other runs.' },
-      3: { clean: 61, rate: 98.4, insight: 'Repeat 3 returns to 61 clean programs, matching the first generation.' }
+      3: { clean: 61, rate: 98.4, insight: 'Repeat 3 returns to 61 clean programs, matching the first generation.' },
+      all: { clean: 182, rate: 97.8, insight: 'Across the three runs 182 of 186 program–run pairs are clean (97.8%). The runs finish at 61, 60 and 61: the spread is one program.' }
     };
 
     function renderA4(run) {
       const result = a4Runs[run];
-      $('a4-result-label').textContent = `Repeat ${run}`;
-      $('a4-result').textContent = `${result.clean} / 62`;
-      $('a4-result-note').textContent = `${result.rate.toFixed(1)}% clean at iteration five.`;
       $('a4-insight').textContent = result.insight;
       document.querySelectorAll('.run-card').forEach(button => {
-        button.setAttribute('aria-pressed', String(Number(button.dataset.run) === run));
+        button.setAttribute('aria-pressed', String(button.dataset.run === String(run)));
       });
-    }
-
-    function compareA4Runs() {
-      document.querySelectorAll('.run-card').forEach(button => button.setAttribute('aria-pressed', 'false'));
-      $('a4-result-label').textContent = 'Three repetitions';
-      $('a4-result').textContent = '182 / 186';
-      $('a4-result-note').textContent = '97.8% clean across independent repair generations.';
-      $('a4-insight').textContent = 'The three runs finish at 61, 60, and 61 successful programs. Their narrow spread indicates stable repair performance rather than a single lucky generation.';
     }
 
     const witnessCoverage = [91.3, 97.6, 98.6, 99.1, 99.4];
@@ -1243,9 +1408,8 @@ Use this skill when a coding agent creates or modifies a relational feature prog
         : count === 5
           ? 'At five times, both signals detect more than 99% of leaking programs in the density study.'
           : `Adding temporal coverage raises witness detection to ${witness.toFixed(1)}%.`;
-      document.querySelectorAll('.density-button').forEach(button => {
-        button.setAttribute('aria-pressed', String(Number(button.dataset.density) === count));
-      });
+      $('density-slider').value = String(count);
+      if ($('run-controls').disabled) resetCleanControls();
     }
 
     async function runCleanControls() {
@@ -1262,12 +1426,24 @@ Use this skill when a coding agent creates or modifies a relational feature prog
         dots[index].classList.add('passed');
         $('control-result').textContent = `Evaluating clean controls · ${index + 1} / 30`;
       }
-      $('control-result').textContent = '0 / 30 witness false positives · all controls remained clean';
+      const k = Number($('density-slider').value);
+      $('control-result').textContent = `0 / 30 witness false positives at ${k} prediction ${k === 1 ? 'time' : 'times'} · canary flagged 4 / 30 on the full grid`;
       $('control-result').classList.add('complete');
       button.textContent = 'Check complete';
     }
 
+    function resetCleanControls() {
+      const button = $('run-controls');
+      button.disabled = false;
+      button.textContent = 'Check 30 controls';
+      document.querySelectorAll('.control-dot').forEach(dot => dot.classList.remove('passed'));
+      $('control-result').classList.remove('complete');
+      $('control-result').textContent = 'Ready to evaluate · 30 CLEAN controls';
+    }
+
     $('advance').addEventListener('click', runAnalysis);
+    $('code-expand').addEventListener('click', () => setCodeCollapsed(!$('code-panel').classList.contains('collapsed')));
+    window.addEventListener('resize', () => { if ($('code-panel').classList.contains('collapsed')) syncCollapsedHeight(); });
     $('restart').addEventListener('click', reset);
     $('download-source').addEventListener('click', () => {
       downloadText('generated_features.repaired.py', repairedDownloadText, 'text/x-python');
@@ -1278,31 +1454,26 @@ Use this skill when a coding agent creates or modifies a relational feature prog
     $('download').addEventListener('click', () => {
       downloadText('pitbull-temporal-safety-report.json', JSON.stringify(reportData, null, 2), 'application/json');
     });
-    $('download-skill').addEventListener('click', () => {
-      downloadText('SKILL.md', generatedSkill, 'text/markdown');
-    });
 
-    document.querySelectorAll('.iteration-button[data-iteration]').forEach(button => {
-      button.addEventListener('click', () => renderA2(Number(button.dataset.iteration)));
-    });
+
+    $('a2-slider').addEventListener('input', event => renderA2(Number(event.target.value)));
     $('repair-peek-toggle').addEventListener('click', () => {
       const open = $('repair-peek').classList.toggle('open');
       $('repair-peek-toggle').setAttribute('aria-expanded', String(open));
       $('repair-peek-toggle').textContent = open ? 'Close repair' : 'Open one repair';
     });
     document.querySelectorAll('.run-card').forEach(button => {
-      button.addEventListener('click', () => renderA4(Number(button.dataset.run)));
+      button.addEventListener('click', () => renderA4(button.dataset.run));
     });
-    $('compare-runs').addEventListener('click', compareA4Runs);
-    document.querySelectorAll('.density-button').forEach(button => {
-      button.addEventListener('click', () => renderCoverage(Number(button.dataset.density)));
-    });
+    $('density-slider').addEventListener('input', event => renderCoverage(Number(event.target.value)));
     $('run-controls').addEventListener('click', runCleanControls);
 
     $('control-matrix').innerHTML = Array.from({ length: 30 }, (_, index) =>
       `<span class="control-dot" title="Clean control ${index + 1}"></span>`
     ).join('');
-    renderA2(1);
+    const kParam = Number(new URLSearchParams(location.search).get('k'));
+    renderA2(kParam >= 1 && kParam <= 5 ? kParam : 1);
+    if (kParam >= 3) $('a2-why').open = true;
     renderA4(1);
     renderCoverage(1);
     loadEmbeddedSourceArtifact();
