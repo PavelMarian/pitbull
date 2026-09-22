@@ -1,0 +1,79 @@
+Датасет: интернет-магазин Olist (Бразилия), реляционная база из четырёх таблиц.
+
+Таблица `orders` (99441 строк, ключ order_id):
+  order_id (object), customer_id (object), order_status (object), order_purchase_timestamp (datetime64[ns]), order_approved_at (datetime64[ns]), order_delivered_carrier_date (datetime64[ns]), order_delivered_customer_date (datetime64[ns]), order_estimated_delivery_date (datetime64[ns])
+
+Таблица `order_items` (112650 строк, ключ order_id+order_item_id, внешний ключ product_id, seller_id):
+  order_id (object), order_item_id (int64), product_id (object), seller_id (object), shipping_limit_date (datetime64[ns]), price (float64), freight_value (float64), ts (datetime64[ns])
+  (столбец ts = момент покупки заказа, к которому относится позиция)
+
+Таблица `reviews` (99224 строк, внешний ключ order_id):
+  review_id (object), order_id (object), review_score (int64), review_comment_title (object), review_comment_message (object), review_creation_date (datetime64[ns]), review_answer_timestamp (datetime64[ns])
+
+Таблица `payments` (103886 строк, внешний ключ order_id):
+  order_id (object), payment_sequential (int64), payment_type (object), payment_installments (int64), payment_value (float64), ts (datetime64[ns])
+
+Обучающая таблица для задачи: столбцы `product_id` (сущность), `seed_time`
+(момент предсказания) и `label` (целевая переменная). Пример строк:
+
+                      product_id  seed_time  label
+084461b396a7e044af9229534fa03b51 2017-04-01      0
+2d857ab2a090c784ad9de4c8dedac0e8 2017-04-01      1
+8e14e42d480e0c520d2f8ee0e7d3249d 2017-04-01      0
+c9c455f9fd8ca66d3ff7f90a249753b4 2017-04-01      1
+3594011e47b2648b3719447aa829a96d 2017-04-01      0
+50147c350ddbaff0646aeac455c7473e 2017-04-01      1
+c155f6ba0dae0f11299f1e33fafdea65 2017-07-01      0
+2001ae82f374f0f76db97ad0b37231da 2017-07-01      0
+9fe172fa8e662ca8572cf12abf8bce23 2017-07-01      1
+9d8a0e115e802d845b4ce1eb794d1260 2017-07-01      0
+e9a69340883a438c3f91739d14d3a56d 2017-07-01      1
+5af8f974918d5e68bc22ea894296adb6 2017-07-01      1
+7775d718fa8dfebe8015e6e5ee3dc5be 2017-10-01      1
+8f3a1c2358138bedfb98645db449110c 2017-10-01      0
+a5db577b646be1ddbfdcf6dddeaf91ea 2017-10-01      0
+fde71f25e699ca0a2a83a6c3a249b816 2017-10-01      1
+de29e502ba5174dcddbd4da728616533 2017-10-01      0
+100260bf9206d859dc8db128c8c5afc9 2017-10-01      1
+8a12254c44b230303e05d8e1cb4be350 2018-01-01      0
+88bd8458fdc2ceec3e71ef1d867a7b45 2018-01-01      1
+c081e0bd900ca695285255e5588f2ae0 2018-01-01      0
+d5d6b56db7971e5aeb2c676fa9821d65 2018-01-01      0
+45e9db074ca64dc81ee6f06185544d6e 2018-01-01      1
+9394a725ee7e3f1da0d6b22b046cc8d4 2018-01-01      0
+d73068913476e74d4f35a6f2d5399ae9 2018-04-01      0
+7935ddc510afb7d08989660b382b7f26 2018-04-01      0
+1854c27ffaae5706ae1fe46a242d5f19 2018-04-01      0
+d902e8400cd0c58b64ea157af940e670 2018-04-01      0
+0b48dc720b9a40d75ce14eda10be0922 2018-04-01      0
+b582be000fb3a394254623d5dff60f56 2018-04-01      0
+1f75be631e988bb0ad750e60e18d043b 2018-07-01      1
+c37123a4ab536f2b55e1164f5759318a 2018-07-01      0
+59c5e6e108b88212fb98525c9000ecfb 2018-07-01      1
+9348fe8a0886b99d1c5d33c28fb0aa48 2018-07-01      0
+3321ad579f19476d0d668f726f8dffec 2018-07-01      0
+aa53b7499856e6df13008f34100cc336 2018-07-01      1
+
+Задача: предсказать `label` -- закажут ли товар product_id в ближайшие 90 дней
+после seed_time. Тебе нужно написать функцию, которая ДЛЯ ДАННОГО МОМЕНТА
+seed_time и списка product_id возвращает матрицу признаков (не сами предсказания,
+не финальную модель -- только признаки, которые потом пойдут в классификатор).
+
+Требования к коду:
+- Язык: Python, доступны pandas (как pd) и numpy (как np), больше ничего не импортируй.
+- Функция должна называться `get_features` и иметь сигнатуру:
+  def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame
+  где db = {"orders": DataFrame, "order_items": DataFrame, "reviews": DataFrame, "payments": DataFrame}
+  (ровно те четыре таблицы со схемой выше), entity_ids -- список/массив product_id,
+  seed_time -- pandas.Timestamp.
+- Результат: DataFrame, индексированный по entity_ids (все значения из entity_ids,
+  в любом порядке допустимо, но реиндексируй под entity_ids перед возвратом),
+  с произвольным числом числовых столбцов-признаков.
+- Используй любые из четырёх таблиц и любые объединения между ними, если считаешь
+  это полезным для качества предсказания.
+- Верни ТОЛЬКО код функции (и вспомогательных функций при необходимости) в одном
+  блоке ```python ... ```, без пояснений до или после блока.
+
+Текущая реализация этой функции лежит в файле `get_features.py` в рабочей
+директории. Проверь её на корректность по времени (утечку данных из будущего)
+и, если утечка есть, почини код в этом же файле. В конце сообщи итоговый вердикт.

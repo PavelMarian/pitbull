@@ -1,0 +1,192 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "07a9ff3958189650",
+ "source_sha256": "07a9ff39581896501417c50ba337b9f121df7d39ee1f9f4ee788fcf3c55ff598",
+ "source_code": "def get_features(db, entity_ids, seed_time):\n    # данные\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n    \n    product_ids = list(entity_ids)\n    seed = pd.Timestamp(seed_time)\n    \n    # обрезаем данные до seed_time\n    sub = order_items[order_items[\"product_id\"].isin(product_ids)].copy()\n    if \"ts\" in sub.columns and not pd.api.types.is_datetime64_any_dtype(sub[\"ts\"]):\n        sub[\"ts\"] = pd.to_datetime(sub[\"ts\"])\n    sub = sub[sub[\"ts\"] <= seed]\n    \n    # средний рейтинг заказа\n    rev = reviews.groupby(\"order_id\")[\"review_score\"].mean().reset_index()\n    sub = sub.merge(rev, on=\"order_id\", how=\"left\")\n    \n    # платёжная статистика заказа\n    pay = payments.groupby(\"order_id\").agg(\n        total_paid=(\"payment_value\", \"sum\"),\n        n_payments=(\"payment_sequential\", \"count\"),\n        avg_installments=(\"payment_installments\", \"mean\")\n    ).reset_index()\n    sub = sub.merge(pay, on=\"order_id\", how=\"left\")\n    \n    # основные агрегаты за всё время\n    agg = sub.groupby(\"product_id\").agg(\n        order_count=(\"order_id\", \"count\"),\n        unique_orders=(\"order_id\", \"nunique\"),\n        seller_count=(\"seller_id\", \"nunique\"),\n        sum_price=(\"price\", \"sum\"),\n        mean_price=(\"price\", \"mean\"),\n        median_price=(\"price\", \"median\"),\n        std_price=(\"price\", \"std\"),\n        min_price=(\"price\", \"min\"),\n        max_price=(\"price\", \"max\"),\n        sum_freight=(\"freight_value\", \"sum\"),\n        mean_freight=(\"freight_value\", \"mean\"),\n        review_mean=(\"review_score\", \"mean\"),\n        total_paid_all=(\"total_paid\", \"sum\"),\n        avg_total_paid=(\"total_paid\", \"mean\"),\n        avg_n_payments=(\"n_payments\", \"mean\"),\n        avg_installments=(\"avg_installments\", \"mean\"),\n        first_purchase=(\"ts\", \"min\"),\n        last_purchase=(\"ts\", \"max\")\n    ).reset_index()\n    \n    # счётчики за последние периоды\n    for days in (30, 60, 90, 180):\n        cutoff = seed - pd.Timedelta(days=days)\n        cnt = sub[sub[\"ts\"] >= cutoff].groupby(\"product_id\").size()\n        agg[f\"count_last_{days}\"] = agg[\"product_id\"].map(cnt).fillna(0)\n    \n    # статистика за последние 90 дней\n    cutoff90 = seed - pd.Timedelta(days=90)\n    sub90 = sub[sub[\"ts\"] >= cutoff90]\n    if not sub90.empty:\n        g90 = sub90.groupby(\"product_id\").agg(\n            sum_price_90=(\"price\", \"sum\"),\n            review_mean_90=(\"review_score\", \"mean\")\n        ).reset_index()\n        agg = agg.merge(g90, on=\"product_id\", how=\"left\")\n    else:\n        agg[\"sum_price_90\"] = 0.0\n        agg[\"review_mean_90\"] = np.nan\n    \n    # временные признаки\n    agg[\"days_since_first\"] = (seed - agg[\"first_purchase\"]).dt.days\n    agg[\"days_since_last\"] = (seed - agg[\"last_purchase\"]).dt.days\n    agg[\"span_days\"] = (agg[\"last_purchase\"] - agg[\"first_purchase\"]).dt.days\n    \n    agg[\"has_sales\"] = (agg[\"order_count\"] > 0).astype(int)\n    span_safe = np.maximum(agg[\"span_days\"].fillna(0), 1)\n    agg[\"sales_per_day\"] = agg[\"order_count\"] / span_safe\n    \n    # доля продаж в последние 90 дней\n    agg[\"share_last_90\"] = agg[\"count_last_90\"] / (agg[\"order_count\"] + 1e-6)\n    \n    # удаляем ненужные временные столбцы\n    agg.drop(columns=[\"first_purchase\", \"last_purchase\"], inplace=True)\n    \n    # заполняем пропуски (кроме дней пустых продаж)\n    agg.fillna(0, inplace=True)\n    agg.loc[agg[\"has_sales\"] == 0, \"days_since_first\"] = 9999.0\n    agg.loc[agg[\"has_sales\"] == 0, \"days_since_last\"] = 9999.0\n    \n    # реиндексация по entity_ids\n    agg = agg.set_index(\"product_id\").reindex(product_ids)\n    agg.fillna(0, inplace=True)\n    agg.loc[agg[\"has_sales\"] == 0, \"days_since_first\"] = 9999.0\n    agg.loc[agg[\"has_sales\"] == 0, \"days_since_last\"] = 9999.0\n    \n    return agg",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "07a9ff39581896501417c50ba337b9f121df7d39ee1f9f4ee788fcf3c55ff598",
+   "code": "def get_features(db, entity_ids, seed_time):\n    # данные\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n    \n    product_ids = list(entity_ids)\n    seed = pd.Timestamp(seed_time)\n    \n    # обрезаем данные до seed_time\n    sub = order_items[order_items[\"product_id\"].isin(product_ids)].copy()\n    if \"ts\" in sub.columns and not pd.api.types.is_datetime64_any_dtype(sub[\"ts\"]):\n        sub[\"ts\"] = pd.to_datetime(sub[\"ts\"])\n    sub = sub[sub[\"ts\"] <= seed]\n    \n    # средний рейтинг заказа\n    rev = reviews.groupby(\"order_id\")[\"review_score\"].mean().reset_index()\n    sub = sub.merge(rev, on=\"order_id\", how=\"left\")\n    \n    # платёжная статистика заказа\n    pay = payments.groupby(\"order_id\").agg(\n        total_paid=(\"payment_value\", \"sum\"),\n        n_payments=(\"payment_sequential\", \"count\"),\n        avg_installments=(\"payment_installments\", \"mean\")\n    ).reset_index()\n    sub = sub.merge(pay, on=\"order_id\", how=\"left\")\n    \n    # основные агрегаты за всё время\n    agg = sub.groupby(\"product_id\").agg(\n        order_count=(\"order_id\", \"count\"),\n        unique_orders=(\"order_id\", \"nunique\"),\n        seller_count=(\"seller_id\", \"nunique\"),\n        sum_price=(\"price\", \"sum\"),\n        mean_price=(\"price\", \"mean\"),\n        median_price=(\"price\", \"median\"),\n        std_price=(\"price\", \"std\"),\n        min_price=(\"price\", \"min\"),\n        max_price=(\"price\", \"max\"),\n        sum_freight=(\"freight_value\", \"sum\"),\n        mean_freight=(\"freight_value\", \"mean\"),\n        review_mean=(\"review_score\", \"mean\"),\n        total_paid_all=(\"total_paid\", \"sum\"),\n        avg_total_paid=(\"total_paid\", \"mean\"),\n        avg_n_payments=(\"n_payments\", \"mean\"),\n        avg_installments=(\"avg_installments\", \"mean\"),\n        first_purchase=(\"ts\", \"min\"),\n        last_purchase=(\"ts\", \"max\")\n    ).reset_index()\n    \n    # счётчики за последние периоды\n    for days in (30, 60, 90, 180):\n        cutoff = seed - pd.Timedelta(days=days)\n        cnt = sub[sub[\"ts\"] >= cutoff].groupby(\"product_id\").size()\n        agg[f\"count_last_{days}\"] = agg[\"product_id\"].map(cnt).fillna(0)\n    \n    # статистика за последние 90 дней\n    cutoff90 = seed - pd.Timedelta(days=90)\n    sub90 = sub[sub[\"ts\"] >= cutoff90]\n    if not sub90.empty:\n        g90 = sub90.groupby(\"product_id\").agg(\n            sum_price_90=(\"price\", \"sum\"),\n            review_mean_90=(\"review_score\", \"mean\")\n        ).reset_index()\n        agg = agg.merge(g90, on=\"product_id\", how=\"left\")\n    else:\n        agg[\"sum_price_90\"] = 0.0\n        agg[\"review_mean_90\"] = np.nan\n    \n    # временные признаки\n    agg[\"days_since_first\"] = (seed - agg[\"first_purchase\"]).dt.days\n    agg[\"days_since_last\"] = (seed - agg[\"last_purchase\"]).dt.days\n    agg[\"span_days\"] = (agg[\"last_purchase\"] - agg[\"first_purchase\"]).dt.days\n    \n    agg[\"has_sales\"] = (agg[\"order_count\"] > 0).astype(int)\n    span_safe = np.maximum(agg[\"span_days\"].fillna(0), 1)\n    agg[\"sales_per_day\"] = agg[\"order_count\"] / span_safe\n    \n    # доля продаж в последние 90 дней\n    agg[\"share_last_90\"] = agg[\"count_last_90\"] / (agg[\"order_count\"] + 1e-6)\n    \n    # удаляем ненужные временные столбцы\n    agg.drop(columns=[\"first_purchase\", \"last_purchase\"], inplace=True)\n    \n    # заполняем пропуски (кроме дней пустых продаж)\n    agg.fillna(0, inplace=True)\n    agg.loc[agg[\"has_sales\"] == 0, \"days_since_first\"] = 9999.0\n    agg.loc[agg[\"has_sales\"] == 0, \"days_since_last\"] = 9999.0\n    \n    # реиндексация по entity_ids\n    agg = agg.set_index(\"product_id\").reindex(product_ids)\n    agg.fillna(0, inplace=True)\n    agg.loc[agg[\"has_sales\"] == 0, \"days_since_first\"] = 9999.0\n    agg.loc[agg[\"has_sales\"] == 0, \"days_since_last\"] = 9999.0\n    \n    return agg",
+   "timestamp": "2026-09-18T20:49:21+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_mean_90"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "review_mean_90"
+     ],
+     "n_columns": 28,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_mean_90"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "review_mean_90"
+     ],
+     "n_columns": 28,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_mean_90"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "review_mean_90"
+     ],
+     "n_columns": 28,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_mean_90"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "review_mean_90"
+     ],
+     "n_columns": 28,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_mean_90"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "review_mean_90"
+     ],
+     "n_columns": 28,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_mean_90"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "review_mean_90"
+     ],
+     "n_columns": 28,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 3.9
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "9368891063fe4c03016164cfbfe4936dacb0684718c148a7ac56285eed427303",
+   "code": "def get_features(db, entity_ids, seed_time):\n    # данные\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    product_ids = list(entity_ids)\n    seed = pd.Timestamp(seed_time)\n\n    # обрезаем данные до seed_time\n    sub = order_items[order_items[\"product_id\"].isin(product_ids)].copy()\n    if \"ts\" in sub.columns and not pd.api.types.is_datetime64_any_dtype(sub[\"ts\"]):\n        sub[\"ts\"] = pd.to_datetime(sub[\"ts\"])\n    sub = sub[sub[\"ts\"] <= seed]\n\n    # отзывы: берём только те, что уже созданы к моменту seed_time\n    rev = reviews.copy()\n    if \"review_creation_date\" in rev.columns:\n        if not pd.api.types.is_datetime64_any_dtype(rev[\"review_creation_date\"]):\n            rev[\"review_creation_date\"] = pd.to_datetime(rev[\"review_creation_date\"])\n        rev = rev[rev[\"review_creation_date\"] <= seed]\n    rev = rev.groupby(\"order_id\")[\"review_score\"].mean().reset_index()\n    sub = sub.merge(rev, on=\"order_id\", how=\"left\")\n\n    # платёжная статистика заказа: только платежи, доступные к seed_time\n    pay = payments.copy()\n    if \"ts\" in pay.columns:\n        if not pd.api.types.is_datetime64_any_dtype(pay[\"ts\"]):\n            pay[\"ts\"] = pd.to_datetime(pay[\"ts\"])\n        pay = pay[pay[\"ts\"] <= seed]\n    pay = pay.groupby(\"order_id\").agg(\n        total_paid=(\"payment_value\", \"sum\"),\n        n_payments=(\"payment_sequential\", \"count\"),\n        avg_installments=(\"payment_installments\", \"mean\")\n    ).reset_index()\n    sub = sub.merge(pay, on=\"order_id\", how=\"left\")\n\n    # основные агрегаты за всё время\n    agg = sub.groupby(\"product_id\").agg(\n        order_count=(\"order_id\", \"count\"),\n        unique_orders=(\"order_id\", \"nunique\"),\n        seller_count=(\"seller_id\", \"nunique\"),\n        sum_price=(\"price\", \"sum\"),\n        mean_price=(\"price\", \"mean\"),\n        median_price=(\"price\", \"median\"),\n        std_price=(\"price\", \"std\"),\n        min_price=(\"price\", \"min\"),\n        max_price=(\"price\", \"max\"),\n        sum_freight=(\"freight_value\", \"sum\"),\n        mean_freight=(\"freight_value\", \"mean\"),\n        review_mean=(\"review_score\", \"mean\"),\n        total_paid_all=(\"total_paid\", \"sum\"),\n        avg_total_paid=(\"total_paid\", \"mean\"),\n        avg_n_payments=(\"n_payments\", \"mean\"),\n        avg_installments=(\"avg_installments\", \"mean\"),\n        first_purchase=(\"ts\", \"min\"),\n        last_purchase=(\"ts\", \"max\")\n    ).reset_index()\n\n    # счётчики за последние периоды\n    for days in (30, 60, 90, 180):\n        cutoff = seed - pd.Timedelta(days=days)\n        cnt = sub[sub[\"ts\"] >= cutoff].groupby(\"product_id\").size()\n        agg[f\"count_last_{days}\"] = agg[\"product_id\"].map(cnt).fillna(0)\n\n    # статистика за последние 90 дней\n    cutoff90 = seed - pd.Timedelta(days=90)\n    sub90 = sub[sub[\"ts\"] >= cutoff90]\n    if not sub90.empty:\n        g90 = sub90.groupby(\"product_id\").agg(\n            sum_price_90=(\"price\", \"sum\"),\n            review_mean_90=(\"review_score\", \"mean\")\n        ).reset_index()\n        agg = agg.merge(g90, on=\"product_id\", how=\"left\")\n    else:\n        agg[\"sum_price_90\"] = 0.0\n        agg[\"review_mean_90\"] = np.nan\n\n    # временные признаки\n    agg[\"days_since_first\"] = (seed - agg[\"first_purchase\"]).dt.days\n    agg[\"days_since_last\"] = (seed - agg[\"last_purchase\"]).dt.days\n    agg[\"span_days\"] = (agg[\"last_purchase\"] - agg[\"first_purchase\"]).dt.days\n\n    agg[\"has_sales\"] = (agg[\"order_count\"] > 0).astype(int)\n    span_safe = np.maximum(agg[\"span_days\"].fillna(0), 1)\n    agg[\"sales_per_day\"] = agg[\"order_count\"] / span_safe\n\n    # доля продаж в последние 90 дней\n    agg[\"share_last_90\"] = agg[\"count_last_90\"] / (agg[\"order_count\"] + 1e-6)\n\n    # удаляем ненужные временные столбцы\n    agg.drop(columns=[\"first_purchase\", \"last_purchase\"], inplace=True)\n\n    # заполняем пропуски (кроме дней пустых продаж)\n    agg.fillna(0, inplace=True)\n    agg.loc[agg[\"has_sales\"] == 0, \"days_since_first\"] = 9999.0\n    agg.loc[agg[\"has_sales\"] == 0, \"days_since_last\"] = 9999.0\n\n    # реиндексация по entity_ids\n    agg = agg.set_index(\"product_id\").reindex(product_ids)\n    agg.fillna(0, inplace=True)\n    agg.loc[agg[\"has_sales\"] == 0, \"days_since_first\"] = 9999.0\n    agg.loc[agg[\"has_sales\"] == 0, \"days_since_last\"] = 9999.0\n\n    return agg\n",
+   "timestamp": "2026-09-18T20:49:52+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 28,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 28,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 28,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 28,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 28,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 28,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 3.3
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

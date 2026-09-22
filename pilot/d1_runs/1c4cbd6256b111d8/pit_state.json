@@ -1,0 +1,270 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "1c4cbd6256b111d8",
+ "source_sha256": "1c4cbd6256b111d8edddc182fea3a8aa71b01dd6180ac2c2a097fa5810421ed3",
+ "source_code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    if not isinstance(seed_time, pd.Timestamp):\n        seed_time = pd.Timestamp(seed_time)\n\n    orders = db[\"orders\"]\n    items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    features = pd.DataFrame(index=entity_ids)\n\n    # базовые колонки\n    defaults = {\n        \"count_orders\": 0,\n        \"count_items\": 0,\n        \"count_sellers\": 0,\n        \"total_price\": 0.0,\n        \"total_freight\": 0.0,\n        \"avg_price\": 0.0,\n        \"avg_freight\": 0.0,\n        \"std_price\": 0.0,\n        \"std_freight\": 0.0,\n        \"min_price\": 0.0,\n        \"max_price\": 0.0,\n        \"days_since_first\": 0,\n        \"days_since_last\": 0,\n        \"avg_items_per_order\": 0.0,\n        \"has_sales\": 0,\n    }\n    for k, v in defaults.items():\n        features[k] = v\n\n    for h in (30, 90):\n        features[f\"orders_last_{h}\"] = 0\n        features[f\"items_last_{h}\"] = 0\n\n    features[\"review_count\"] = 0\n    features[\"avg_review_score\"] = 0.0\n    features[\"payment_count\"] = 0\n\n    payment_types = payments[\"payment_type\"].unique() if \"payment_type\" in payments.columns else []\n    for pt in payment_types:\n        features[f\"payment_type_{pt}\"] = 0\n\n    # Покупки товаров до seed_time\n    items_with_ts = items.merge(\n        orders[[\"order_id\", \"order_purchase_timestamp\"]],\n        on=\"order_id\",\n        how=\"inner\"\n    )\n    items_past = items_with_ts[\n        (items_with_ts[\"order_purchase_timestamp\"] < seed_time) &\n        (items_with_ts[\"product_id\"].isin(entity_ids))\n    ]\n\n    if len(items_past) > 0:\n        g = items_past.groupby(\"product_id\")\n\n        cnt_orders = g[\"order_id\"].nunique()\n        cnt_items = g[\"order_id\"].size()\n        cnt_sellers = g[\"seller_id\"].nunique()\n        total_price = g[\"price\"].sum()\n        total_freight = g[\"freight_value\"].sum()\n        avg_price = g[\"price\"].mean()\n        avg_freight = g[\"freight_value\"].mean()\n        std_price = g[\"price\"].std(ddof=0)\n        std_freight = g[\"freight_value\"].std(ddof=0)\n        min_price = g[\"price\"].min()\n        max_price = g[\"price\"].max()\n        first_date = g[\"order_purchase_timestamp\"].min()\n        last_date = g[\"order_purchase_timestamp\"].max()\n\n        features.loc[cnt_orders.index, \"has_sales\"] = 1\n        features.loc[cnt_orders.index, \"count_orders\"] = cnt_orders\n        features.loc[cnt_items.index, \"count_items\"] = cnt_items\n        features.loc[cnt_sellers.index, \"count_sellers\"] = cnt_sellers\n        features.loc[total_price.index, \"total_price\"] = total_price\n        features.loc[total_freight.index, \"total_freight\"] = total_freight\n        features.loc[avg_price.index, \"avg_price\"] = avg_price\n        features.loc[avg_freight.index, \"avg_freight\"] = avg_freight\n        features.loc[std_price.index, \"std_price\"] = std_price\n        features.loc[std_freight.index, \"std_freight\"] = std_freight\n        features.loc[min_price.index, \"min_price\"] = min_price\n        features.loc[max_price.index, \"max_price\"] = max_price\n        features.loc[first_date.index, \"days_since_first\"] = (seed_time - first_date).dt.days\n        features.loc[last_date.index, \"days_since_last\"] = (seed_time - last_date).dt.days\n\n        items_per_order = cnt_items / cnt_orders\n        features.loc[items_per_order.index, \"avg_items_per_order\"] = items_per_order\n\n        # Недавние продажи\n        for h in (30, 90):\n            cutoff = seed_time - pd.Timedelta(days=h)\n            recent = items_past[items_past[\"order_purchase_timestamp\"] >= cutoff]\n            if len(recent) > 0:\n                rg = recent.groupby(\"product_id\")\n                r_orders = rg[\"order_id\"].nunique()\n                r_items = rg[\"order_id\"].size()\n                features.loc[r_orders.index, f\"orders_last_{h}\"] = r_orders\n                features.loc[r_items.index, f\"items_last_{h}\"] = r_items\n\n    # Отзывы\n    if \"review_creation_date\" in reviews.columns:\n        reviews_past = reviews[reviews[\"review_creation_date\"] <= seed_time]\n    else:\n        reviews_past = reviews\n\n    mapping = items_past[[\"product_id\", \"order_id\"]].drop_duplicates()\n    if len(mapping) > 0 and len(reviews_past) > 0:\n        joined = reviews_past.merge(mapping, on=\"order_id\", how=\"inner\")\n        if len(joined) > 0:\n            rev_agg = joined.groupby(\"product_id\").agg(\n                review_count=(\"review_score\", \"count\"),\n                avg_review_score=(\"review_score\", \"mean\")\n            )\n            features.loc[rev_agg.index, \"review_count\"] = rev_agg[\"review_count\"]\n            features.loc[rev_agg.index, \"avg_review_score\"] = rev_agg[\"avg_review_score\"]\n\n    # Платежи\n    if len(mapping) > 0 and len(payments) > 0:\n        pay_merged = payments.merge(mapping, on=\"order_id\", how=\"inner\")\n        if len(pay_merged) > 0:\n            pay_count = pay_merged.groupby(\"product_id\").size()\n            features.loc[pay_count.index, \"payment_count\"] = pay_count\n\n            for pt in payment_types:\n                sub = pay_merged[pay_merged[\"payment_type\"] == pt]\n                if len(sub) > 0:\n                    ptype_count = sub.groupby(\"product_id\").size()\n                    features.loc[ptype_count.index, f\"payment_type_{pt}\"] = ptype_count\n\n    features = features.reindex(entity_ids)\n    features = features.fillna(0)\n    return features",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 2,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "1c4cbd6256b111d8edddc182fea3a8aa71b01dd6180ac2c2a097fa5810421ed3",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    if not isinstance(seed_time, pd.Timestamp):\n        seed_time = pd.Timestamp(seed_time)\n\n    orders = db[\"orders\"]\n    items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    features = pd.DataFrame(index=entity_ids)\n\n    # базовые колонки\n    defaults = {\n        \"count_orders\": 0,\n        \"count_items\": 0,\n        \"count_sellers\": 0,\n        \"total_price\": 0.0,\n        \"total_freight\": 0.0,\n        \"avg_price\": 0.0,\n        \"avg_freight\": 0.0,\n        \"std_price\": 0.0,\n        \"std_freight\": 0.0,\n        \"min_price\": 0.0,\n        \"max_price\": 0.0,\n        \"days_since_first\": 0,\n        \"days_since_last\": 0,\n        \"avg_items_per_order\": 0.0,\n        \"has_sales\": 0,\n    }\n    for k, v in defaults.items():\n        features[k] = v\n\n    for h in (30, 90):\n        features[f\"orders_last_{h}\"] = 0\n        features[f\"items_last_{h}\"] = 0\n\n    features[\"review_count\"] = 0\n    features[\"avg_review_score\"] = 0.0\n    features[\"payment_count\"] = 0\n\n    payment_types = payments[\"payment_type\"].unique() if \"payment_type\" in payments.columns else []\n    for pt in payment_types:\n        features[f\"payment_type_{pt}\"] = 0\n\n    # Покупки товаров до seed_time\n    items_with_ts = items.merge(\n        orders[[\"order_id\", \"order_purchase_timestamp\"]],\n        on=\"order_id\",\n        how=\"inner\"\n    )\n    items_past = items_with_ts[\n        (items_with_ts[\"order_purchase_timestamp\"] < seed_time) &\n        (items_with_ts[\"product_id\"].isin(entity_ids))\n    ]\n\n    if len(items_past) > 0:\n        g = items_past.groupby(\"product_id\")\n\n        cnt_orders = g[\"order_id\"].nunique()\n        cnt_items = g[\"order_id\"].size()\n        cnt_sellers = g[\"seller_id\"].nunique()\n        total_price = g[\"price\"].sum()\n        total_freight = g[\"freight_value\"].sum()\n        avg_price = g[\"price\"].mean()\n        avg_freight = g[\"freight_value\"].mean()\n        std_price = g[\"price\"].std(ddof=0)\n        std_freight = g[\"freight_value\"].std(ddof=0)\n        min_price = g[\"price\"].min()\n        max_price = g[\"price\"].max()\n        first_date = g[\"order_purchase_timestamp\"].min()\n        last_date = g[\"order_purchase_timestamp\"].max()\n\n        features.loc[cnt_orders.index, \"has_sales\"] = 1\n        features.loc[cnt_orders.index, \"count_orders\"] = cnt_orders\n        features.loc[cnt_items.index, \"count_items\"] = cnt_items\n        features.loc[cnt_sellers.index, \"count_sellers\"] = cnt_sellers\n        features.loc[total_price.index, \"total_price\"] = total_price\n        features.loc[total_freight.index, \"total_freight\"] = total_freight\n        features.loc[avg_price.index, \"avg_price\"] = avg_price\n        features.loc[avg_freight.index, \"avg_freight\"] = avg_freight\n        features.loc[std_price.index, \"std_price\"] = std_price\n        features.loc[std_freight.index, \"std_freight\"] = std_freight\n        features.loc[min_price.index, \"min_price\"] = min_price\n        features.loc[max_price.index, \"max_price\"] = max_price\n        features.loc[first_date.index, \"days_since_first\"] = (seed_time - first_date).dt.days\n        features.loc[last_date.index, \"days_since_last\"] = (seed_time - last_date).dt.days\n\n        items_per_order = cnt_items / cnt_orders\n        features.loc[items_per_order.index, \"avg_items_per_order\"] = items_per_order\n\n        # Недавние продажи\n        for h in (30, 90):\n            cutoff = seed_time - pd.Timedelta(days=h)\n            recent = items_past[items_past[\"order_purchase_timestamp\"] >= cutoff]\n            if len(recent) > 0:\n                rg = recent.groupby(\"product_id\")\n                r_orders = rg[\"order_id\"].nunique()\n                r_items = rg[\"order_id\"].size()\n                features.loc[r_orders.index, f\"orders_last_{h}\"] = r_orders\n                features.loc[r_items.index, f\"items_last_{h}\"] = r_items\n\n    # Отзывы\n    if \"review_creation_date\" in reviews.columns:\n        reviews_past = reviews[reviews[\"review_creation_date\"] <= seed_time]\n    else:\n        reviews_past = reviews\n\n    mapping = items_past[[\"product_id\", \"order_id\"]].drop_duplicates()\n    if len(mapping) > 0 and len(reviews_past) > 0:\n        joined = reviews_past.merge(mapping, on=\"order_id\", how=\"inner\")\n        if len(joined) > 0:\n            rev_agg = joined.groupby(\"product_id\").agg(\n                review_count=(\"review_score\", \"count\"),\n                avg_review_score=(\"review_score\", \"mean\")\n            )\n            features.loc[rev_agg.index, \"review_count\"] = rev_agg[\"review_count\"]\n            features.loc[rev_agg.index, \"avg_review_score\"] = rev_agg[\"avg_review_score\"]\n\n    # Платежи\n    if len(mapping) > 0 and len(payments) > 0:\n        pay_merged = payments.merge(mapping, on=\"order_id\", how=\"inner\")\n        if len(pay_merged) > 0:\n            pay_count = pay_merged.groupby(\"product_id\").size()\n            features.loc[pay_count.index, \"payment_count\"] = pay_count\n\n            for pt in payment_types:\n                sub = pay_merged[pay_merged[\"payment_type\"] == pt]\n                if len(sub) > 0:\n                    ptype_count = sub.groupby(\"product_id\").size()\n                    features.loc[ptype_count.index, f\"payment_type_{pt}\"] = ptype_count\n\n    features = features.reindex(entity_ids)\n    features = features.fillna(0)\n    return features",
+   "timestamp": "2026-09-18T20:39:40+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "__shape__"
+     ],
+     "canary_columns": [
+      "__shape__"
+     ],
+     "n_columns": 27,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "__shape__"
+     ],
+     "canary_columns": [
+      "__shape__"
+     ],
+     "n_columns": 27,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "__shape__"
+     ],
+     "canary_columns": [
+      "__shape__"
+     ],
+     "n_columns": 27,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "__shape__"
+     ],
+     "canary_columns": [
+      "__shape__"
+     ],
+     "n_columns": 27,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "__shape__"
+     ],
+     "canary_columns": [
+      "__shape__"
+     ],
+     "n_columns": 27,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "__shape__"
+     ],
+     "canary_columns": [
+      "__shape__"
+     ],
+     "n_columns": 27,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 2.1
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "1c4cbd6256b111d8edddc182fea3a8aa71b01dd6180ac2c2a097fa5810421ed3",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    if not isinstance(seed_time, pd.Timestamp):\n        seed_time = pd.Timestamp(seed_time)\n\n    orders = db[\"orders\"]\n    items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    features = pd.DataFrame(index=entity_ids)\n\n    # базовые колонки\n    defaults = {\n        \"count_orders\": 0,\n        \"count_items\": 0,\n        \"count_sellers\": 0,\n        \"total_price\": 0.0,\n        \"total_freight\": 0.0,\n        \"avg_price\": 0.0,\n        \"avg_freight\": 0.0,\n        \"std_price\": 0.0,\n        \"std_freight\": 0.0,\n        \"min_price\": 0.0,\n        \"max_price\": 0.0,\n        \"days_since_first\": 0,\n        \"days_since_last\": 0,\n        \"avg_items_per_order\": 0.0,\n        \"has_sales\": 0,\n    }\n    for k, v in defaults.items():\n        features[k] = v\n\n    for h in (30, 90):\n        features[f\"orders_last_{h}\"] = 0\n        features[f\"items_last_{h}\"] = 0\n\n    features[\"review_count\"] = 0\n    features[\"avg_review_score\"] = 0.0\n    features[\"payment_count\"] = 0\n\n    payment_types = payments[\"payment_type\"].unique() if \"payment_type\" in payments.columns else []\n    for pt in payment_types:\n        features[f\"payment_type_{pt}\"] = 0\n\n    # Покупки товаров до seed_time\n    items_with_ts = items.merge(\n        orders[[\"order_id\", \"order_purchase_timestamp\"]],\n        on=\"order_id\",\n        how=\"inner\"\n    )\n    items_past = items_with_ts[\n        (items_with_ts[\"order_purchase_timestamp\"] < seed_time) &\n        (items_with_ts[\"product_id\"].isin(entity_ids))\n    ]\n\n    if len(items_past) > 0:\n        g = items_past.groupby(\"product_id\")\n\n        cnt_orders = g[\"order_id\"].nunique()\n        cnt_items = g[\"order_id\"].size()\n        cnt_sellers = g[\"seller_id\"].nunique()\n        total_price = g[\"price\"].sum()\n        total_freight = g[\"freight_value\"].sum()\n        avg_price = g[\"price\"].mean()\n        avg_freight = g[\"freight_value\"].mean()\n        std_price = g[\"price\"].std(ddof=0)\n        std_freight = g[\"freight_value\"].std(ddof=0)\n        min_price = g[\"price\"].min()\n        max_price = g[\"price\"].max()\n        first_date = g[\"order_purchase_timestamp\"].min()\n        last_date = g[\"order_purchase_timestamp\"].max()\n\n        features.loc[cnt_orders.index, \"has_sales\"] = 1\n        features.loc[cnt_orders.index, \"count_orders\"] = cnt_orders\n        features.loc[cnt_items.index, \"count_items\"] = cnt_items\n        features.loc[cnt_sellers.index, \"count_sellers\"] = cnt_sellers\n        features.loc[total_price.index, \"total_price\"] = total_price\n        features.loc[total_freight.index, \"total_freight\"] = total_freight\n        features.loc[avg_price.index, \"avg_price\"] = avg_price\n        features.loc[avg_freight.index, \"avg_freight\"] = avg_freight\n        features.loc[std_price.index, \"std_price\"] = std_price\n        features.loc[std_freight.index, \"std_freight\"] = std_freight\n        features.loc[min_price.index, \"min_price\"] = min_price\n        features.loc[max_price.index, \"max_price\"] = max_price\n        features.loc[first_date.index, \"days_since_first\"] = (seed_time - first_date).dt.days\n        features.loc[last_date.index, \"days_since_last\"] = (seed_time - last_date).dt.days\n\n        items_per_order = cnt_items / cnt_orders\n        features.loc[items_per_order.index, \"avg_items_per_order\"] = items_per_order\n\n        # Недавние продажи\n        for h in (30, 90):\n            cutoff = seed_time - pd.Timedelta(days=h)\n            recent = items_past[items_past[\"order_purchase_timestamp\"] >= cutoff]\n            if len(recent) > 0:\n                rg = recent.groupby(\"product_id\")\n                r_orders = rg[\"order_id\"].nunique()\n                r_items = rg[\"order_id\"].size()\n                features.loc[r_orders.index, f\"orders_last_{h}\"] = r_orders\n                features.loc[r_items.index, f\"items_last_{h}\"] = r_items\n\n    # Отзывы\n    if \"review_creation_date\" in reviews.columns:\n        reviews_past = reviews[reviews[\"review_creation_date\"] <= seed_time]\n    else:\n        reviews_past = reviews\n\n    mapping = items_past[[\"product_id\", \"order_id\"]].drop_duplicates()\n    if len(mapping) > 0 and len(reviews_past) > 0:\n        joined = reviews_past.merge(mapping, on=\"order_id\", how=\"inner\")\n        if len(joined) > 0:\n            rev_agg = joined.groupby(\"product_id\").agg(\n                review_count=(\"review_score\", \"count\"),\n                avg_review_score=(\"review_score\", \"mean\")\n            )\n            features.loc[rev_agg.index, \"review_count\"] = rev_agg[\"review_count\"]\n            features.loc[rev_agg.index, \"avg_review_score\"] = rev_agg[\"avg_review_score\"]\n\n    # Платежи\n    if len(mapping) > 0 and len(payments) > 0:\n        pay_merged = payments.merge(mapping, on=\"order_id\", how=\"inner\")\n        if len(pay_merged) > 0:\n            pay_count = pay_merged.groupby(\"product_id\").size()\n            features.loc[pay_count.index, \"payment_count\"] = pay_count\n\n            for pt in payment_types:\n                sub = pay_merged[pay_merged[\"payment_type\"] == pt]\n                if len(sub) > 0:\n                    ptype_count = sub.groupby(\"product_id\").size()\n                    features.loc[ptype_count.index, f\"payment_type_{pt}\"] = ptype_count\n\n    features = features.reindex(entity_ids)\n    features = features.fillna(0)\n    return features",
+   "timestamp": "2026-09-18T20:39:47+00:00",
+   "note": "candidate identical to previous iteration",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "__shape__"
+     ],
+     "canary_columns": [
+      "__shape__"
+     ],
+     "n_columns": 27,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "__shape__"
+     ],
+     "canary_columns": [
+      "__shape__"
+     ],
+     "n_columns": 27,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "__shape__"
+     ],
+     "canary_columns": [
+      "__shape__"
+     ],
+     "n_columns": 27,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "__shape__"
+     ],
+     "canary_columns": [
+      "__shape__"
+     ],
+     "n_columns": 27,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "__shape__"
+     ],
+     "canary_columns": [
+      "__shape__"
+     ],
+     "n_columns": 27,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "__shape__"
+     ],
+     "canary_columns": [
+      "__shape__"
+     ],
+     "n_columns": 27,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 2.2
+  },
+  {
+   "iteration": 2,
+   "candidate_sha256": "f735895142f26e4b689d81f49f34fa965000a349facea56bc1b4bd9ac01957ae",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    if not isinstance(seed_time, pd.Timestamp):\n        seed_time = pd.Timestamp(seed_time)\n\n    orders = db[\"orders\"]\n    items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    features = pd.DataFrame(index=entity_ids)\n\n    # базовые колонки\n    defaults = {\n        \"count_orders\": 0,\n        \"count_items\": 0,\n        \"count_sellers\": 0,\n        \"total_price\": 0.0,\n        \"total_freight\": 0.0,\n        \"avg_price\": 0.0,\n        \"avg_freight\": 0.0,\n        \"std_price\": 0.0,\n        \"std_freight\": 0.0,\n        \"min_price\": 0.0,\n        \"max_price\": 0.0,\n        \"days_since_first\": 0,\n        \"days_since_last\": 0,\n        \"avg_items_per_order\": 0.0,\n        \"has_sales\": 0,\n    }\n    for k, v in defaults.items():\n        features[k] = v\n\n    for h in (30, 90):\n        features[f\"orders_last_{h}\"] = 0\n        features[f\"items_last_{h}\"] = 0\n\n    features[\"review_count\"] = 0\n    features[\"avg_review_score\"] = 0.0\n    features[\"payment_count\"] = 0\n\n    # Покупки товаров до seed_time\n    items_with_ts = items.merge(\n        orders[[\"order_id\", \"order_purchase_timestamp\"]],\n        on=\"order_id\",\n        how=\"inner\"\n    )\n    items_past = items_with_ts[\n        (items_with_ts[\"order_purchase_timestamp\"] < seed_time) &\n        (items_with_ts[\"product_id\"].isin(entity_ids))\n    ]\n\n    # Платежи: только строки, которые уже существуют на момент seed_time\n    payments_past = payments\n    if \"ts\" in payments_past.columns:\n        payments_past = payments_past[payments_past[\"ts\"] <= seed_time]\n\n    payment_types = (\n        payments_past[\"payment_type\"].unique()\n        if \"payment_type\" in payments_past.columns\n        else []\n    )\n    for pt in payment_types:\n        features[f\"payment_type_{pt}\"] = 0\n\n    if len(items_past) > 0:\n        g = items_past.groupby(\"product_id\")\n\n        cnt_orders = g[\"order_id\"].nunique()\n        cnt_items = g[\"order_id\"].size()\n        cnt_sellers = g[\"seller_id\"].nunique()\n        total_price = g[\"price\"].sum()\n        total_freight = g[\"freight_value\"].sum()\n        avg_price = g[\"price\"].mean()\n        avg_freight = g[\"freight_value\"].mean()\n        std_price = g[\"price\"].std(ddof=0)\n        std_freight = g[\"freight_value\"].std(ddof=0)\n        min_price = g[\"price\"].min()\n        max_price = g[\"price\"].max()\n        first_date = g[\"order_purchase_timestamp\"].min()\n        last_date = g[\"order_purchase_timestamp\"].max()\n\n        features.loc[cnt_orders.index, \"has_sales\"] = 1\n        features.loc[cnt_orders.index, \"count_orders\"] = cnt_orders\n        features.loc[cnt_items.index, \"count_items\"] = cnt_items\n        features.loc[cnt_sellers.index, \"count_sellers\"] = cnt_sellers\n        features.loc[total_price.index, \"total_price\"] = total_price\n        features.loc[total_freight.index, \"total_freight\"] = total_freight\n        features.loc[avg_price.index, \"avg_price\"] = avg_price\n        features.loc[avg_freight.index, \"avg_freight\"] = avg_freight\n        features.loc[std_price.index, \"std_price\"] = std_price\n        features.loc[std_freight.index, \"std_freight\"] = std_freight\n        features.loc[min_price.index, \"min_price\"] = min_price\n        features.loc[max_price.index, \"max_price\"] = max_price\n        features.loc[first_date.index, \"days_since_first\"] = (seed_time - first_date).dt.days\n        features.loc[last_date.index, \"days_since_last\"] = (seed_time - last_date).dt.days\n\n        items_per_order = cnt_items / cnt_orders\n        features.loc[items_per_order.index, \"avg_items_per_order\"] = items_per_order\n\n        # Недавние продажи\n        for h in (30, 90):\n            cutoff = seed_time - pd.Timedelta(days=h)\n            recent = items_past[items_past[\"order_purchase_timestamp\"] >= cutoff]\n            if len(recent) > 0:\n                rg = recent.groupby(\"product_id\")\n                r_orders = rg[\"order_id\"].nunique()\n                r_items = rg[\"order_id\"].size()\n                features.loc[r_orders.index, f\"orders_last_{h}\"] = r_orders\n                features.loc[r_items.index, f\"items_last_{h}\"] = r_items\n\n    # Отзывы: только отзывы, созданные до seed_time\n    if \"review_creation_date\" in reviews.columns:\n        reviews_past = reviews[reviews[\"review_creation_date\"] <= seed_time]\n    else:\n        reviews_past = reviews\n\n    mapping = items_past[[\"product_id\", \"order_id\"]].drop_duplicates()\n    if len(mapping) > 0 and len(reviews_past) > 0:\n        joined = reviews_past.merge(mapping, on=\"order_id\", how=\"inner\")\n        if len(joined) > 0:\n            rev_agg = joined.groupby(\"product_id\").agg(\n                review_count=(\"review_score\", \"count\"),\n                avg_review_score=(\"review_score\", \"mean\")\n            )\n            features.loc[rev_agg.index, \"review_count\"] = rev_agg[\"review_count\"]\n            features.loc[rev_agg.index, \"avg_review_score\"] = rev_agg[\"avg_review_score\"]\n\n    # Платежи: merge только с заказами, купленными до seed_time\n    if len(mapping) > 0 and len(payments_past) > 0:\n        pay_merged = payments_past.merge(mapping, on=\"order_id\", how=\"inner\")\n        if len(pay_merged) > 0:\n            pay_count = pay_merged.groupby(\"product_id\").size()\n            features.loc[pay_count.index, \"payment_count\"] = pay_count\n\n            for pt in payment_types:\n                sub = pay_merged[pay_merged[\"payment_type\"] == pt]\n                if len(sub) > 0:\n                    ptype_count = sub.groupby(\"product_id\").size()\n                    features.loc[ptype_count.index, f\"payment_type_{pt}\"] = ptype_count\n\n    features = features.reindex(entity_ids)\n    features = features.fillna(0)\n    return features\n",
+   "timestamp": "2026-09-18T20:42:53+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 26,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 26,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 26,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 26,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 26,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 26,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 2.1
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

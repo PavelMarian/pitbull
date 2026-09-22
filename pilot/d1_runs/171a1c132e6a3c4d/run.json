@@ -1,0 +1,27 @@
+{
+ "program_uid": "171a1c132e6a3c4d",
+ "program": "deepseek-v4-flash-0731#49",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 54.1,
+ "assistant_turns": 6,
+ "tool_calls": 6,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "```\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/171a1c132e6a3c4d/pit_state.json\n```\n\nИтоговый вердикт: утечка была и устранена.\n\n- **Детекция (итерация 0):** `LEAK`. Witness-сравнение полной и усечённой баз показало чтение будущего в четырёх столбцах: `avg_review_score`, `num_reviews`, `positive_reviews`, `positive_ratio`. Canary подтвердил на трёх из них.\n- **Механизм:** `get_features.py:102-103` объединял отзывы с заказами по `order_id` без фильтра по времени написания отзыва. Отзыв появляется в базе позже покупки, поэтому на момент `seed_time` в признаки попадали оценки ещё не существующих отзывов.\n- **Починка:** добавлен фильтр `reviews[\"review_creation_date\"] <= seed_time` перед присоединением отзывов (get_features.py:101-105). Остальная логика не менялась: все остальные признаки строятся по позициям с `order_purchase_timestamp < seed_time`.\n- **Повторная проверка (итерация 1):** `CLEAN`, witness и canary молчат на всех шести моментах, включая три held-out (`2017-10-01`, `2018-02-01`, `2018-06-01`).",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 78909,
+   "output_tokens": 2258
+  },
+  "message_count": 12,
+  "session_id": "35f2b53bc24c",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

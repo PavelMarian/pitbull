@@ -1,0 +1,27 @@
+{
+ "program_uid": "22c221a3b242d5f8",
+ "program": "seed-2.0-code#59",
+ "mechanism": "SELF_AVAILABILITY_CANARY",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 402.2,
+ "assistant_turns": 7,
+ "tool_calls": 7,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "Утечка найдена и устранена, повторная проверка чистая на всех шести моментах, включая held-out.\n\n**Что было:** признаки `avg_delivery_delay` и `pct_on_time_deliveries` считались по всем заказам, купленным до `seed_time`, с использованием `order_delivered_customer_date`. Эта дата заполняется после фактической доставки, поэтому на момент `seed_time` для недавних заказов она из будущего: так модель узнала бы, что товар уже доставлен (и как быстро), чего в момент предсказания знать нельзя. Canary-проверка поймала это на всех шести моментах.\n\n**Починка** (get_features.py:16-24): в выборку заказов для расчёта доставочных признаков добавлен фильтр `order_delivered_customer_date < seed_time`. Заказы без доставки или с датой доставки после `seed_time` больше не участвуют в этих признаках. Остальная логика (продажи по `ts`, отзывы по `review_creation_date`, платежи по `ts`) уже была точечной по времени и не тронута.\n\n```\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1,\nwitness_final=[], canary_final=[],\nstate=/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/22c221a3b242d5f8/pit_state.json\n```\n\nИтоговый вердикт: утечка была, код починен, `get_features.py` теперь чист по времени на dev- и held-out моментах.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 100319,
+   "output_tokens": 2403
+  },
+  "message_count": 14,
+  "session_id": "b289e08264df",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

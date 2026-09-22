@@ -1,0 +1,186 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "ec8a75db4ce0aae8",
+ "source_sha256": "ec8a75db4ce0aae8371c5ea1e779f867eb4ebed6b70fc59a7de04d5332f0890c",
+ "source_code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Извлекаем таблицы\n    orders = db['orders'].copy()\n    items = db['order_items'].copy()\n    reviews = db['reviews'].copy()\n    payments = db['payments'].copy()\n    \n    # Приводим к datetime\n    orders['order_purchase_timestamp'] = pd.to_datetime(orders['order_purchase_timestamp'])\n    items['ts'] = pd.to_datetime(items['ts'])\n    \n    # Фильтруем товары\n    items = items[items['product_id'].isin(entity_ids)]\n    if items.empty:\n        result = pd.DataFrame(index=entity_ids)\n        for col in ['count_orders', 'sum_price', 'avg_freight', 'count_customers',\n                    'avg_review_score', 'count_reviews', 'days_since_last_purchase',\n                    'days_since_first_purchase', 'purchase_frequency_30d', 'purchase_frequency_90d',\n                    'avg_basket_size', 'avg_payment_value', 'installment_ratio']:\n            result[col] = 0\n        return result.reindex(entity_ids)\n    \n    # Объединяем с заказами\n    merged = items.merge(orders[['order_id', 'customer_id', 'order_purchase_timestamp']],\n                         on='order_id', how='left')\n    merged = merged[merged['order_purchase_timestamp'] < seed_time]\n    \n    if merged.empty:\n        result = pd.DataFrame(index=entity_ids)\n        for col in ['count_orders', 'sum_price', 'avg_freight', 'count_customers',\n                    'avg_review_score', 'count_reviews', 'days_since_last_purchase',\n                    'days_since_first_purchase', 'purchase_frequency_30d', 'purchase_frequency_90d',\n                    'avg_basket_size', 'avg_payment_value', 'installment_ratio']:\n            result[col] = 0\n        return result.reindex(entity_ids)\n    \n    # Размер заказа\n    order_sizes = items.groupby('order_id').size().rename('order_size')\n    merged = merged.merge(order_sizes, on='order_id', how='left')\n    \n    # Отзывы\n    review_agg = reviews.groupby('order_id')['review_score'].mean().rename('review_score')\n    merged = merged.merge(review_agg, on='order_id', how='left')\n    \n    # Платежи\n    pay_agg = payments.groupby('order_id').agg(\n        avg_payment_value=('payment_value', 'mean'),\n        installment_ratio=('payment_installments', lambda x: (x > 1).mean())\n    ).reset_index()\n    merged = merged.merge(pay_agg, on='order_id', how='left')\n    \n    # Вспомогательные функции\n    def days_since_last(series):\n        if series.empty:\n            return np.nan\n        return (seed_time - series.max()).days\n    \n    def days_since_first(series):\n        if series.empty:\n            return np.nan\n        return (seed_time - series.min()).days\n    \n    # Признаки для окон\n    merged['is_30d'] = (seed_time - merged['order_purchase_timestamp']).dt.days <= 30\n    merged['is_90d'] = (seed_time - merged['order_purchase_timestamp']).dt.days <= 90\n    \n    # Агрегация\n    features = merged.groupby('product_id').agg(\n        count_orders=('order_id', 'count'),\n        sum_price=('price', 'sum'),\n        avg_freight=('freight_value', 'mean'),\n        count_customers=('customer_id', 'nunique'),\n        avg_review_score=('review_score', 'mean'),\n        count_reviews=('review_score', 'count'),\n        days_since_last_purchase=('order_purchase_timestamp', days_since_last),\n        days_since_first_purchase=('order_purchase_timestamp', days_since_first),\n        purchase_frequency_30d=('is_30d', 'sum'),\n        purchase_frequency_90d=('is_90d', 'sum'),\n        avg_basket_size=('order_size', 'mean'),\n        avg_payment_value=('avg_payment_value', 'mean'),\n        installment_ratio=('installment_ratio', 'mean')\n    ).reset_index()\n    \n    features = features.set_index('product_id')\n    features = features.reindex(entity_ids)\n    features = features.fillna(0)\n    \n    return features",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "ec8a75db4ce0aae8371c5ea1e779f867eb4ebed6b70fc59a7de04d5332f0890c",
+   "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Извлекаем таблицы\n    orders = db['orders'].copy()\n    items = db['order_items'].copy()\n    reviews = db['reviews'].copy()\n    payments = db['payments'].copy()\n    \n    # Приводим к datetime\n    orders['order_purchase_timestamp'] = pd.to_datetime(orders['order_purchase_timestamp'])\n    items['ts'] = pd.to_datetime(items['ts'])\n    \n    # Фильтруем товары\n    items = items[items['product_id'].isin(entity_ids)]\n    if items.empty:\n        result = pd.DataFrame(index=entity_ids)\n        for col in ['count_orders', 'sum_price', 'avg_freight', 'count_customers',\n                    'avg_review_score', 'count_reviews', 'days_since_last_purchase',\n                    'days_since_first_purchase', 'purchase_frequency_30d', 'purchase_frequency_90d',\n                    'avg_basket_size', 'avg_payment_value', 'installment_ratio']:\n            result[col] = 0\n        return result.reindex(entity_ids)\n    \n    # Объединяем с заказами\n    merged = items.merge(orders[['order_id', 'customer_id', 'order_purchase_timestamp']],\n                         on='order_id', how='left')\n    merged = merged[merged['order_purchase_timestamp'] < seed_time]\n    \n    if merged.empty:\n        result = pd.DataFrame(index=entity_ids)\n        for col in ['count_orders', 'sum_price', 'avg_freight', 'count_customers',\n                    'avg_review_score', 'count_reviews', 'days_since_last_purchase',\n                    'days_since_first_purchase', 'purchase_frequency_30d', 'purchase_frequency_90d',\n                    'avg_basket_size', 'avg_payment_value', 'installment_ratio']:\n            result[col] = 0\n        return result.reindex(entity_ids)\n    \n    # Размер заказа\n    order_sizes = items.groupby('order_id').size().rename('order_size')\n    merged = merged.merge(order_sizes, on='order_id', how='left')\n    \n    # Отзывы\n    review_agg = reviews.groupby('order_id')['review_score'].mean().rename('review_score')\n    merged = merged.merge(review_agg, on='order_id', how='left')\n    \n    # Платежи\n    pay_agg = payments.groupby('order_id').agg(\n        avg_payment_value=('payment_value', 'mean'),\n        installment_ratio=('payment_installments', lambda x: (x > 1).mean())\n    ).reset_index()\n    merged = merged.merge(pay_agg, on='order_id', how='left')\n    \n    # Вспомогательные функции\n    def days_since_last(series):\n        if series.empty:\n            return np.nan\n        return (seed_time - series.max()).days\n    \n    def days_since_first(series):\n        if series.empty:\n            return np.nan\n        return (seed_time - series.min()).days\n    \n    # Признаки для окон\n    merged['is_30d'] = (seed_time - merged['order_purchase_timestamp']).dt.days <= 30\n    merged['is_90d'] = (seed_time - merged['order_purchase_timestamp']).dt.days <= 90\n    \n    # Агрегация\n    features = merged.groupby('product_id').agg(\n        count_orders=('order_id', 'count'),\n        sum_price=('price', 'sum'),\n        avg_freight=('freight_value', 'mean'),\n        count_customers=('customer_id', 'nunique'),\n        avg_review_score=('review_score', 'mean'),\n        count_reviews=('review_score', 'count'),\n        days_since_last_purchase=('order_purchase_timestamp', days_since_last),\n        days_since_first_purchase=('order_purchase_timestamp', days_since_first),\n        purchase_frequency_30d=('is_30d', 'sum'),\n        purchase_frequency_90d=('is_90d', 'sum'),\n        avg_basket_size=('order_size', 'mean'),\n        avg_payment_value=('avg_payment_value', 'mean'),\n        installment_ratio=('installment_ratio', 'mean')\n    ).reset_index()\n    \n    features = features.set_index('product_id')\n    features = features.reindex(entity_ids)\n    features = features.fillna(0)\n    \n    return features",
+   "timestamp": "2026-09-18T20:34:15+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 13,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 13,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 13,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 13,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 13,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 13,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 73.2
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "cfd1da467f7448cf43b9c120f19ae698d5c894150d7324c9498d9953de41ffc7",
+   "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Извлекаем таблицы\n    orders = db['orders'].copy()\n    items = db['order_items'].copy()\n    reviews = db['reviews'].copy()\n    payments = db['payments'].copy()\n\n    # Приводим к datetime\n    orders['order_purchase_timestamp'] = pd.to_datetime(orders['order_purchase_timestamp'])\n    items['ts'] = pd.to_datetime(items['ts'])\n    reviews['review_creation_date'] = pd.to_datetime(reviews['review_creation_date'])\n\n    # Фильтруем товары\n    items = items[items['product_id'].isin(entity_ids)]\n    if items.empty:\n        result = pd.DataFrame(index=entity_ids)\n        for col in ['count_orders', 'sum_price', 'avg_freight', 'count_customers',\n                    'avg_review_score', 'count_reviews', 'days_since_last_purchase',\n                    'days_since_first_purchase', 'purchase_frequency_30d', 'purchase_frequency_90d',\n                    'avg_basket_size', 'avg_payment_value', 'installment_ratio']:\n            result[col] = 0\n        return result.reindex(entity_ids)\n\n    # Объединяем с заказами\n    merged = items.merge(orders[['order_id', 'customer_id', 'order_purchase_timestamp']],\n                         on='order_id', how='left')\n    merged = merged[merged['order_purchase_timestamp'] < seed_time]\n\n    if merged.empty:\n        result = pd.DataFrame(index=entity_ids)\n        for col in ['count_orders', 'sum_price', 'avg_freight', 'count_customers',\n                    'avg_review_score', 'count_reviews', 'days_since_last_purchase',\n                    'days_since_first_purchase', 'purchase_frequency_30d', 'purchase_frequency_90d',\n                    'avg_basket_size', 'avg_payment_value', 'installment_ratio']:\n            result[col] = 0\n        return result.reindex(entity_ids)\n\n    # Размер заказа\n    order_sizes = items.groupby('order_id').size().rename('order_size')\n    merged = merged.merge(order_sizes, on='order_id', how='left')\n\n    # Отзывы: берём только те, что уже написаны к моменту seed_time\n    reviews = reviews[reviews['review_creation_date'] <= seed_time]\n    review_agg = reviews.groupby('order_id')['review_score'].mean().rename('review_score')\n    merged = merged.merge(review_agg, on='order_id', how='left')\n\n    # Платежи\n    pay_agg = payments.groupby('order_id').agg(\n        avg_payment_value=('payment_value', 'mean'),\n        installment_ratio=('payment_installments', lambda x: (x > 1).mean())\n    ).reset_index()\n    merged = merged.merge(pay_agg, on='order_id', how='left')\n\n    # Вспомогательные функции\n    def days_since_last(series):\n        if series.empty:\n            return np.nan\n        return (seed_time - series.max()).days\n\n    def days_since_first(series):\n        if series.empty:\n            return np.nan\n        return (seed_time - series.min()).days\n\n    # Признаки для окон\n    merged['is_30d'] = (seed_time - merged['order_purchase_timestamp']).dt.days <= 30\n    merged['is_90d'] = (seed_time - merged['order_purchase_timestamp']).dt.days <= 90\n\n    # Агрегация\n    features = merged.groupby('product_id').agg(\n        count_orders=('order_id', 'count'),\n        sum_price=('price', 'sum'),\n        avg_freight=('freight_value', 'mean'),\n        count_customers=('customer_id', 'nunique'),\n        avg_review_score=('review_score', 'mean'),\n        count_reviews=('review_score', 'count'),\n        days_since_last_purchase=('order_purchase_timestamp', days_since_last),\n        days_since_first_purchase=('order_purchase_timestamp', days_since_first),\n        purchase_frequency_30d=('is_30d', 'sum'),\n        purchase_frequency_90d=('is_90d', 'sum'),\n        avg_basket_size=('order_size', 'mean'),\n        avg_payment_value=('avg_payment_value', 'mean'),\n        installment_ratio=('installment_ratio', 'mean')\n    ).reset_index()\n\n    features = features.set_index('product_id')\n    features = features.reindex(entity_ids)\n    features = features.fillna(0)\n\n    return features\n",
+   "timestamp": "2026-09-18T20:36:04+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 13,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 13,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 13,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 13,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 13,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 13,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 69.9
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

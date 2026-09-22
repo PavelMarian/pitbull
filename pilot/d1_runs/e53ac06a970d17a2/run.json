@@ -1,0 +1,27 @@
+{
+ "program_uid": "e53ac06a970d17a2",
+ "program": "deepseek-v4-flash-0731#62",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 209.1,
+ "assistant_turns": 13,
+ "tool_calls": 13,
+ "skill_loaded": true,
+ "pit_check_calls": 5,
+ "errors": [],
+ "final_text": "Починка подтверждена чекером на всех шести моментах, включая held-out.\n\nЧто было не так и что изменено в `get_features.py`:\n- `reviews` агрегировались без ограничения по `review_creation_date`, в признаки попадали отзывы, написанные после `seed_time` (это дала witness: `avg_positive_ratio`, `avg_review_count`, `avg_review_score`). Теперь `reviews` фильтруются по `review_creation_date <= seed_time`.\n- `order_delivered_customer_date` читался как есть: заказ, купленный до `seed_time`, но доставленный после, давал «будущую» длительность доставки (это дала canary: `avg_delivery_days`). Теперь доставка учитывается только если дата доставки уже наступила, иначе NaN, плюс добавлены признаки `delivered_share` и `delivered_order_share`.\n- `payments` теперь тоже отфильтрованы по `ts <= seed_time` (по карте чекера `ts` — временная колонка таблицы платежей).\n\nОстальная логика (агрегаты по позициям, заказам, временные признаки, заполнение нулями, реиндексация под `entity_ids`) сохранена.\n\n```\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1,\nwitness_final=[], canary_final=[],\nstate=/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/e53ac06a970d17a2/pit_state.json\n```",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 195794,
+   "output_tokens": 11527
+  },
+  "message_count": 26,
+  "session_id": "c8dfec317aa2",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

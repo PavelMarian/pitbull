@@ -1,0 +1,216 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "28f9475f172c7de7",
+ "source_sha256": "28f9475f172c7de7edb18b897725dd2299c2e2bed4afeaa276324ed038d4c082",
+ "source_code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    import pandas as pd\n    import numpy as np\n\n    # Извлекаем таблицы\n    oi = db['order_items']\n    orders = db['orders']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    # Фильтруем order_items по целевым товарам и до seed_time\n    oi_filtered = oi[oi['product_id'].isin(entity_ids) & (oi['ts'] < seed_time)]\n\n    # Если нет данных, сразу возвращаем DataFrame с нулями\n    if len(oi_filtered) == 0:\n        # Создаём пустой DataFrame с индексами entity_ids\n        result = pd.DataFrame(index=entity_ids)\n        # Добавляем заглушку, чтобы не было пустого DataFrame\n        result['dummy'] = 0\n        return result\n\n    # Присоединяем orders для дат и статусов\n    oi_filtered = oi_filtered.merge(\n        orders[['order_id', 'order_status', 'order_purchase_timestamp',\n                'order_delivered_customer_date', 'order_estimated_delivery_date']],\n        on='order_id', how='left'\n    )\n\n    # Признаки времени\n    oi_filtered['days_since_purchase'] = (seed_time - oi_filtered['ts']).dt.days\n    oi_filtered['delivery_time'] = (\n        oi_filtered['order_delivered_customer_date'] - oi_filtered['order_purchase_timestamp']\n    ).dt.days\n    oi_filtered['on_time'] = (\n        oi_filtered['order_delivered_customer_date'] <= oi_filtered['order_estimated_delivery_date']\n    ).astype(int)\n    oi_filtered['is_delivered'] = (oi_filtered['order_status'] == 'delivered').astype(int)\n\n    # Агрегаты по отзывам для заказа\n    rev_agg = reviews.groupby('order_id').agg(\n        review_mean=('review_score', 'mean'),\n        review_count=('review_score', 'count')\n    ).reset_index()\n    oi_filtered = oi_filtered.merge(rev_agg, on='order_id', how='left')\n\n    # Агрегаты по платежам для заказа\n    pay_agg = payments.groupby('order_id').agg(\n        payment_sum=('payment_value', 'sum'),\n        payment_count=('payment_sequential', 'count'),\n        payment_installments_mean=('payment_installments', 'mean'),\n        payment_installments_max=('payment_installments', 'max'),\n        payment_installments_gt1=('payment_installments', lambda x: (x > 1).mean())\n    ).reset_index()\n    oi_filtered = oi_filtered.merge(pay_agg, on='order_id', how='left')\n\n    # Общая выручка позиции\n    oi_filtered['revenue'] = oi_filtered['price'] + oi_filtered['freight_value']\n\n    # Индикаторы заказов за последние N дней\n    for window in [30, 90, 180]:\n        oi_filtered[f'order_in_{window}d'] = (oi_filtered['days_since_purchase'] <= window).astype(int)\n\n    # Основная агрегация по продукту\n    agg_dict = {\n        'order_count': ('order_id', 'nunique'),\n        'item_count': ('order_id', 'count'),\n        'total_revenue': ('revenue', 'sum'),\n        'avg_price': ('price', 'mean'),\n        'sum_price': ('price', 'sum'),\n        'avg_freight': ('freight_value', 'mean'),\n        'sum_freight': ('freight_value', 'sum'),\n        'avg_review': ('review_mean', 'mean'),\n        'total_reviews': ('review_count', 'sum'),\n        'total_payment': ('payment_sum', 'sum'),\n        'payment_transactions': ('payment_count', 'sum'),\n        'avg_installments': ('payment_installments_mean', 'mean'),\n        'max_installments': ('payment_installments_max', 'max'),\n        'frac_installments_gt1': ('payment_installments_gt1', 'mean'),\n        'avg_days_since': ('days_since_purchase', 'mean'),\n        'min_days_since': ('days_since_purchase', 'min'),\n        'max_days_since': ('days_since_purchase', 'max'),\n        'frac_delivered': ('is_delivered', 'mean'),\n        'avg_delivery_time': ('delivery_time', 'mean'),\n        'frac_on_time': ('on_time', 'mean'),\n    }\n\n    prod_features = oi_filtered.groupby('product_id').agg(**agg_dict).reset_index()\n\n    # Количество заказов за последние N дней\n    for window in [30, 90, 180]:\n        counts = oi_filtered.groupby('product_id')[f'order_in_{window}d'].sum().reset_index()\n        counts.columns = ['product_id', f'orders_last_{window}d']\n        prod_features = prod_features.merge(counts, on='product_id', how='left')\n\n    # Характеристики продавца на основе всех его заказов до seed_time\n    oi_all = oi[oi['ts'] < seed_time]\n    oi_all['revenue'] = oi_all['price'] + oi_all['freight_value']\n    seller_oi = oi_all.groupby('seller_id').agg(\n        seller_order_count=('order_id', 'nunique'),\n        seller_item_count=('order_id', 'count'),\n        seller_avg_price=('price', 'mean'),\n        seller_avg_freight=('freight_value', 'mean'),\n        seller_total_revenue=('revenue', 'sum'),\n    ).reset_index()\n\n    # Средний рейтинг продавца\n    rev_agg_all = reviews.groupby('order_id').agg(rev_mean=('review_score', 'mean')).reset_index()\n    oi_all_rev = oi_all.merge(rev_agg_all, on='order_id', how='left')\n    seller_rev = oi_all_rev.groupby('seller_id').agg(\n        seller_avg_review=('rev_mean', 'mean'),\n        seller_review_count=('rev_mean', 'count')\n    ).reset_index()\n    seller_oi = seller_oi.merge(seller_rev, on='seller_id', how='left')\n\n    # Основной продавец для каждого товара (самый частый)\n    seller_mode = oi_filtered.groupby('product_id')['seller_id'].agg(\n        lambda x: x.value_counts().idxmax()\n    ).reset_index()\n    seller_mode.columns = ['product_id', 'main_seller_id']\n\n    prod_features = prod_features.merge(seller_mode, on='product_id', how='left')\n    prod_features = prod_features.merge(seller_oi, left_on='main_seller_id', right_on='seller_id', how='left')\n    prod_features.drop(columns=['seller_id', 'main_seller_id'], inplace=True)\n\n    # Количество уникальных продавцов у товара\n    seller_count = oi_filtered.groupby('product_id')['seller_id'].nunique().reset_index()\n    seller_count.columns = ['product_id', 'unique_sellers']\n    prod_features = prod_features.merge(seller_count, on='product_id', how='left')\n\n    # Итоговый DataFrame с индексами entity_ids\n    result = pd.DataFrame(index=entity_ids)\n    prod_features = prod_features.set_index('product_id')\n    result = result.join(prod_features, how='left')\n    result = result.fillna(0)\n\n    # Удаляем возможные нечисловые столбцы (если остались)\n    numeric_cols = result.select_dtypes(include=[np.number]).columns\n    result = result[numeric_cols]\n\n    return result",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "28f9475f172c7de7edb18b897725dd2299c2e2bed4afeaa276324ed038d4c082",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    import pandas as pd\n    import numpy as np\n\n    # Извлекаем таблицы\n    oi = db['order_items']\n    orders = db['orders']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    # Фильтруем order_items по целевым товарам и до seed_time\n    oi_filtered = oi[oi['product_id'].isin(entity_ids) & (oi['ts'] < seed_time)]\n\n    # Если нет данных, сразу возвращаем DataFrame с нулями\n    if len(oi_filtered) == 0:\n        # Создаём пустой DataFrame с индексами entity_ids\n        result = pd.DataFrame(index=entity_ids)\n        # Добавляем заглушку, чтобы не было пустого DataFrame\n        result['dummy'] = 0\n        return result\n\n    # Присоединяем orders для дат и статусов\n    oi_filtered = oi_filtered.merge(\n        orders[['order_id', 'order_status', 'order_purchase_timestamp',\n                'order_delivered_customer_date', 'order_estimated_delivery_date']],\n        on='order_id', how='left'\n    )\n\n    # Признаки времени\n    oi_filtered['days_since_purchase'] = (seed_time - oi_filtered['ts']).dt.days\n    oi_filtered['delivery_time'] = (\n        oi_filtered['order_delivered_customer_date'] - oi_filtered['order_purchase_timestamp']\n    ).dt.days\n    oi_filtered['on_time'] = (\n        oi_filtered['order_delivered_customer_date'] <= oi_filtered['order_estimated_delivery_date']\n    ).astype(int)\n    oi_filtered['is_delivered'] = (oi_filtered['order_status'] == 'delivered').astype(int)\n\n    # Агрегаты по отзывам для заказа\n    rev_agg = reviews.groupby('order_id').agg(\n        review_mean=('review_score', 'mean'),\n        review_count=('review_score', 'count')\n    ).reset_index()\n    oi_filtered = oi_filtered.merge(rev_agg, on='order_id', how='left')\n\n    # Агрегаты по платежам для заказа\n    pay_agg = payments.groupby('order_id').agg(\n        payment_sum=('payment_value', 'sum'),\n        payment_count=('payment_sequential', 'count'),\n        payment_installments_mean=('payment_installments', 'mean'),\n        payment_installments_max=('payment_installments', 'max'),\n        payment_installments_gt1=('payment_installments', lambda x: (x > 1).mean())\n    ).reset_index()\n    oi_filtered = oi_filtered.merge(pay_agg, on='order_id', how='left')\n\n    # Общая выручка позиции\n    oi_filtered['revenue'] = oi_filtered['price'] + oi_filtered['freight_value']\n\n    # Индикаторы заказов за последние N дней\n    for window in [30, 90, 180]:\n        oi_filtered[f'order_in_{window}d'] = (oi_filtered['days_since_purchase'] <= window).astype(int)\n\n    # Основная агрегация по продукту\n    agg_dict = {\n        'order_count': ('order_id', 'nunique'),\n        'item_count': ('order_id', 'count'),\n        'total_revenue': ('revenue', 'sum'),\n        'avg_price': ('price', 'mean'),\n        'sum_price': ('price', 'sum'),\n        'avg_freight': ('freight_value', 'mean'),\n        'sum_freight': ('freight_value', 'sum'),\n        'avg_review': ('review_mean', 'mean'),\n        'total_reviews': ('review_count', 'sum'),\n        'total_payment': ('payment_sum', 'sum'),\n        'payment_transactions': ('payment_count', 'sum'),\n        'avg_installments': ('payment_installments_mean', 'mean'),\n        'max_installments': ('payment_installments_max', 'max'),\n        'frac_installments_gt1': ('payment_installments_gt1', 'mean'),\n        'avg_days_since': ('days_since_purchase', 'mean'),\n        'min_days_since': ('days_since_purchase', 'min'),\n        'max_days_since': ('days_since_purchase', 'max'),\n        'frac_delivered': ('is_delivered', 'mean'),\n        'avg_delivery_time': ('delivery_time', 'mean'),\n        'frac_on_time': ('on_time', 'mean'),\n    }\n\n    prod_features = oi_filtered.groupby('product_id').agg(**agg_dict).reset_index()\n\n    # Количество заказов за последние N дней\n    for window in [30, 90, 180]:\n        counts = oi_filtered.groupby('product_id')[f'order_in_{window}d'].sum().reset_index()\n        counts.columns = ['product_id', f'orders_last_{window}d']\n        prod_features = prod_features.merge(counts, on='product_id', how='left')\n\n    # Характеристики продавца на основе всех его заказов до seed_time\n    oi_all = oi[oi['ts'] < seed_time]\n    oi_all['revenue'] = oi_all['price'] + oi_all['freight_value']\n    seller_oi = oi_all.groupby('seller_id').agg(\n        seller_order_count=('order_id', 'nunique'),\n        seller_item_count=('order_id', 'count'),\n        seller_avg_price=('price', 'mean'),\n        seller_avg_freight=('freight_value', 'mean'),\n        seller_total_revenue=('revenue', 'sum'),\n    ).reset_index()\n\n    # Средний рейтинг продавца\n    rev_agg_all = reviews.groupby('order_id').agg(rev_mean=('review_score', 'mean')).reset_index()\n    oi_all_rev = oi_all.merge(rev_agg_all, on='order_id', how='left')\n    seller_rev = oi_all_rev.groupby('seller_id').agg(\n        seller_avg_review=('rev_mean', 'mean'),\n        seller_review_count=('rev_mean', 'count')\n    ).reset_index()\n    seller_oi = seller_oi.merge(seller_rev, on='seller_id', how='left')\n\n    # Основной продавец для каждого товара (самый частый)\n    seller_mode = oi_filtered.groupby('product_id')['seller_id'].agg(\n        lambda x: x.value_counts().idxmax()\n    ).reset_index()\n    seller_mode.columns = ['product_id', 'main_seller_id']\n\n    prod_features = prod_features.merge(seller_mode, on='product_id', how='left')\n    prod_features = prod_features.merge(seller_oi, left_on='main_seller_id', right_on='seller_id', how='left')\n    prod_features.drop(columns=['seller_id', 'main_seller_id'], inplace=True)\n\n    # Количество уникальных продавцов у товара\n    seller_count = oi_filtered.groupby('product_id')['seller_id'].nunique().reset_index()\n    seller_count.columns = ['product_id', 'unique_sellers']\n    prod_features = prod_features.merge(seller_count, on='product_id', how='left')\n\n    # Итоговый DataFrame с индексами entity_ids\n    result = pd.DataFrame(index=entity_ids)\n    prod_features = prod_features.set_index('product_id')\n    result = result.join(prod_features, how='left')\n    result = result.fillna(0)\n\n    # Удаляем возможные нечисловые столбцы (если остались)\n    numeric_cols = result.select_dtypes(include=[np.number]).columns\n    result = result[numeric_cols]\n\n    return result",
+   "timestamp": "2026-09-18T20:37:43+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "total_reviews",
+      "seller_avg_review",
+      "seller_review_count"
+     ],
+     "canary_columns": [
+      "avg_review",
+      "avg_delivery_time",
+      "frac_on_time",
+      "seller_avg_review"
+     ],
+     "n_columns": 31,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "total_reviews",
+      "seller_avg_review",
+      "seller_review_count"
+     ],
+     "canary_columns": [
+      "avg_review",
+      "avg_delivery_time",
+      "frac_on_time",
+      "seller_avg_review"
+     ],
+     "n_columns": 31,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "total_reviews",
+      "seller_avg_review",
+      "seller_review_count"
+     ],
+     "canary_columns": [
+      "avg_review",
+      "avg_delivery_time",
+      "frac_on_time",
+      "seller_avg_review"
+     ],
+     "n_columns": 31,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "total_reviews",
+      "seller_avg_review",
+      "seller_review_count"
+     ],
+     "canary_columns": [
+      "avg_review",
+      "avg_delivery_time",
+      "frac_on_time",
+      "seller_avg_review"
+     ],
+     "n_columns": 31,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "total_reviews",
+      "seller_avg_review",
+      "seller_review_count"
+     ],
+     "canary_columns": [
+      "avg_review",
+      "avg_delivery_time",
+      "frac_on_time",
+      "seller_avg_review"
+     ],
+     "n_columns": 31,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "total_reviews",
+      "seller_avg_review",
+      "seller_review_count"
+     ],
+     "canary_columns": [
+      "avg_review",
+      "avg_delivery_time",
+      "frac_on_time",
+      "seller_avg_review"
+     ],
+     "n_columns": 31,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 79.0
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "c7d69e3170e5f0f1fd065817a044e66b457648d17e51b7f0c6e0d24a5adf7f65",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    import pandas as pd\n    import numpy as np\n\n    # Извлекаем таблицы\n    oi = db['order_items']\n    orders = db['orders']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    # Фильтруем отзывы по времени: отзыв доступен, только если он уже создан\n    # (review_creation_date <= seed_time). Без этого фильтра в агрегаты попадают\n    # отзывы, написанные после момента предсказания.\n    reviews = reviews[reviews['review_creation_date'] <= seed_time]\n\n    # Фильтруем order_items по целевым товарам и до seed_time\n    oi_filtered = oi[oi['product_id'].isin(entity_ids) & (oi['ts'] < seed_time)].copy()\n\n    # Если нет данных, сразу возвращаем DataFrame с нулями\n    if len(oi_filtered) == 0:\n        # Создаём пустой DataFrame с индексами entity_ids\n        result = pd.DataFrame(index=entity_ids)\n        # Добавляем заглушку, чтобы не было пустого DataFrame\n        result['dummy'] = 0\n        return result\n\n    # Присоединяем orders для дат и статусов\n    oi_filtered = oi_filtered.merge(\n        orders[['order_id', 'order_status', 'order_purchase_timestamp',\n                'order_delivered_customer_date', 'order_estimated_delivery_date']],\n        on='order_id', how='left'\n    )\n\n    # Признаки времени\n    oi_filtered['days_since_purchase'] = (seed_time - oi_filtered['ts']).dt.days\n    # Дата доставки доступна только если она не пуста и не в будущем\n    # относительно seed_time. Иначе delivery_time и on_time читают будущее.\n    delivered = oi_filtered['order_delivered_customer_date']\n    delivered_known = delivered.notna() & (delivered <= seed_time)\n    oi_filtered['delivery_time'] = (\n        (delivered - oi_filtered['order_purchase_timestamp']).dt.days\n    ).where(delivered_known)\n    oi_filtered['on_time'] = pd.Series(\n        np.where(delivered_known & (delivered <= oi_filtered['order_estimated_delivery_date']), 1.0, np.nan),\n        index=oi_filtered.index\n    )\n    oi_filtered['is_delivered'] = (delivered_known).astype(int)\n\n    # Агрегаты по отзывам для заказа\n    rev_agg = reviews.groupby('order_id').agg(\n        review_mean=('review_score', 'mean'),\n        review_count=('review_score', 'count')\n    ).reset_index()\n    oi_filtered = oi_filtered.merge(rev_agg, on='order_id', how='left')\n\n    # Агрегаты по платежам для заказа (только платежи, уже существующие на\n    # момент seed_time; ts платежа = момент покупки его заказа)\n    payments = payments[payments['ts'] <= seed_time]\n    pay_agg = payments.groupby('order_id').agg(\n        payment_sum=('payment_value', 'sum'),\n        payment_count=('payment_sequential', 'count'),\n        payment_installments_mean=('payment_installments', 'mean'),\n        payment_installments_max=('payment_installments', 'max'),\n        payment_installments_gt1=('payment_installments', lambda x: (x > 1).mean())\n    ).reset_index()\n    oi_filtered = oi_filtered.merge(pay_agg, on='order_id', how='left')\n\n    # Общая выручка позиции\n    oi_filtered['revenue'] = oi_filtered['price'] + oi_filtered['freight_value']\n\n    # Индикаторы заказов за последние N дней\n    for window in [30, 90, 180]:\n        oi_filtered[f'order_in_{window}d'] = (oi_filtered['days_since_purchase'] <= window).astype(int)\n\n    # Основная агрегация по продукту\n    agg_dict = {\n        'order_count': ('order_id', 'nunique'),\n        'item_count': ('order_id', 'count'),\n        'total_revenue': ('revenue', 'sum'),\n        'avg_price': ('price', 'mean'),\n        'sum_price': ('price', 'sum'),\n        'avg_freight': ('freight_value', 'mean'),\n        'sum_freight': ('freight_value', 'sum'),\n        'avg_review': ('review_mean', 'mean'),\n        'total_reviews': ('review_count', 'sum'),\n        'total_payment': ('payment_sum', 'sum'),\n        'payment_transactions': ('payment_count', 'sum'),\n        'avg_installments': ('payment_installments_mean', 'mean'),\n        'max_installments': ('payment_installments_max', 'max'),\n        'frac_installments_gt1': ('payment_installments_gt1', 'mean'),\n        'avg_days_since': ('days_since_purchase', 'mean'),\n        'min_days_since': ('days_since_purchase', 'min'),\n        'max_days_since': ('days_since_purchase', 'max'),\n        'frac_delivered': ('is_delivered', 'mean'),\n        'avg_delivery_time': ('delivery_time', 'mean'),\n        'frac_on_time': ('on_time', 'mean'),\n    }\n\n    prod_features = oi_filtered.groupby('product_id').agg(**agg_dict).reset_index()\n\n    # Количество заказов за последние N дней\n    for window in [30, 90, 180]:\n        counts = oi_filtered.groupby('product_id')[f'order_in_{window}d'].sum().reset_index()\n        counts.columns = ['product_id', f'orders_last_{window}d']\n        prod_features = prod_features.merge(counts, on='product_id', how='left')\n\n    # Характеристики продавца на основе всех его заказов до seed_time\n    oi_all = oi[oi['ts'] < seed_time].copy()\n    oi_all['revenue'] = oi_all['price'] + oi_all['freight_value']\n    seller_oi = oi_all.groupby('seller_id').agg(\n        seller_order_count=('order_id', 'nunique'),\n        seller_item_count=('order_id', 'count'),\n        seller_avg_price=('price', 'mean'),\n        seller_avg_freight=('freight_value', 'mean'),\n        seller_total_revenue=('revenue', 'sum'),\n    ).reset_index()\n\n    # Средний рейтинг продавца\n    rev_agg_all = reviews.groupby('order_id').agg(rev_mean=('review_score', 'mean')).reset_index()\n    oi_all_rev = oi_all.merge(rev_agg_all, on='order_id', how='left')\n    seller_rev = oi_all_rev.groupby('seller_id').agg(\n        seller_avg_review=('rev_mean', 'mean'),\n        seller_review_count=('rev_mean', 'count')\n    ).reset_index()\n    seller_oi = seller_oi.merge(seller_rev, on='seller_id', how='left')\n\n    # Основной продавец для каждого товара (самый частый)\n    seller_mode = oi_filtered.groupby('product_id')['seller_id'].agg(\n        lambda x: x.value_counts().idxmax()\n    ).reset_index()\n    seller_mode.columns = ['product_id', 'main_seller_id']\n\n    prod_features = prod_features.merge(seller_mode, on='product_id', how='left')\n    prod_features = prod_features.merge(seller_oi, left_on='main_seller_id', right_on='seller_id', how='left')\n    prod_features.drop(columns=['seller_id', 'main_seller_id'], inplace=True)\n\n    # Количество уникальных продавцов у товара\n    seller_count = oi_filtered.groupby('product_id')['seller_id'].nunique().reset_index()\n    seller_count.columns = ['product_id', 'unique_sellers']\n    prod_features = prod_features.merge(seller_count, on='product_id', how='left')\n\n    # Итоговый DataFrame с индексами entity_ids\n    result = pd.DataFrame(index=entity_ids)\n    prod_features = prod_features.set_index('product_id')\n    result = result.join(prod_features, how='left')\n    result = result.fillna(0)\n\n    # Удаляем возможные нечисловые столбцы (если остались)\n    numeric_cols = result.select_dtypes(include=[np.number]).columns\n    result = result[numeric_cols]\n\n    return result",
+   "timestamp": "2026-09-18T20:42:59+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 31,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 31,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 31,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 31,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 31,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 31,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 58.2
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

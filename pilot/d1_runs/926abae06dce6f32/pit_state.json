@@ -1,0 +1,232 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "926abae06dce6f32",
+ "source_sha256": "926abae06dce6f32b0b66b8f4513e1dd529232437142f205f63359f6020de6cb",
+ "source_code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Извлекаем таблицы из базы\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n    \n    # Фильтруем исторические данные до seed_time\n    items_hist = order_items[order_items[\"ts\"] <= seed_time].copy()\n    # Создаем столбец общей стоимости позиции\n    items_hist[\"total_value\"] = items_hist[\"price\"] + items_hist[\"freight_value\"]\n    \n    # Определяем временные окна для агрегации\n    windows = {\n        \"7d\": 7,\n        \"30d\": 30,\n        \"90d\": 90,\n        \"365d\": 365,\n        \"all_time\": 100000  # Достаточно большое число для всех данных\n    }\n    \n    # Создаем базовый фрейм с требуемыми product_id в качестве индекса\n    base = pd.DataFrame(index=entity_ids)\n    base.index.name = \"product_id\"\n    \n    # Агрегируем признаки по order_items для каждого окна\n    for window_name, days in windows.items():\n        if window_name == \"all_time\":\n            window_data = items_hist\n        else:\n            cutoff = seed_time - pd.Timedelta(days=days)\n            window_data = items_hist[items_hist[\"ts\"] >= cutoff]\n        \n        # Основные агрегаты по товарным позициям\n        agg_params = {\n            \"order_id\": [\"count\", \"nunique\"],\n            \"price\": [\"mean\", \"sum\", \"min\", \"max\"],\n            \"freight_value\": [\"mean\", \"sum\"],\n            \"total_value\": [\"mean\", \"sum\"],\n            \"seller_id\": \"nunique\",\n            \"order_item_id\": \"max\"\n        }\n        window_agg = window_data.groupby(\"product_id\").agg(agg_params)\n        # Приводим имена столбцов к единому формату\n        window_agg.columns = [f\"{window_name}_{'_'.join(col)}\" for col in window_agg.columns]\n        # Упрощаем имена столбцов для читаемости\n        rename_map = {\n            f\"{window_name}_order_id_count\": f\"{window_name}_item_count\",\n            f\"{window_name}_order_id_nunique\": f\"{window_name}_order_count\",\n            f\"{window_name}_price_mean\": f\"{window_name}_avg_price\",\n            f\"{window_name}_price_sum\": f\"{window_name}_total_price\",\n            f\"{window_name}_price_min\": f\"{window_name}_min_price\",\n            f\"{window_name}_price_max\": f\"{window_name}_max_price\",\n            f\"{window_name}_freight_value_mean\": f\"{window_name}_avg_freight\",\n            f\"{window_name}_freight_value_sum\": f\"{window_name}_total_freight\",\n            f\"{window_name}_total_value_mean\": f\"{window_name}_avg_order_value\",\n            f\"{window_name}_total_value_sum\": f\"{window_name}_total_revenue\",\n            f\"{window_name}_seller_id_nunique\": f\"{window_name}_unique_sellers\",\n            f\"{window_name}_order_item_id_max\": f\"{window_name}_max_units_per_order\",\n        }\n        window_agg = window_agg.rename(columns=rename_map)\n        # Добавляем агрегаты к базовому фрейму\n        base = base.join(window_agg, how=\"left\")\n    \n    # Временные признаки: первая и последняя продажа\n    time_metrics = items_hist.groupby(\"product_id\")[\"ts\"].agg([\"min\", \"max\"])\n    time_metrics = time_metrics.rename(columns={\"min\": \"first_purchase\", \"max\": \"last_purchase\"})\n    time_metrics[\"days_since_first_purchase\"] = (seed_time - time_metrics[\"first_purchase\"]).dt.days\n    time_metrics[\"days_since_last_purchase\"] = (seed_time - time_metrics[\"last_purchase\"]).dt.days\n    base = base.join(time_metrics[[\"days_since_first_purchase\", \"days_since_last_purchase\"]], how=\"left\")\n    \n    # Признаки по отзывам\n    # Объединяем товары с отзывами через order_id\n    product_reviews = items_hist[[\"product_id\", \"order_id\"]].drop_duplicates().merge(reviews, on=\"order_id\", how=\"inner\")\n    # Агрегируем метрики отзывов\n    review_agg = product_reviews.groupby(\"product_id\")[\"review_score\"].agg([\n        \"count\", \"mean\", \"min\", \"max\", \"std\"\n    ])\n    # Добавляем долю крайних оценок\n    review_agg[\"five_star_ratio\"] = (product_reviews[\"review_score\"] == 5).groupby(product_reviews[\"product_id\"]).mean()\n    review_agg[\"one_star_ratio\"] = (product_reviews[\"review_score\"] == 1).groupby(product_reviews[\"product_id\"]).mean()\n    review_agg.columns = [f\"review_{col}\" for col in review_agg.columns]\n    base = base.join(review_agg, how=\"left\")\n    \n    # Признаки по платежам\n    # Объединяем товары с платежами через order_id\n    product_payments = items_hist[[\"product_id\", \"order_id\"]].merge(payments, on=\"order_id\", how=\"inner\")\n    # Агрегируем метрики платежей\n    pay_agg = product_payments.groupby(\"product_id\").agg({\n        \"payment_sequential\": \"count\",\n        \"payment_installments\": [\"mean\", \"max\"],\n        \"payment_value\": [\"mean\", \"sum\"]\n    })\n    # Добавляем долю кредитных платежей\n    pay_agg[\"payment_credit_ratio\"] = (product_payments[\"payment_type\"] == \"credit_card\").groupby(product_payments[\"product_id\"]).mean()\n    # Приводим имена столбцов\n    pay_agg.columns = [f\"{'_'.join(col)}\" if col[1] else col[0] for col in pay_agg.columns]\n    pay_agg = pay_agg.rename(columns={\n        \"payment_sequential_count\": \"payment_count\",\n        \"payment_installments_mean\": \"payment_avg_installments\",\n        \"payment_installments_max\": \"payment_max_installments\",\n        \"payment_value_mean\": \"payment_avg_value\",\n        \"payment_value_sum\": \"payment_total_value\",\n    })\n    base = base.join(pay_agg, how=\"left\")\n    \n    # Заполняем пропуски нулями (отсутствие данных означает нулевые значения метрик\n    base = base.fillna(0)\n    \n    # Удаляем возможные дубликаты столбцов\n    base = base.loc[:, ~base.columns.duplicated()]\n    \n    # Реиндексируем под заданный список entity_ids\n    base = base.reindex(entity_ids)\n    \n    return base",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "926abae06dce6f32b0b66b8f4513e1dd529232437142f205f63359f6020de6cb",
+   "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Извлекаем таблицы из базы\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n    \n    # Фильтруем исторические данные до seed_time\n    items_hist = order_items[order_items[\"ts\"] <= seed_time].copy()\n    # Создаем столбец общей стоимости позиции\n    items_hist[\"total_value\"] = items_hist[\"price\"] + items_hist[\"freight_value\"]\n    \n    # Определяем временные окна для агрегации\n    windows = {\n        \"7d\": 7,\n        \"30d\": 30,\n        \"90d\": 90,\n        \"365d\": 365,\n        \"all_time\": 100000  # Достаточно большое число для всех данных\n    }\n    \n    # Создаем базовый фрейм с требуемыми product_id в качестве индекса\n    base = pd.DataFrame(index=entity_ids)\n    base.index.name = \"product_id\"\n    \n    # Агрегируем признаки по order_items для каждого окна\n    for window_name, days in windows.items():\n        if window_name == \"all_time\":\n            window_data = items_hist\n        else:\n            cutoff = seed_time - pd.Timedelta(days=days)\n            window_data = items_hist[items_hist[\"ts\"] >= cutoff]\n        \n        # Основные агрегаты по товарным позициям\n        agg_params = {\n            \"order_id\": [\"count\", \"nunique\"],\n            \"price\": [\"mean\", \"sum\", \"min\", \"max\"],\n            \"freight_value\": [\"mean\", \"sum\"],\n            \"total_value\": [\"mean\", \"sum\"],\n            \"seller_id\": \"nunique\",\n            \"order_item_id\": \"max\"\n        }\n        window_agg = window_data.groupby(\"product_id\").agg(agg_params)\n        # Приводим имена столбцов к единому формату\n        window_agg.columns = [f\"{window_name}_{'_'.join(col)}\" for col in window_agg.columns]\n        # Упрощаем имена столбцов для читаемости\n        rename_map = {\n            f\"{window_name}_order_id_count\": f\"{window_name}_item_count\",\n            f\"{window_name}_order_id_nunique\": f\"{window_name}_order_count\",\n            f\"{window_name}_price_mean\": f\"{window_name}_avg_price\",\n            f\"{window_name}_price_sum\": f\"{window_name}_total_price\",\n            f\"{window_name}_price_min\": f\"{window_name}_min_price\",\n            f\"{window_name}_price_max\": f\"{window_name}_max_price\",\n            f\"{window_name}_freight_value_mean\": f\"{window_name}_avg_freight\",\n            f\"{window_name}_freight_value_sum\": f\"{window_name}_total_freight\",\n            f\"{window_name}_total_value_mean\": f\"{window_name}_avg_order_value\",\n            f\"{window_name}_total_value_sum\": f\"{window_name}_total_revenue\",\n            f\"{window_name}_seller_id_nunique\": f\"{window_name}_unique_sellers\",\n            f\"{window_name}_order_item_id_max\": f\"{window_name}_max_units_per_order\",\n        }\n        window_agg = window_agg.rename(columns=rename_map)\n        # Добавляем агрегаты к базовому фрейму\n        base = base.join(window_agg, how=\"left\")\n    \n    # Временные признаки: первая и последняя продажа\n    time_metrics = items_hist.groupby(\"product_id\")[\"ts\"].agg([\"min\", \"max\"])\n    time_metrics = time_metrics.rename(columns={\"min\": \"first_purchase\", \"max\": \"last_purchase\"})\n    time_metrics[\"days_since_first_purchase\"] = (seed_time - time_metrics[\"first_purchase\"]).dt.days\n    time_metrics[\"days_since_last_purchase\"] = (seed_time - time_metrics[\"last_purchase\"]).dt.days\n    base = base.join(time_metrics[[\"days_since_first_purchase\", \"days_since_last_purchase\"]], how=\"left\")\n    \n    # Признаки по отзывам\n    # Объединяем товары с отзывами через order_id\n    product_reviews = items_hist[[\"product_id\", \"order_id\"]].drop_duplicates().merge(reviews, on=\"order_id\", how=\"inner\")\n    # Агрегируем метрики отзывов\n    review_agg = product_reviews.groupby(\"product_id\")[\"review_score\"].agg([\n        \"count\", \"mean\", \"min\", \"max\", \"std\"\n    ])\n    # Добавляем долю крайних оценок\n    review_agg[\"five_star_ratio\"] = (product_reviews[\"review_score\"] == 5).groupby(product_reviews[\"product_id\"]).mean()\n    review_agg[\"one_star_ratio\"] = (product_reviews[\"review_score\"] == 1).groupby(product_reviews[\"product_id\"]).mean()\n    review_agg.columns = [f\"review_{col}\" for col in review_agg.columns]\n    base = base.join(review_agg, how=\"left\")\n    \n    # Признаки по платежам\n    # Объединяем товары с платежами через order_id\n    product_payments = items_hist[[\"product_id\", \"order_id\"]].merge(payments, on=\"order_id\", how=\"inner\")\n    # Агрегируем метрики платежей\n    pay_agg = product_payments.groupby(\"product_id\").agg({\n        \"payment_sequential\": \"count\",\n        \"payment_installments\": [\"mean\", \"max\"],\n        \"payment_value\": [\"mean\", \"sum\"]\n    })\n    # Добавляем долю кредитных платежей\n    pay_agg[\"payment_credit_ratio\"] = (product_payments[\"payment_type\"] == \"credit_card\").groupby(product_payments[\"product_id\"]).mean()\n    # Приводим имена столбцов\n    pay_agg.columns = [f\"{'_'.join(col)}\" if col[1] else col[0] for col in pay_agg.columns]\n    pay_agg = pay_agg.rename(columns={\n        \"payment_sequential_count\": \"payment_count\",\n        \"payment_installments_mean\": \"payment_avg_installments\",\n        \"payment_installments_max\": \"payment_max_installments\",\n        \"payment_value_mean\": \"payment_avg_value\",\n        \"payment_value_sum\": \"payment_total_value\",\n    })\n    base = base.join(pay_agg, how=\"left\")\n    \n    # Заполняем пропуски нулями (отсутствие данных означает нулевые значения метрик\n    base = base.fillna(0)\n    \n    # Удаляем возможные дубликаты столбцов\n    base = base.loc[:, ~base.columns.duplicated()]\n    \n    # Реиндексируем под заданный список entity_ids\n    base = base.reindex(entity_ids)\n    \n    return base",
+   "timestamp": "2026-09-18T20:17:05+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_count",
+      "review_mean",
+      "review_min",
+      "review_max",
+      "review_std",
+      "review_five_star_ratio",
+      "review_one_star_ratio"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "review_min",
+      "review_max",
+      "review_std",
+      "review_one_star_ratio"
+     ],
+     "n_columns": 75,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_count",
+      "review_mean",
+      "review_min",
+      "review_std",
+      "review_five_star_ratio",
+      "review_one_star_ratio"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "review_min",
+      "review_max",
+      "review_std",
+      "review_one_star_ratio"
+     ],
+     "n_columns": 75,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_count",
+      "review_mean",
+      "review_max",
+      "review_std",
+      "review_five_star_ratio",
+      "review_one_star_ratio"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "review_max",
+      "review_std",
+      "review_five_star_ratio"
+     ],
+     "n_columns": 75,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_count",
+      "review_mean",
+      "review_min",
+      "review_std",
+      "review_five_star_ratio",
+      "review_one_star_ratio"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "review_min",
+      "review_max",
+      "review_std",
+      "review_five_star_ratio",
+      "review_one_star_ratio"
+     ],
+     "n_columns": 75,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_count",
+      "review_mean",
+      "review_std",
+      "review_five_star_ratio",
+      "review_one_star_ratio"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "review_max",
+      "review_std",
+      "review_five_star_ratio"
+     ],
+     "n_columns": 75,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_count",
+      "review_mean",
+      "review_max",
+      "review_std",
+      "review_five_star_ratio",
+      "review_one_star_ratio"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "review_max",
+      "review_std",
+      "review_five_star_ratio"
+     ],
+     "n_columns": 75,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 6.3
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "b0cae0e2c726690ee129040f6d305e8cf3d805a1e48584fbf3e29750d6c17857",
+   "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Извлекаем таблицы из базы\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n    \n    # Фильтруем исторические данные до seed_time\n    items_hist = order_items[order_items[\"ts\"] <= seed_time].copy()\n    # Создаем столбец общей стоимости позиции\n    items_hist[\"total_value\"] = items_hist[\"price\"] + items_hist[\"freight_value\"]\n    \n    # Определяем временные окна для агрегации\n    windows = {\n        \"7d\": 7,\n        \"30d\": 30,\n        \"90d\": 90,\n        \"365d\": 365,\n        \"all_time\": 100000  # Достаточно большое число для всех данных\n    }\n    \n    # Создаем базовый фрейм с требуемыми product_id в качестве индекса\n    base = pd.DataFrame(index=entity_ids)\n    base.index.name = \"product_id\"\n    \n    # Агрегируем признаки по order_items для каждого окна\n    for window_name, days in windows.items():\n        if window_name == \"all_time\":\n            window_data = items_hist\n        else:\n            cutoff = seed_time - pd.Timedelta(days=days)\n            window_data = items_hist[items_hist[\"ts\"] >= cutoff]\n        \n        # Основные агрегаты по товарным позициям\n        agg_params = {\n            \"order_id\": [\"count\", \"nunique\"],\n            \"price\": [\"mean\", \"sum\", \"min\", \"max\"],\n            \"freight_value\": [\"mean\", \"sum\"],\n            \"total_value\": [\"mean\", \"sum\"],\n            \"seller_id\": \"nunique\",\n            \"order_item_id\": \"max\"\n        }\n        window_agg = window_data.groupby(\"product_id\").agg(agg_params)\n        # Приводим имена столбцов к единому формату\n        window_agg.columns = [f\"{window_name}_{'_'.join(col)}\" for col in window_agg.columns]\n        # Упрощаем имена столбцов для читаемости\n        rename_map = {\n            f\"{window_name}_order_id_count\": f\"{window_name}_item_count\",\n            f\"{window_name}_order_id_nunique\": f\"{window_name}_order_count\",\n            f\"{window_name}_price_mean\": f\"{window_name}_avg_price\",\n            f\"{window_name}_price_sum\": f\"{window_name}_total_price\",\n            f\"{window_name}_price_min\": f\"{window_name}_min_price\",\n            f\"{window_name}_price_max\": f\"{window_name}_max_price\",\n            f\"{window_name}_freight_value_mean\": f\"{window_name}_avg_freight\",\n            f\"{window_name}_freight_value_sum\": f\"{window_name}_total_freight\",\n            f\"{window_name}_total_value_mean\": f\"{window_name}_avg_order_value\",\n            f\"{window_name}_total_value_sum\": f\"{window_name}_total_revenue\",\n            f\"{window_name}_seller_id_nunique\": f\"{window_name}_unique_sellers\",\n            f\"{window_name}_order_item_id_max\": f\"{window_name}_max_units_per_order\",\n        }\n        window_agg = window_agg.rename(columns=rename_map)\n        # Добавляем агрегаты к базовому фрейму\n        base = base.join(window_agg, how=\"left\")\n    \n    # Временные признаки: первая и последняя продажа\n    time_metrics = items_hist.groupby(\"product_id\")[\"ts\"].agg([\"min\", \"max\"])\n    time_metrics = time_metrics.rename(columns={\"min\": \"first_purchase\", \"max\": \"last_purchase\"})\n    time_metrics[\"days_since_first_purchase\"] = (seed_time - time_metrics[\"first_purchase\"]).dt.days\n    time_metrics[\"days_since_last_purchase\"] = (seed_time - time_metrics[\"last_purchase\"]).dt.days\n    base = base.join(time_metrics[[\"days_since_first_purchase\", \"days_since_last_purchase\"]], how=\"left\")\n    \n    # Признаки по отзывам\n    # Оставляем только отзывы, уже существующие на момент seed_time:\n    # отзыв пишется после покупки, поэтому без фильтра сюда попадает будущее.\n    reviews_hist = reviews[reviews[\"review_creation_date\"] <= seed_time]\n    # Объединяем товары с отзывами через order_id\n    product_reviews = items_hist[[\"product_id\", \"order_id\"]].drop_duplicates().merge(reviews_hist, on=\"order_id\", how=\"inner\")\n    # Агрегируем метрики отзывов\n    review_agg = product_reviews.groupby(\"product_id\")[\"review_score\"].agg([\n        \"count\", \"mean\", \"min\", \"max\", \"std\"\n    ])\n    # Добавляем долю крайних оценок\n    review_agg[\"five_star_ratio\"] = (product_reviews[\"review_score\"] == 5).groupby(product_reviews[\"product_id\"]).mean()\n    review_agg[\"one_star_ratio\"] = (product_reviews[\"review_score\"] == 1).groupby(product_reviews[\"product_id\"]).mean()\n    review_agg.columns = [f\"review_{col}\" for col in review_agg.columns]\n    base = base.join(review_agg, how=\"left\")\n    \n    # Признаки по платежам\n    # Объединяем товары с платежами через order_id\n    product_payments = items_hist[[\"product_id\", \"order_id\"]].merge(payments, on=\"order_id\", how=\"inner\")\n    # Агрегируем метрики платежей\n    pay_agg = product_payments.groupby(\"product_id\").agg({\n        \"payment_sequential\": \"count\",\n        \"payment_installments\": [\"mean\", \"max\"],\n        \"payment_value\": [\"mean\", \"sum\"]\n    })\n    # Добавляем долю кредитных платежей\n    pay_agg[\"payment_credit_ratio\"] = (product_payments[\"payment_type\"] == \"credit_card\").groupby(product_payments[\"product_id\"]).mean()\n    # Приводим имена столбцов\n    pay_agg.columns = [f\"{'_'.join(col)}\" if col[1] else col[0] for col in pay_agg.columns]\n    pay_agg = pay_agg.rename(columns={\n        \"payment_sequential_count\": \"payment_count\",\n        \"payment_installments_mean\": \"payment_avg_installments\",\n        \"payment_installments_max\": \"payment_max_installments\",\n        \"payment_value_mean\": \"payment_avg_value\",\n        \"payment_value_sum\": \"payment_total_value\",\n    })\n    base = base.join(pay_agg, how=\"left\")\n    \n    # Заполняем пропуски нулями (отсутствие данных означает нулевые значения метрик\n    base = base.fillna(0)\n    \n    # Удаляем возможные дубликаты столбцов\n    base = base.loc[:, ~base.columns.duplicated()]\n    \n    # Реиндексируем под заданный список entity_ids\n    base = base.reindex(entity_ids)\n    \n    return base",
+   "timestamp": "2026-09-18T20:17:35+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 75,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 75,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 75,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 75,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 75,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 75,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 6.1
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

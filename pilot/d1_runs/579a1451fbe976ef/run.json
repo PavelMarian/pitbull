@@ -1,0 +1,27 @@
+{
+ "program_uid": "579a1451fbe976ef",
+ "program": "deepseek-v4-flash-0731#48",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 87.6,
+ "assistant_turns": 6,
+ "tool_calls": 6,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "```\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[],\ncanary_final=[], state=/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/579a1451fbe976ef/pit_state.json\n```\n\n**Вердикт:** утечка была, починена и подтверждена на всех шести моментах (3 dev + 3 held-out), verdict CLEAN.\n\nЧто нашла детекция (дифференциальное исполнение, witness + canary):\n\n- **witness** `avg_review_score`: отзывы соединялись с заказами по `order_id` без фильтра по времени — в признаки попадали отзывы, написанные после `seed_time`.\n- **canary** `avg_delivery_days`, `min/max_delivery_days`, `late_delivery_rate`: `delivery_days` и `late` считались по `order_delivered_customer_date` и `order_estimated_delivery_date` без фильтра — дата доставки заполняется позже покупки, и для заказов, ещё не доставленных на `seed_time`, это информация из будущего.\n\nЧто изменено в `get_features.py`:\n\n- Отзывы фильтруются по `review_creation_date <= seed_time` до агрегации.\n- Признаки доставки считаются только по заказам с `order_delivered_customer_date <= seed_time` (доставка уже известна).\n- Платежи дополнительно отфильтрованы по `ts <= seed_time`.\n- Агрегации по продуктам (отзывы, платежи, доставка) собираются через inner-join с отфильтрованными таблицами, `fillna(0)` только по числовым столбцам.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 76285,
+   "output_tokens": 2871
+  },
+  "message_count": 12,
+  "session_id": "54634a785dc1",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

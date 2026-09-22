@@ -1,0 +1,27 @@
+{
+ "program_uid": "72af1675e371e264",
+ "program": "deepseek-v4-flash-0731#78",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 61.7,
+ "assistant_turns": 6,
+ "tool_calls": 6,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "pit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=pit_state.json\n\nИтоговый вердикт: утечка была и устранена.\n\n- Детекция (итерация 0): LEAK. Witness-доказательство: столбцы `avg_review_score`, `num_reviews` менялись при усечении базы по seed_time, значит функция читала отзывы, созданные после момента предсказания. Canary подтвердил то же на `avg_review_score`.\n- Причина: отзывы агрегировались по всем заказам без фильтра по времени (`get_features.py:53` в старой версии), хотя `review_creation_date` наступает позже покупки. Платежи и покупки были отфильтрованы корректно.\n- Починка: добавлен фильтр `reviews[reviews[\"review_creation_date\"] < seed_time]` перед агрегацией, остальная логика признаков сохранена.\n- Повторная проверка (итерация 1): CLEAN на всех 6 моментах, включая 3 held-out (2017-10-01, 2018-02-01, 2018-06-01), witness и canary молчат.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 78340,
+   "output_tokens": 2303
+  },
+  "message_count": 12,
+  "session_id": "3a88b521fa25",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

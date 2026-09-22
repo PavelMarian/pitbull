@@ -1,0 +1,27 @@
+{
+ "program_uid": "c3bef92f3f174aa4",
+ "program": "deepseek-v4-flash-0731#78",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 60.9,
+ "assistant_turns": 7,
+ "tool_calls": 7,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "`pit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=pit_state.json`\n\nЧто было и что стало:\n\n- **Утечка 1 (witness):** `avg_review_score`, `count_reviews`, `neg_review_count` считались по всем отзывам к заказам, сделанным до `seed_time`. Отзыв появляется позже покупки, поэтому в признаки попадали отзывы из будущего. Починка: фильтр `review_creation_date < seed_time` перед join.\n- **Утечка 2 (canary):** `avg_delivery_days` и `delayed_count` использовали `order_delivered_customer_date` и `order_estimated_delivery_date` для всех заказов, купленных до `seed_time`, включая ещё не доставленные. Починка: маска `delivered_mask` (доставка существует и произошла до `seed_time`), вне её значения `NaN`/0 через `np.where`.\n\nПроверка подтвердила чистоту на трёх dev-моментах (2018-01, 2018-04, 2018-07) и трёх held-out (2017-10, 2018-02, 2018-06): witness и canary молчат везде. Сигнатура, набор признаков и структура кода сохранены.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 89194,
+   "output_tokens": 2348
+  },
+  "message_count": 14,
+  "session_id": "9fe6f695030f",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

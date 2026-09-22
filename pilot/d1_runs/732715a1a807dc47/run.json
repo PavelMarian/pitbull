@@ -1,0 +1,27 @@
+{
+ "program_uid": "732715a1a807dc47",
+ "program": "deepseek-v4-flash-0731#58",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 67.2,
+ "assistant_turns": 6,
+ "tool_calls": 6,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "pit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=pit_state.json\n\nИтог:\n- Детекция (итерация 0) подтвердила утечку: witness-столбцы `avg_review_score`, `num_reviews` (отзывы читались без фильтра по времени), canary дополнительно указал на `avg_delivery_days` (даты доставки из будущего).\n- Починка в `get_features.py:70-102`: отзывы фильтруются по `review_creation_date <= seed_time`, доставка учитывается только для заказов с `order_delivered_customer_date <= seed_time`, платежи по `ts <= seed_time`.\n- Повторная проверка (итерация 1) чистая на всех шести моментах, включая held-out (2017-10-01, 2018-02-01, 2018-06-01).",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 79540,
+   "output_tokens": 2493
+  },
+  "message_count": 12,
+  "session_id": "ae7aaf097d12",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

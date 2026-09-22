@@ -1,0 +1,186 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "72af1675e371e264",
+ "source_sha256": "72af1675e371e2648483ee51f8953b0e6fe5cb7c94f4d6f5ff73ca552b4b8ea2",
+ "source_code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    orders = db[\"orders\"]\n    items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    seed_time = pd.Timestamp(seed_time)\n    product_ids = list(entity_ids)\n\n    # ----- 历史订单（种子时刻之前） -----\n    orders_before = orders[orders[\"order_purchase_timestamp\"] < seed_time]\n\n    # 空数据集, 直接返回全 0 特征\n    if orders_before.empty:\n        columns = [\n            \"num_items_total\", \"num_orders_total\", \"total_price\", \"avg_price\",\n            \"std_price\", \"total_freight\", \"avg_freight\", \"avg_review_score\",\n            \"num_reviews\", \"avg_total_paid\", \"avg_installments\",\n            \"avg_credit_card_share\", \"recency_days\", \"avg_days_ago\",\n            \"items_7d\", \"items_30d\", \"items_60d\", \"items_90d\"\n        ]\n        return pd.DataFrame(0.0, index=product_ids, columns=columns)\n\n    # 将订单时间附到 item 上\n    order_time = orders_before[[\"order_id\", \"order_purchase_timestamp\"]].rename(\n        columns={\"order_purchase_timestamp\": \"purchase_time\"}\n    )\n    items_needed = items[[\"order_id\", \"product_id\", \"price\", \"freight_value\"]]\n\n    hist = items_needed.merge(order_time, on=\"order_id\", how=\"inner\")\n\n    # 只保留需要预测的 product\n    hist = hist[hist[\"product_id\"].isin(product_ids)]\n    if hist.empty:\n        columns = [\n            \"num_items_unique\", \"num_orders_total\", \"total_price\", \"avg_price\",\n            \"std_price\", \"total_freight\", \"avg_freight\", \"avg_review_score\",\n            \"num_reviews\", \"avg_total_paid\", \"avg_installments\",\n            \"avg_credit_card_share\", \"recency_days\", \"avg_days_ago\",\n            \"items_7d\", \"items_30d\", \"items_60d\", \"items_90d\"\n        ]\n        return pd.DataFrame(0.0, index=product_ids, columns=columns)\n\n    # 加入距 seed_time 的天数\n    hist[\"days_ago\"] = (seed_time - hist[\"purchase_time\"]).dt.days\n\n    # 时间窗口指示器\n    for window in [7, 30, 60, 90]:\n        hist[f\"in_{window}d\"] = (hist[\"days_ago\"] <= window).astype(int)\n\n    # 每个订单的平均评分和评论数\n    if not reviews.empty:\n        order_rev = reviews.groupby(\"order_id\")[\"review_score\"].agg(\n            [\"mean\", \"count\"]\n        ).reset_index()\n        order_rev.columns = [\"order_id\", \"order_avg_score\", \"order_num_reviews\"]\n        hist = hist.merge(order_rev, on=\"order_id\", how=\"left\")\n    else:\n        hist[\"order_avg_score\"] = np.nan\n        hist[\"order_num_reviews\"] = 0\n\n    # 每个订单的支付概况\n    if not payments.empty:\n        pay = payments[[\"order_id\", \"payment_type\", \"payment_installments\", \"payment_value\"]].copy()\n        pay[\"is_credit\"] = (pay[\"payment_type\"] == \"credit_card\").astype(int)\n        order_pay = pay.groupby(\"order_id\").agg(\n            order_total_paid=(\"payment_value\", \"sum\"),\n            order_avg_installments=(\"payment_installments\", \"mean\"),\n            order_credit_share=(\"is_credit\", \"mean\"),\n            order_num_payments=(\"payment_value\", \"size\")\n        ).reset_index()\n        hist = hist.merge(order_pay, on=\"order_id\", how=\"left\")\n    else:\n        for col in [\"order_total_paid\", \"order_avg_installments\", \"order_credit_share\", \"order_num_payments\"]:\n            hist[col] = np.nan\n\n    # --------- 聚合特征 ----------\n    grouped = hist.groupby(\"product_id\")\n\n    features = pd.DataFrame({\n        \"num_items_unique\": grouped[\"price\"].count(),\n        \"num_orders_total\": grouped[\"order_id\"].nunique(),\n        \"total_price\": grouped[\"price\"].sum(),\n        \"avg_price\": grouped[\"price\"].mean(),\n        \"std_price\": grouped[\"price\"].std().fillna(0.0),\n        \"total_freight\": grouped[\"freight_value\"].sum(),\n        \"avg_freight\": grouped[\"freight_value\"].mean(),\n        \"avg_review_score\": grouped[\"order_avg_score\"].mean().fillna(0.0),\n        \"num_reviews\": grouped[\"order_num_reviews\"].sum().fillna(0),\n        \"avg_total_paid\": grouped[\"order_total_paid\"].mean().fillna(0.0),\n        \"avg_installments\": grouped[\"order_avg_installments\"].mean().fillna(0.0),\n        \"avg_credit_card_share\": grouped[\"order_credit_share\"].mean().fillna(0.0),\n        \"recency_days\": grouped[\"days_ago\"].min(),\n        \"avg_days_ago\": grouped[\"days_ago\"].mean(),\n        \"items_7d\": grouped[\"in_7d\"].sum(),\n        \"items_30d\": grouped[\"in_30d\"].sum(),\n        \"items_60d\": grouped[\"in_60d\"].sum(),\n        \"items_90d\": grouped[\"in_90d\"].sum(),\n    })\n\n    # 处理缺失商品（完全没有历史）\n    features = features.reindex(product_ids, fill_value=-1.0)\n\n    # 不同的缺失值处理：历史长度类 -> 0，时间相关 -> 9999\n    for col in features.columns:\n        if col in [\"recency_days\", \"avg_days_ago\"]:\n            features[col] = features[col].replace(-1.0, 9999.0)\n        else:\n            features[col] = features[col].replace(-1.0, 0.0)\n\n    # 消除可能的其他 NaN（例如单样本 std）\n    return features.fillna(0.0)",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "72af1675e371e2648483ee51f8953b0e6fe5cb7c94f4d6f5ff73ca552b4b8ea2",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    orders = db[\"orders\"]\n    items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    seed_time = pd.Timestamp(seed_time)\n    product_ids = list(entity_ids)\n\n    # ----- 历史订单（种子时刻之前） -----\n    orders_before = orders[orders[\"order_purchase_timestamp\"] < seed_time]\n\n    # 空数据集, 直接返回全 0 特征\n    if orders_before.empty:\n        columns = [\n            \"num_items_total\", \"num_orders_total\", \"total_price\", \"avg_price\",\n            \"std_price\", \"total_freight\", \"avg_freight\", \"avg_review_score\",\n            \"num_reviews\", \"avg_total_paid\", \"avg_installments\",\n            \"avg_credit_card_share\", \"recency_days\", \"avg_days_ago\",\n            \"items_7d\", \"items_30d\", \"items_60d\", \"items_90d\"\n        ]\n        return pd.DataFrame(0.0, index=product_ids, columns=columns)\n\n    # 将订单时间附到 item 上\n    order_time = orders_before[[\"order_id\", \"order_purchase_timestamp\"]].rename(\n        columns={\"order_purchase_timestamp\": \"purchase_time\"}\n    )\n    items_needed = items[[\"order_id\", \"product_id\", \"price\", \"freight_value\"]]\n\n    hist = items_needed.merge(order_time, on=\"order_id\", how=\"inner\")\n\n    # 只保留需要预测的 product\n    hist = hist[hist[\"product_id\"].isin(product_ids)]\n    if hist.empty:\n        columns = [\n            \"num_items_unique\", \"num_orders_total\", \"total_price\", \"avg_price\",\n            \"std_price\", \"total_freight\", \"avg_freight\", \"avg_review_score\",\n            \"num_reviews\", \"avg_total_paid\", \"avg_installments\",\n            \"avg_credit_card_share\", \"recency_days\", \"avg_days_ago\",\n            \"items_7d\", \"items_30d\", \"items_60d\", \"items_90d\"\n        ]\n        return pd.DataFrame(0.0, index=product_ids, columns=columns)\n\n    # 加入距 seed_time 的天数\n    hist[\"days_ago\"] = (seed_time - hist[\"purchase_time\"]).dt.days\n\n    # 时间窗口指示器\n    for window in [7, 30, 60, 90]:\n        hist[f\"in_{window}d\"] = (hist[\"days_ago\"] <= window).astype(int)\n\n    # 每个订单的平均评分和评论数\n    if not reviews.empty:\n        order_rev = reviews.groupby(\"order_id\")[\"review_score\"].agg(\n            [\"mean\", \"count\"]\n        ).reset_index()\n        order_rev.columns = [\"order_id\", \"order_avg_score\", \"order_num_reviews\"]\n        hist = hist.merge(order_rev, on=\"order_id\", how=\"left\")\n    else:\n        hist[\"order_avg_score\"] = np.nan\n        hist[\"order_num_reviews\"] = 0\n\n    # 每个订单的支付概况\n    if not payments.empty:\n        pay = payments[[\"order_id\", \"payment_type\", \"payment_installments\", \"payment_value\"]].copy()\n        pay[\"is_credit\"] = (pay[\"payment_type\"] == \"credit_card\").astype(int)\n        order_pay = pay.groupby(\"order_id\").agg(\n            order_total_paid=(\"payment_value\", \"sum\"),\n            order_avg_installments=(\"payment_installments\", \"mean\"),\n            order_credit_share=(\"is_credit\", \"mean\"),\n            order_num_payments=(\"payment_value\", \"size\")\n        ).reset_index()\n        hist = hist.merge(order_pay, on=\"order_id\", how=\"left\")\n    else:\n        for col in [\"order_total_paid\", \"order_avg_installments\", \"order_credit_share\", \"order_num_payments\"]:\n            hist[col] = np.nan\n\n    # --------- 聚合特征 ----------\n    grouped = hist.groupby(\"product_id\")\n\n    features = pd.DataFrame({\n        \"num_items_unique\": grouped[\"price\"].count(),\n        \"num_orders_total\": grouped[\"order_id\"].nunique(),\n        \"total_price\": grouped[\"price\"].sum(),\n        \"avg_price\": grouped[\"price\"].mean(),\n        \"std_price\": grouped[\"price\"].std().fillna(0.0),\n        \"total_freight\": grouped[\"freight_value\"].sum(),\n        \"avg_freight\": grouped[\"freight_value\"].mean(),\n        \"avg_review_score\": grouped[\"order_avg_score\"].mean().fillna(0.0),\n        \"num_reviews\": grouped[\"order_num_reviews\"].sum().fillna(0),\n        \"avg_total_paid\": grouped[\"order_total_paid\"].mean().fillna(0.0),\n        \"avg_installments\": grouped[\"order_avg_installments\"].mean().fillna(0.0),\n        \"avg_credit_card_share\": grouped[\"order_credit_share\"].mean().fillna(0.0),\n        \"recency_days\": grouped[\"days_ago\"].min(),\n        \"avg_days_ago\": grouped[\"days_ago\"].mean(),\n        \"items_7d\": grouped[\"in_7d\"].sum(),\n        \"items_30d\": grouped[\"in_30d\"].sum(),\n        \"items_60d\": grouped[\"in_60d\"].sum(),\n        \"items_90d\": grouped[\"in_90d\"].sum(),\n    })\n\n    # 处理缺失商品（完全没有历史）\n    features = features.reindex(product_ids, fill_value=-1.0)\n\n    # 不同的缺失值处理：历史长度类 -> 0，时间相关 -> 9999\n    for col in features.columns:\n        if col in [\"recency_days\", \"avg_days_ago\"]:\n            features[col] = features[col].replace(-1.0, 9999.0)\n        else:\n            features[col] = features[col].replace(-1.0, 0.0)\n\n    # 消除可能的其他 NaN（例如单样本 std）\n    return features.fillna(0.0)",
+   "timestamp": "2026-09-18T20:51:49+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "num_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 18,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "num_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 18,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "num_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 18,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "num_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 18,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "num_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 18,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "num_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 18,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 4.6
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "d6570f57db287be4d0a11eb1c7af8923567c85b9a4a853ded05f6706e10a1451",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    orders = db[\"orders\"]\n    items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    seed_time = pd.Timestamp(seed_time)\n    product_ids = list(entity_ids)\n\n    # ----- 历史订单（种子时刻之前） -----\n    orders_before = orders[orders[\"order_purchase_timestamp\"] < seed_time]\n\n    # 空数据集, 直接返回全 0 特征\n    if orders_before.empty:\n        columns = [\n            \"num_items_total\", \"num_orders_total\", \"total_price\", \"avg_price\",\n            \"std_price\", \"total_freight\", \"avg_freight\", \"avg_review_score\",\n            \"num_reviews\", \"avg_total_paid\", \"avg_installments\",\n            \"avg_credit_card_share\", \"recency_days\", \"avg_days_ago\",\n            \"items_7d\", \"items_30d\", \"items_60d\", \"items_90d\"\n        ]\n        return pd.DataFrame(0.0, index=product_ids, columns=columns)\n\n    # 将订单时间附到 item 上\n    order_time = orders_before[[\"order_id\", \"order_purchase_timestamp\"]].rename(\n        columns={\"order_purchase_timestamp\": \"purchase_time\"}\n    )\n    items_needed = items[[\"order_id\", \"product_id\", \"price\", \"freight_value\"]]\n\n    hist = items_needed.merge(order_time, on=\"order_id\", how=\"inner\")\n\n    # 只保留需要预测的 product\n    hist = hist[hist[\"product_id\"].isin(product_ids)]\n    if hist.empty:\n        columns = [\n            \"num_items_unique\", \"num_orders_total\", \"total_price\", \"avg_price\",\n            \"std_price\", \"total_freight\", \"avg_freight\", \"avg_review_score\",\n            \"num_reviews\", \"avg_total_paid\", \"avg_installments\",\n            \"avg_credit_card_share\", \"recency_days\", \"avg_days_ago\",\n            \"items_7d\", \"items_30d\", \"items_60d\", \"items_90d\"\n        ]\n        return pd.DataFrame(0.0, index=product_ids, columns=columns)\n\n    # 加入距 seed_time 的天数\n    hist[\"days_ago\"] = (seed_time - hist[\"purchase_time\"]).dt.days\n\n    # 时间窗口指示器\n    for window in [7, 30, 60, 90]:\n        hist[f\"in_{window}d\"] = (hist[\"days_ago\"] <= window).astype(int)\n\n    # 每个订单的平均评分和评论数\n    # 只使用 seed_time 之前已经创建的评论\n    if not reviews.empty:\n        reviews_before = reviews[reviews[\"review_creation_date\"] < seed_time]\n        order_rev = reviews_before.groupby(\"order_id\")[\"review_score\"].agg(\n            [\"mean\", \"count\"]\n        ).reset_index()\n        order_rev.columns = [\"order_id\", \"order_avg_score\", \"order_num_reviews\"]\n        hist = hist.merge(order_rev, on=\"order_id\", how=\"left\")\n    else:\n        hist[\"order_avg_score\"] = np.nan\n        hist[\"order_num_reviews\"] = 0\n\n    # 每个订单的支付概况\n    if not payments.empty:\n        pay = payments[[\"order_id\", \"payment_type\", \"payment_installments\", \"payment_value\"]].copy()\n        pay[\"is_credit\"] = (pay[\"payment_type\"] == \"credit_card\").astype(int)\n        order_pay = pay.groupby(\"order_id\").agg(\n            order_total_paid=(\"payment_value\", \"sum\"),\n            order_avg_installments=(\"payment_installments\", \"mean\"),\n            order_credit_share=(\"is_credit\", \"mean\"),\n            order_num_payments=(\"payment_value\", \"size\")\n        ).reset_index()\n        hist = hist.merge(order_pay, on=\"order_id\", how=\"left\")\n    else:\n        for col in [\"order_total_paid\", \"order_avg_installments\", \"order_credit_share\", \"order_num_payments\"]:\n            hist[col] = np.nan\n\n    # --------- 聚合特征 ----------\n    grouped = hist.groupby(\"product_id\")\n\n    features = pd.DataFrame({\n        \"num_items_unique\": grouped[\"price\"].count(),\n        \"num_orders_total\": grouped[\"order_id\"].nunique(),\n        \"total_price\": grouped[\"price\"].sum(),\n        \"avg_price\": grouped[\"price\"].mean(),\n        \"std_price\": grouped[\"price\"].std().fillna(0.0),\n        \"total_freight\": grouped[\"freight_value\"].sum(),\n        \"avg_freight\": grouped[\"freight_value\"].mean(),\n        \"avg_review_score\": grouped[\"order_avg_score\"].mean().fillna(0.0),\n        \"num_reviews\": grouped[\"order_num_reviews\"].sum().fillna(0),\n        \"avg_total_paid\": grouped[\"order_total_paid\"].mean().fillna(0.0),\n        \"avg_installments\": grouped[\"order_avg_installments\"].mean().fillna(0.0),\n        \"avg_credit_card_share\": grouped[\"order_credit_share\"].mean().fillna(0.0),\n        \"recency_days\": grouped[\"days_ago\"].min(),\n        \"avg_days_ago\": grouped[\"days_ago\"].mean(),\n        \"items_7d\": grouped[\"in_7d\"].sum(),\n        \"items_30d\": grouped[\"in_30d\"].sum(),\n        \"items_60d\": grouped[\"in_60d\"].sum(),\n        \"items_90d\": grouped[\"in_90d\"].sum(),\n    })\n\n    # 处理缺失商品（完全没有历史）\n    features = features.reindex(product_ids, fill_value=-1.0)\n\n    # 不同的缺失值处理：历史长度类 -> 0，时间相关 -> 9999\n    for col in features.columns:\n        if col in [\"recency_days\", \"avg_days_ago\"]:\n            features[col] = features[col].replace(-1.0, 9999.0)\n        else:\n            features[col] = features[col].replace(-1.0, 0.0)\n\n    # 消除可能的其他 NaN（例如单样本 std）\n    return features.fillna(0.0)\n",
+   "timestamp": "2026-09-18T20:52:18+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 18,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 18,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 18,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 18,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 18,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 18,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 6.2
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

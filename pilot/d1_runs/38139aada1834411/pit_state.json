@@ -1,0 +1,168 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "38139aada1834411",
+ "source_sha256": "38139aada1834411fe142da8e630ece1f659bc201453b309ead5fabffba1c93c",
+ "source_code": "def get_features(db: dict, entity_ids, seed_time) -> \"pd.DataFrame\":\n    import pandas as pd\n    import numpy as np\n\n    orders = db[\"orders\"].copy()\n    order_items = db[\"order_items\"].copy()\n    reviews = db[\"reviews\"].copy()\n    payments = db[\"payments\"].copy()\n\n    # 1. Фильтруем заказы до seed_time\n    orders = orders[orders[\"order_purchase_timestamp\"] < seed_time]\n\n    # 2. Базовая объединенная таблица (product_id, order_id, покупатель, время покупки)\n    merged = order_items.merge(\n        orders[[\"order_id\", \"customer_id\", \"order_purchase_timestamp\"]],\n        on=\"order_id\",\n        how=\"inner\"\n    )\n\n    # 3. Агрегация по товару: основные продажи\n    feat_agg = merged.groupby(\"product_id\").agg(\n        total_orders=(\"order_id\", \"nunique\"),          # сколько уникальных заказов\n        total_items=(\"order_item_id\", \"count\"),        # суммарное количество товара\n        price_sum=(\"price\", \"sum\"),\n        price_mean=(\"price\", \"mean\"),\n        freight_sum=(\"freight_value\", \"sum\"),\n        freight_mean=(\"freight_value\", \"mean\"),\n        n_customers=(\"customer_id\", \"nunique\")         # количество разных покупателей\n    ).reset_index()\n\n    # 4. Время первой и последней покупки\n    time_agg = merged.groupby(\"product_id\")[\"order_purchase_timestamp\"].agg([\"min\", \"max\"]).reset_index()\n    time_agg.columns = [\"product_id\", \"first_purchase\", \"last_purchase\"]\n\n    # 5. Помесячная статистика продаж\n    monthly = merged.copy()\n    monthly[\"purchase_month\"] = monthly[\"order_purchase_timestamp\"].dt.to_period(\"M\")\n    monthly_g = monthly.groupby([\"product_id\", \"purchase_month\"]).size().reset_index(name=\"cnt\")\n    monthly_agg = monthly_g.groupby(\"product_id\").agg(\n        n_months=(\"purchase_month\", \"count\"),          # количество активных месяцев\n        avg_orders_per_month=(\"cnt\", \"mean\")          # среднее количество заказов в месяц\n    ).reset_index()\n\n    # 6. Отзывы (только созданные до seed_time)\n    reviews_f = reviews[reviews[\"review_creation_date\"] < seed_time]\n    rev_tmp = reviews_f[[\"order_id\", \"review_score\"]].merge(\n        merged[[\"product_id\", \"order_id\"]].drop_duplicates(),\n        on=\"order_id\",\n        how=\"inner\"\n    )\n    review_agg = rev_tmp.groupby(\"product_id\").agg(\n        n_reviews=(\"review_score\", \"count\"),\n        mean_review_score=(\"review_score\", \"mean\")\n    ).reset_index()\n\n    # 7. Платежи (только те, что произошли до seed_time по ts)\n    payments_f = payments[payments[\"ts\"] < seed_time]\n    pay_tmp = payments_f.merge(\n        merged[[\"product_id\", \"order_id\"]].drop_duplicates(),\n        on=\"order_id\",\n        how=\"inner\"\n    )\n    pay_base = pay_tmp.groupby(\"product_id\").agg(\n        n_payments=(\"payment_value\", \"count\"),\n        total_payment=(\"payment_value\", \"sum\"),\n        avg_payment=(\"payment_value\", \"mean\")\n    ).reset_index()\n\n    # Доля кредитных карт и среднее количество платежей\n    pay_tmp[\"is_credit\"] = (pay_tmp[\"payment_type\"] == \"credit_card\").astype(int)\n    pay_tmp[\"is_debit\"] = (pay_tmp[\"payment_type\"] == \"debit_card\").astype(int)\n    pay_type_agg = pay_tmp.groupby(\"product_id\").agg(\n        credit_rate=(\"is_credit\", \"mean\"),\n        debit_rate=(\"is_debit\", \"mean\"),\n        avg_installments=(\"payment_installments\", \"mean\")\n    ).reset_index()\n\n    # 8. Средняя задержка доставки (по заказам с фактической датой доставки)\n    # Уникальные (product_id, order_id)\n    tmp_del = merged[[\"product_id\", \"order_id\"]].drop_duplicates()\n    delivered_orders = orders[[\"order_id\", \"order_purchase_timestamp\", \"order_delivered_customer_date\"]]\n    delivered_orders = delivered_orders.dropna(subset=[\"order_delivered_customer_date\"])\n    del_join = tmp_del.merge(delivered_orders, on=\"order_id\", how=\"inner\")\n    del_join[\"delivery_days\"] = (del_join[\"order_delivered_customer_date\"] - del_join[\"order_purchase_timestamp\"]).dt.days\n    delivery_agg = del_join.groupby(\"product_id\")[\"delivery_days\"].mean().reset_index(name=\"avg_delivery_days\")\n\n    # 9. Объединение всех агрегатов\n    features = feat_agg \\\n        .merge(time_agg, on=\"product_id\", how=\"left\") \\\n        .merge(monthly_agg, on=\"product_id\", how=\"left\") \\\n        .merge(review_agg, on=\"product_id\", how=\"left\") \\\n        .merge(pay_base, on=\"product_id\", how=\"left\") \\\n        .merge(pay_type_agg, on=\"product_id\", how=\"left\") \\\n        .merge(delivery_agg, on=\"product_id\", how=\"left\")\n\n    # 10. Относительное время от seed_time\n    features[\"days_since_first_sale\"] = (seed_time - features[\"first_purchase\"]).dt.days\n    features[\"days_since_last_sale\"] = (seed_time - features[\"last_purchase\"]).dt.days\n\n    # 11. Убираем нечисловые колонки, превращаем в нужный набор\n    selected = [\n        \"total_orders\", \"total_items\", \"price_sum\", \"price_mean\",\n        \"freight_sum\", \"freight_mean\", \"n_customers\",\n        \"n_months\", \"avg_orders_per_month\",\n        \"n_reviews\", \"mean_review_score\",\n        \"n_payments\", \"total_payment\", \"avg_payment\",\n        \"credit_rate\", \"debit_rate\", \"avg_installments\",\n        \"avg_delivery_days\",\n        \"days_since_first_sale\", \"days_since_last_sale\"\n    ]\n    # Убедимся, что все колонки присутствуют; заполняем пропуски нулями\n    features = features.set_index(\"product_id\")[selected]\n    features = features.reindex(entity_ids, fill_value=0.0)\n    features = features.fillna(0.0)\n\n    return features",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "38139aada1834411fe142da8e630ece1f659bc201453b309ead5fabffba1c93c",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> \"pd.DataFrame\":\n    import pandas as pd\n    import numpy as np\n\n    orders = db[\"orders\"].copy()\n    order_items = db[\"order_items\"].copy()\n    reviews = db[\"reviews\"].copy()\n    payments = db[\"payments\"].copy()\n\n    # 1. Фильтруем заказы до seed_time\n    orders = orders[orders[\"order_purchase_timestamp\"] < seed_time]\n\n    # 2. Базовая объединенная таблица (product_id, order_id, покупатель, время покупки)\n    merged = order_items.merge(\n        orders[[\"order_id\", \"customer_id\", \"order_purchase_timestamp\"]],\n        on=\"order_id\",\n        how=\"inner\"\n    )\n\n    # 3. Агрегация по товару: основные продажи\n    feat_agg = merged.groupby(\"product_id\").agg(\n        total_orders=(\"order_id\", \"nunique\"),          # сколько уникальных заказов\n        total_items=(\"order_item_id\", \"count\"),        # суммарное количество товара\n        price_sum=(\"price\", \"sum\"),\n        price_mean=(\"price\", \"mean\"),\n        freight_sum=(\"freight_value\", \"sum\"),\n        freight_mean=(\"freight_value\", \"mean\"),\n        n_customers=(\"customer_id\", \"nunique\")         # количество разных покупателей\n    ).reset_index()\n\n    # 4. Время первой и последней покупки\n    time_agg = merged.groupby(\"product_id\")[\"order_purchase_timestamp\"].agg([\"min\", \"max\"]).reset_index()\n    time_agg.columns = [\"product_id\", \"first_purchase\", \"last_purchase\"]\n\n    # 5. Помесячная статистика продаж\n    monthly = merged.copy()\n    monthly[\"purchase_month\"] = monthly[\"order_purchase_timestamp\"].dt.to_period(\"M\")\n    monthly_g = monthly.groupby([\"product_id\", \"purchase_month\"]).size().reset_index(name=\"cnt\")\n    monthly_agg = monthly_g.groupby(\"product_id\").agg(\n        n_months=(\"purchase_month\", \"count\"),          # количество активных месяцев\n        avg_orders_per_month=(\"cnt\", \"mean\")          # среднее количество заказов в месяц\n    ).reset_index()\n\n    # 6. Отзывы (только созданные до seed_time)\n    reviews_f = reviews[reviews[\"review_creation_date\"] < seed_time]\n    rev_tmp = reviews_f[[\"order_id\", \"review_score\"]].merge(\n        merged[[\"product_id\", \"order_id\"]].drop_duplicates(),\n        on=\"order_id\",\n        how=\"inner\"\n    )\n    review_agg = rev_tmp.groupby(\"product_id\").agg(\n        n_reviews=(\"review_score\", \"count\"),\n        mean_review_score=(\"review_score\", \"mean\")\n    ).reset_index()\n\n    # 7. Платежи (только те, что произошли до seed_time по ts)\n    payments_f = payments[payments[\"ts\"] < seed_time]\n    pay_tmp = payments_f.merge(\n        merged[[\"product_id\", \"order_id\"]].drop_duplicates(),\n        on=\"order_id\",\n        how=\"inner\"\n    )\n    pay_base = pay_tmp.groupby(\"product_id\").agg(\n        n_payments=(\"payment_value\", \"count\"),\n        total_payment=(\"payment_value\", \"sum\"),\n        avg_payment=(\"payment_value\", \"mean\")\n    ).reset_index()\n\n    # Доля кредитных карт и среднее количество платежей\n    pay_tmp[\"is_credit\"] = (pay_tmp[\"payment_type\"] == \"credit_card\").astype(int)\n    pay_tmp[\"is_debit\"] = (pay_tmp[\"payment_type\"] == \"debit_card\").astype(int)\n    pay_type_agg = pay_tmp.groupby(\"product_id\").agg(\n        credit_rate=(\"is_credit\", \"mean\"),\n        debit_rate=(\"is_debit\", \"mean\"),\n        avg_installments=(\"payment_installments\", \"mean\")\n    ).reset_index()\n\n    # 8. Средняя задержка доставки (по заказам с фактической датой доставки)\n    # Уникальные (product_id, order_id)\n    tmp_del = merged[[\"product_id\", \"order_id\"]].drop_duplicates()\n    delivered_orders = orders[[\"order_id\", \"order_purchase_timestamp\", \"order_delivered_customer_date\"]]\n    delivered_orders = delivered_orders.dropna(subset=[\"order_delivered_customer_date\"])\n    del_join = tmp_del.merge(delivered_orders, on=\"order_id\", how=\"inner\")\n    del_join[\"delivery_days\"] = (del_join[\"order_delivered_customer_date\"] - del_join[\"order_purchase_timestamp\"]).dt.days\n    delivery_agg = del_join.groupby(\"product_id\")[\"delivery_days\"].mean().reset_index(name=\"avg_delivery_days\")\n\n    # 9. Объединение всех агрегатов\n    features = feat_agg \\\n        .merge(time_agg, on=\"product_id\", how=\"left\") \\\n        .merge(monthly_agg, on=\"product_id\", how=\"left\") \\\n        .merge(review_agg, on=\"product_id\", how=\"left\") \\\n        .merge(pay_base, on=\"product_id\", how=\"left\") \\\n        .merge(pay_type_agg, on=\"product_id\", how=\"left\") \\\n        .merge(delivery_agg, on=\"product_id\", how=\"left\")\n\n    # 10. Относительное время от seed_time\n    features[\"days_since_first_sale\"] = (seed_time - features[\"first_purchase\"]).dt.days\n    features[\"days_since_last_sale\"] = (seed_time - features[\"last_purchase\"]).dt.days\n\n    # 11. Убираем нечисловые колонки, превращаем в нужный набор\n    selected = [\n        \"total_orders\", \"total_items\", \"price_sum\", \"price_mean\",\n        \"freight_sum\", \"freight_mean\", \"n_customers\",\n        \"n_months\", \"avg_orders_per_month\",\n        \"n_reviews\", \"mean_review_score\",\n        \"n_payments\", \"total_payment\", \"avg_payment\",\n        \"credit_rate\", \"debit_rate\", \"avg_installments\",\n        \"avg_delivery_days\",\n        \"days_since_first_sale\", \"days_since_last_sale\"\n    ]\n    # Убедимся, что все колонки присутствуют; заполняем пропуски нулями\n    features = features.set_index(\"product_id\")[selected]\n    features = features.reindex(entity_ids, fill_value=0.0)\n    features = features.fillna(0.0)\n\n    return features",
+   "timestamp": "2026-09-18T21:02:01+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_days"
+     ],
+     "n_columns": 20,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_days"
+     ],
+     "n_columns": 20,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_days"
+     ],
+     "n_columns": 20,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_days"
+     ],
+     "n_columns": 20,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_days"
+     ],
+     "n_columns": 20,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_days"
+     ],
+     "n_columns": 20,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 9.6
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "ea12bbd2077dd48151f9b3868c6f5063ad7ea26bd465a1da4aaf30c8cc0b865e",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> \"pd.DataFrame\":\n    import pandas as pd\n    import numpy as np\n\n    orders = db[\"orders\"].copy()\n    order_items = db[\"order_items\"].copy()\n    reviews = db[\"reviews\"].copy()\n    payments = db[\"payments\"].copy()\n\n    # 1. Фильтруем заказы до seed_time\n    orders = orders[orders[\"order_purchase_timestamp\"] < seed_time]\n\n    # 2. Базовая объединенная таблица (product_id, order_id, покупатель, время покупки)\n    merged = order_items.merge(\n        orders[[\"order_id\", \"customer_id\", \"order_purchase_timestamp\"]],\n        on=\"order_id\",\n        how=\"inner\"\n    )\n\n    # 3. Агрегация по товару: основные продажи\n    feat_agg = merged.groupby(\"product_id\").agg(\n        total_orders=(\"order_id\", \"nunique\"),          # сколько уникальных заказов\n        total_items=(\"order_item_id\", \"count\"),        # суммарное количество товара\n        price_sum=(\"price\", \"sum\"),\n        price_mean=(\"price\", \"mean\"),\n        freight_sum=(\"freight_value\", \"sum\"),\n        freight_mean=(\"freight_value\", \"mean\"),\n        n_customers=(\"customer_id\", \"nunique\")         # количество разных покупателей\n    ).reset_index()\n\n    # 4. Время первой и последней покупки\n    time_agg = merged.groupby(\"product_id\")[\"order_purchase_timestamp\"].agg([\"min\", \"max\"]).reset_index()\n    time_agg.columns = [\"product_id\", \"first_purchase\", \"last_purchase\"]\n\n    # 5. Помесячная статистика продаж\n    monthly = merged.copy()\n    monthly[\"purchase_month\"] = monthly[\"order_purchase_timestamp\"].dt.to_period(\"M\")\n    monthly_g = monthly.groupby([\"product_id\", \"purchase_month\"]).size().reset_index(name=\"cnt\")\n    monthly_agg = monthly_g.groupby(\"product_id\").agg(\n        n_months=(\"purchase_month\", \"count\"),          # количество активных месяцев\n        avg_orders_per_month=(\"cnt\", \"mean\")          # среднее количество заказов в месяц\n    ).reset_index()\n\n    # 6. Отзывы (только созданные до seed_time)\n    reviews_f = reviews[reviews[\"review_creation_date\"] < seed_time]\n    rev_tmp = reviews_f[[\"order_id\", \"review_score\"]].merge(\n        merged[[\"product_id\", \"order_id\"]].drop_duplicates(),\n        on=\"order_id\",\n        how=\"inner\"\n    )\n    review_agg = rev_tmp.groupby(\"product_id\").agg(\n        n_reviews=(\"review_score\", \"count\"),\n        mean_review_score=(\"review_score\", \"mean\")\n    ).reset_index()\n\n    # 7. Платежи (только те, что произошли до seed_time по ts)\n    payments_f = payments[payments[\"ts\"] < seed_time]\n    pay_tmp = payments_f.merge(\n        merged[[\"product_id\", \"order_id\"]].drop_duplicates(),\n        on=\"order_id\",\n        how=\"inner\"\n    )\n    pay_base = pay_tmp.groupby(\"product_id\").agg(\n        n_payments=(\"payment_value\", \"count\"),\n        total_payment=(\"payment_value\", \"sum\"),\n        avg_payment=(\"payment_value\", \"mean\")\n    ).reset_index()\n\n    # Доля кредитных карт и среднее количество платежей\n    pay_tmp[\"is_credit\"] = (pay_tmp[\"payment_type\"] == \"credit_card\").astype(int)\n    pay_tmp[\"is_debit\"] = (pay_tmp[\"payment_type\"] == \"debit_card\").astype(int)\n    pay_type_agg = pay_tmp.groupby(\"product_id\").agg(\n        credit_rate=(\"is_credit\", \"mean\"),\n        debit_rate=(\"is_debit\", \"mean\"),\n        avg_installments=(\"payment_installments\", \"mean\")\n    ).reset_index()\n\n    # 8. Средняя задержка доставки (по заказам с фактической датой доставки)\n    # Уникальные (product_id, order_id)\n    tmp_del = merged[[\"product_id\", \"order_id\"]].drop_duplicates()\n    delivered_orders = orders[[\"order_id\", \"order_purchase_timestamp\", \"order_delivered_customer_date\"]]\n    delivered_orders = delivered_orders.dropna(subset=[\"order_delivered_customer_date\"])\n    # Дата доставки заполняется позже покупки и может быть позже seed_time:\n    # учитываем только доставки, которые уже произошли к моменту предсказания.\n    delivered_orders = delivered_orders[delivered_orders[\"order_delivered_customer_date\"] <= seed_time]\n    del_join = tmp_del.merge(delivered_orders, on=\"order_id\", how=\"inner\")\n    del_join[\"delivery_days\"] = (del_join[\"order_delivered_customer_date\"] - del_join[\"order_purchase_timestamp\"]).dt.days\n    delivery_agg = del_join.groupby(\"product_id\")[\"delivery_days\"].mean().reset_index(name=\"avg_delivery_days\")\n\n    # 9. Объединение всех агрегатов\n    features = feat_agg \\\n        .merge(time_agg, on=\"product_id\", how=\"left\") \\\n        .merge(monthly_agg, on=\"product_id\", how=\"left\") \\\n        .merge(review_agg, on=\"product_id\", how=\"left\") \\\n        .merge(pay_base, on=\"product_id\", how=\"left\") \\\n        .merge(pay_type_agg, on=\"product_id\", how=\"left\") \\\n        .merge(delivery_agg, on=\"product_id\", how=\"left\")\n\n    # 10. Относительное время от seed_time\n    features[\"days_since_first_sale\"] = (seed_time - features[\"first_purchase\"]).dt.days\n    features[\"days_since_last_sale\"] = (seed_time - features[\"last_purchase\"]).dt.days\n\n    # 11. Убираем нечисловые колонки, превращаем в нужный набор\n    selected = [\n        \"total_orders\", \"total_items\", \"price_sum\", \"price_mean\",\n        \"freight_sum\", \"freight_mean\", \"n_customers\",\n        \"n_months\", \"avg_orders_per_month\",\n        \"n_reviews\", \"mean_review_score\",\n        \"n_payments\", \"total_payment\", \"avg_payment\",\n        \"credit_rate\", \"debit_rate\", \"avg_installments\",\n        \"avg_delivery_days\",\n        \"days_since_first_sale\", \"days_since_last_sale\"\n    ]\n    # Убедимся, что все колонки присутствуют; заполняем пропуски нулями\n    features = features.set_index(\"product_id\")[selected]\n    features = features.reindex(entity_ids, fill_value=0.0)\n    features = features.fillna(0.0)\n\n    return features",
+   "timestamp": "2026-09-18T21:12:31+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 20,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 20,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 20,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 20,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 20,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 20,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 8.0
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

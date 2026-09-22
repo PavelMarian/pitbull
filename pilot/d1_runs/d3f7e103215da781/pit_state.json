@@ -1,0 +1,195 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "d3f7e103215da781",
+ "source_sha256": "d3f7e103215da7810e5f2edb4ceb3982651c3d657b4d8e4cbbb1ddd915f5bbf7",
+ "source_code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    result = pd.DataFrame(index=entity_ids)\n    result.index.name = \"product_id\"\n\n    order_items = db[\"order_items\"].query(\"ts < @seed_time\").copy()\n    valid_orders = order_items[\"order_id\"].unique()\n\n    # Аггрегация по всей истории продаж\n    product_sales = order_items.groupby(\"product_id\").agg(\n        total_revenue=(\"price\", \"sum\"),\n        total_units=(\"order_id\", \"count\"),\n        avg_price=(\"price\", \"mean\"),\n        avg_freight=(\"freight_value\", \"mean\")\n    )\n    product_sales[\"has_sales_history\"] = 1\n\n    # Аггрегация за последние 90 дней\n    cutoff_90 = seed_time - pd.Timedelta(days=90)\n    recent_sales = order_items.query(\"ts >= @cutoff_90\").groupby(\"product_id\").agg(\n        recent_revenue=(\"price\", \"sum\"),\n        recent_units=(\"order_id\", \"count\"),\n        last_sale_days=(\"ts\", lambda x: (seed_time - x.max()).days)\n    )\n\n    # Аггрегация по отзывам\n    reviews = db[\"reviews\"].query(\"order_id in @valid_orders\").copy()\n    reviews_w_products = reviews.merge(order_items[[\"order_id\", \"product_id\"]], on=\"order_id\", how=\"left\")\n    product_reviews = reviews_w_products.groupby(\"product_id\").agg(\n        total_reviews=(\"review_id\", \"count\"),\n        avg_review_score=(\"review_score\", \"mean\"),\n        pct_negative_reviews=(\"review_score\", lambda x: (x <= 2).mean())\n    )\n\n    # Объединение всех признаков\n    features = product_sales.join(recent_sales, how=\"outer\")\n    features = features.join(product_reviews, how=\"outer\")\n\n    # Обработка пропусков\n    count_cols = [\"total_units\", \"total_revenue\", \"total_reviews\", \"recent_units\", \"recent_revenue\"]\n    for col in count_cols:\n        if col in features.columns:\n            features[col] = features[col].fillna(0)\n\n    if \"has_sales_history\" in features.columns:\n        features[\"has_sales_history\"] = features[\"has_sales_history\"].fillna(0)\n\n    if \"last_sale_days\" in features.columns:\n        features[\"last_sale_days\"] = features[\"last_sale_days\"].fillna(3650)\n\n    avg_cols = [\"avg_price\", \"avg_freight\", \"avg_review_score\", \"pct_negative_reviews\"]\n    for col in avg_cols:\n        if col in features.columns:\n            mean_val = features[col].mean()\n            if pd.isna(mean_val):\n                mean_val = 0\n            features[col] = features[col].fillna(mean_val)\n\n    # Приведение к числовому типу\n    for col in features.columns:\n        if not np.issubdtype(features[col].dtype, np.number):\n            features[col] = pd.to_numeric(features[col], errors=\"coerce\").fillna(0)\n\n    # Реиндексация под запрошенные товары\n    result = result.join(features, how=\"left\")\n    result = result.fillna(0)\n\n    # Единый тип для всех признаков\n    for col in result.columns:\n        result[col] = result[col].astype(\"float64\")\n\n    return result",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "d3f7e103215da7810e5f2edb4ceb3982651c3d657b4d8e4cbbb1ddd915f5bbf7",
+   "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    result = pd.DataFrame(index=entity_ids)\n    result.index.name = \"product_id\"\n\n    order_items = db[\"order_items\"].query(\"ts < @seed_time\").copy()\n    valid_orders = order_items[\"order_id\"].unique()\n\n    # Аггрегация по всей истории продаж\n    product_sales = order_items.groupby(\"product_id\").agg(\n        total_revenue=(\"price\", \"sum\"),\n        total_units=(\"order_id\", \"count\"),\n        avg_price=(\"price\", \"mean\"),\n        avg_freight=(\"freight_value\", \"mean\")\n    )\n    product_sales[\"has_sales_history\"] = 1\n\n    # Аггрегация за последние 90 дней\n    cutoff_90 = seed_time - pd.Timedelta(days=90)\n    recent_sales = order_items.query(\"ts >= @cutoff_90\").groupby(\"product_id\").agg(\n        recent_revenue=(\"price\", \"sum\"),\n        recent_units=(\"order_id\", \"count\"),\n        last_sale_days=(\"ts\", lambda x: (seed_time - x.max()).days)\n    )\n\n    # Аггрегация по отзывам\n    reviews = db[\"reviews\"].query(\"order_id in @valid_orders\").copy()\n    reviews_w_products = reviews.merge(order_items[[\"order_id\", \"product_id\"]], on=\"order_id\", how=\"left\")\n    product_reviews = reviews_w_products.groupby(\"product_id\").agg(\n        total_reviews=(\"review_id\", \"count\"),\n        avg_review_score=(\"review_score\", \"mean\"),\n        pct_negative_reviews=(\"review_score\", lambda x: (x <= 2).mean())\n    )\n\n    # Объединение всех признаков\n    features = product_sales.join(recent_sales, how=\"outer\")\n    features = features.join(product_reviews, how=\"outer\")\n\n    # Обработка пропусков\n    count_cols = [\"total_units\", \"total_revenue\", \"total_reviews\", \"recent_units\", \"recent_revenue\"]\n    for col in count_cols:\n        if col in features.columns:\n            features[col] = features[col].fillna(0)\n\n    if \"has_sales_history\" in features.columns:\n        features[\"has_sales_history\"] = features[\"has_sales_history\"].fillna(0)\n\n    if \"last_sale_days\" in features.columns:\n        features[\"last_sale_days\"] = features[\"last_sale_days\"].fillna(3650)\n\n    avg_cols = [\"avg_price\", \"avg_freight\", \"avg_review_score\", \"pct_negative_reviews\"]\n    for col in avg_cols:\n        if col in features.columns:\n            mean_val = features[col].mean()\n            if pd.isna(mean_val):\n                mean_val = 0\n            features[col] = features[col].fillna(mean_val)\n\n    # Приведение к числовому типу\n    for col in features.columns:\n        if not np.issubdtype(features[col].dtype, np.number):\n            features[col] = pd.to_numeric(features[col], errors=\"coerce\").fillna(0)\n\n    # Реиндексация под запрошенные товары\n    result = result.join(features, how=\"left\")\n    result = result.fillna(0)\n\n    # Единый тип для всех признаков\n    for col in result.columns:\n        result[col] = result[col].astype(\"float64\")\n\n    return result",
+   "timestamp": "2026-09-18T20:16:02+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score",
+      "pct_negative_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "pct_negative_reviews"
+     ],
+     "n_columns": 11,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score",
+      "pct_negative_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "pct_negative_reviews"
+     ],
+     "n_columns": 11,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score",
+      "pct_negative_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 11,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score",
+      "pct_negative_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "pct_negative_reviews"
+     ],
+     "n_columns": 11,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score",
+      "pct_negative_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 11,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score",
+      "pct_negative_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 11,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 26.0
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "c6b24a542268d477963a5c686334ffe9bd077b634794892564c7190a7a6b7140",
+   "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    result = pd.DataFrame(index=entity_ids)\n    result.index.name = \"product_id\"\n\n    order_items = db[\"order_items\"].query(\"ts < @seed_time\").copy()\n    valid_orders = order_items[\"order_id\"].unique()\n\n    # Аггрегация по всей истории продаж\n    product_sales = order_items.groupby(\"product_id\").agg(\n        total_revenue=(\"price\", \"sum\"),\n        total_units=(\"order_id\", \"count\"),\n        avg_price=(\"price\", \"mean\"),\n        avg_freight=(\"freight_value\", \"mean\")\n    )\n    product_sales[\"has_sales_history\"] = 1\n\n    # Аггрегация за последние 90 дней\n    cutoff_90 = seed_time - pd.Timedelta(days=90)\n    recent_sales = order_items.query(\"ts >= @cutoff_90\").groupby(\"product_id\").agg(\n        recent_revenue=(\"price\", \"sum\"),\n        recent_units=(\"order_id\", \"count\"),\n        last_sale_days=(\"ts\", lambda x: (seed_time - x.max()).days)\n    )\n\n    # Аггрегация по отзывам: используем только отзывы, существующие на момент seed_time\n    reviews = db[\"reviews\"].query(\"review_creation_date < @seed_time\")\n    reviews = reviews.query(\"order_id in @valid_orders\").copy()\n    reviews_w_products = reviews.merge(order_items[[\"order_id\", \"product_id\"]], on=\"order_id\", how=\"left\")\n    product_reviews = reviews_w_products.groupby(\"product_id\").agg(\n        total_reviews=(\"review_id\", \"count\"),\n        avg_review_score=(\"review_score\", \"mean\"),\n        pct_negative_reviews=(\"review_score\", lambda x: (x <= 2).mean())\n    )\n\n    # Объединение всех признаков\n    features = product_sales.join(recent_sales, how=\"outer\")\n    features = features.join(product_reviews, how=\"outer\")\n\n    # Обработка пропусков\n    count_cols = [\"total_units\", \"total_revenue\", \"total_reviews\", \"recent_units\", \"recent_revenue\"]\n    for col in count_cols:\n        if col in features.columns:\n            features[col] = features[col].fillna(0)\n\n    if \"has_sales_history\" in features.columns:\n        features[\"has_sales_history\"] = features[\"has_sales_history\"].fillna(0)\n\n    if \"last_sale_days\" in features.columns:\n        features[\"last_sale_days\"] = features[\"last_sale_days\"].fillna(3650)\n\n    avg_cols = [\"avg_price\", \"avg_freight\", \"avg_review_score\", \"pct_negative_reviews\"]\n    for col in avg_cols:\n        if col in features.columns:\n            mean_val = features[col].mean()\n            if pd.isna(mean_val):\n                mean_val = 0\n            features[col] = features[col].fillna(mean_val)\n\n    # Приведение к числовому типу\n    for col in features.columns:\n        if not np.issubdtype(features[col].dtype, np.number):\n            features[col] = pd.to_numeric(features[col], errors=\"coerce\").fillna(0)\n\n    # Реиндексация под запрошенные товары\n    result = result.join(features, how=\"left\")\n    result = result.fillna(0)\n\n    # Единый тип для всех признаков\n    for col in result.columns:\n        result[col] = result[col].astype(\"float64\")\n\n    return result",
+   "timestamp": "2026-09-18T20:16:45+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 11,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 11,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 11,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 11,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 11,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 11,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 24.4
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

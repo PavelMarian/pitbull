@@ -1,0 +1,661 @@
+{"type": "assistant_complete", "text": ""}
+{"type": "tool_started", "tool_name": "skill", "tool_input": {"name": "pit-repair"}}
+{"type": "tool_completed", "tool_name": "skill", "output": "---\nname: pit-repair\ndescription: Detect and repair temporal (point-in-time) data leakage in a feature function get_features(db, entity_ids, seed_time) by differential execution (witness + canary), then re-verify each repair on held-out cutoffs. Use this whenever a feature-engineering function over event tables must only use information available at seed_time, when someone asks to check code for \"\u0443\u0442\u0435\u0447\u043a\u0430 \u0438\u0437 \u0431\u0443\u0434\u0443\u0449\u0435\u0433\u043e\" / future leakage / look-ahead / point-in-time correctness, or to fix such a leak. Also use it when the request only says \"\u043f\u0440\u043e\u0432\u0435\u0440\u044c \u043f\u0440\u0438\u0437\u043d\u0430\u043a\u0438 \u043d\u0430 \u043a\u043e\u0440\u0440\u0435\u043a\u0442\u043d\u043e\u0441\u0442\u044c \u043f\u043e \u0432\u0440\u0435\u043c\u0435\u043d\u0438\" without naming leakage explicitly.\n---\n\n# pit-repair: \u0434\u0435\u0442\u0435\u043a\u0446\u0438\u044f \u0438 \u043f\u043e\u0447\u0438\u043d\u043a\u0430 \u0443\u0442\u0435\u0447\u043a\u0438 \u0438\u0437 \u0431\u0443\u0434\u0443\u0449\u0435\u0433\u043e\n\n\u0421\u043a\u0438\u043b\u043b \u0443\u043f\u0430\u043a\u043e\u0432\u044b\u0432\u0430\u0435\u0442 \u0446\u0438\u043a\u043b, \u043f\u0440\u043e\u0432\u0430\u043b\u0438\u0434\u0438\u0440\u043e\u0432\u0430\u043d\u043d\u044b\u0439 \u0432 \u044d\u043a\u0441\u043f\u0435\u0440\u0438\u043c\u0435\u043d\u0442\u0430\u0445 A2/A4 \u043f\u0440\u043e\u0435\u043a\u0442\u0430\nPITBULL: \u0434\u0438\u0444\u0444\u0435\u0440\u0435\u043d\u0446\u0438\u0430\u043b\u044c\u043d\u043e\u0435 \u0438\u0441\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u0435 \u043d\u0430\u0445\u043e\u0434\u0438\u0442 \u0443\u0442\u0435\u0447\u043a\u0443, \u043c\u043e\u0434\u0435\u043b\u044c \u0447\u0438\u043d\u0438\u0442 \u043a\u043e\u0434 \u043f\u043e\n\u0444\u0438\u043a\u0441\u0438\u0440\u043e\u0432\u0430\u043d\u043d\u043e\u0439 \u0444\u043e\u0440\u043c\u0443\u043b\u0438\u0440\u043e\u0432\u043a\u0435 \u043e\u0431\u0440\u0430\u0442\u043d\u043e\u0439 \u0441\u0432\u044f\u0437\u0438, \u0438\u0441\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u0435 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0430\u0435\u0442 \u043f\u043e\u0447\u0438\u043d\u043a\u0443\n\u043d\u0430 held-out \u043c\u043e\u043c\u0435\u043d\u0442\u0430\u0445. \u041d\u0438\u0447\u0435\u0433\u043e \u0438\u0437 \u044d\u0442\u043e\u0433\u043e \u043d\u0435 \u0437\u0430\u043c\u0435\u043d\u044f\u0435\u0442\u0441\u044f \u0447\u0442\u0435\u043d\u0438\u0435\u043c \u043a\u043e\u0434\u0430 \u00ab\u043d\u0430 \u0433\u043b\u0430\u0437\u00bb:\n\u043f\u0438\u043b\u043e\u0442 \u043f\u043e\u043a\u0430\u0437\u0430\u043b, \u0447\u0442\u043e \u043c\u043e\u0434\u0435\u043b\u044c \u0431\u0435\u0437 \u0438\u0441\u043f\u043e\u043b\u043d\u044f\u0435\u043c\u043e\u0439 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438 \u043d\u0430\u0445\u043e\u0434\u0438\u0442 \u0443\u0442\u0435\u0447\u043a\u0443 \u0432 1 \u0438\u0437 12\n\u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c, \u0430 \u0441 \u043d\u0430\u0437\u0432\u0430\u043d\u043d\u044b\u043c \u043a\u043b\u0430\u0441\u0441\u043e\u043c \u043e\u0448\u0438\u0431\u043a\u0438 \u0447\u0438\u043d\u0438\u0442 11 \u0438\u0437 12.\n\n## \u0418\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441 \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u043c\u043e\u0439 \u0444\u0443\u043d\u043a\u0446\u0438\u0438\n\n```python\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame\n```\n\n`db` \u2014 \u0441\u043b\u043e\u0432\u0430\u0440\u044c \u0442\u0430\u0431\u043b\u0438\u0446 pandas (\u0434\u043b\u044f Olist: `orders`, `order_items`,\n`reviews`, `payments`), `entity_ids` \u2014 \u0441\u043f\u0438\u0441\u043e\u043a \u0441\u0443\u0449\u043d\u043e\u0441\u0442\u0435\u0439, `seed_time` \u2014\n`pandas.Timestamp`. \u0420\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442 \u0438\u043d\u0434\u0435\u043a\u0441\u0438\u0440\u043e\u0432\u0430\u043d \u043f\u043e `entity_ids`. \u0414\u043e\u0441\u0442\u0443\u043f\u043d\u044b \u0442\u043e\u043b\u044c\u043a\u043e\n`pd` \u0438 `np`. \u0415\u0441\u043b\u0438 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0439 \u043a\u043e\u0434 \u0443\u0441\u0442\u0440\u043e\u0435\u043d \u0438\u043d\u0430\u0447\u0435, \u0435\u0433\u043e \u043e\u0431\u043e\u0440\u0430\u0447\u0438\u0432\u0430\u044e\u0442 \u0432 \u0442\u0430\u043a\u0443\u044e\n\u0444\u0443\u043d\u043a\u0446\u0438\u044e; \u043e\u0431\u0451\u0440\u0442\u043a\u0435 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043d\u0430 \u043f\u0435\u0440\u0435\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0430 \u0432\u044b\u0437\u043e\u0432\u043e\u0432, \u0437\u0430\u043f\u0440\u0435\u0449\u0435\u043d\u0430 \u043b\u043e\u0433\u0438\u043a\u0430 \u043f\u0440\u0438\u0437\u043d\u0430\u043a\u043e\u0432.\n\n## \u0428\u0430\u0433\u0438\n\n### 0. \u041f\u0440\u0435\u0434\u0443\u0441\u043b\u043e\u0432\u0438\u044f\n\n- Python \u0441 pandas 2.2.x \u0438 numpy 2.2.x (\u0432 \u043f\u0440\u043e\u0435\u043a\u0442\u0435 \u0437\u0430\u043a\u0440\u0435\u043f\u043b\u0435\u043d\u044b 2.2.3 / 2.2.6).\n- \u0414\u0430\u043d\u043d\u044b\u0435 Olist: \u043f\u0435\u0440\u0435\u043c\u0435\u043d\u043d\u0430\u044f `P3_OLIST` \u0438\u043b\u0438 `<\u043a\u043e\u0440\u0435\u043d\u044c PITBULL>/PITFALL_olist_data`.\n- \u041a\u043e\u043c\u0430\u043d\u0434\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438: `pit-check` (\u043e\u0431\u0451\u0440\u0442\u043a\u0430 `bin/pit-check` \u044d\u0442\u043e\u0433\u043e \u0441\u043a\u0438\u043b\u043b\u0430; \u0435\u0441\u043b\u0438\n  \u0435\u0451 \u043d\u0435\u0442 \u043d\u0430 PATH, \u0432\u044b\u0437\u044b\u0432\u0430\u0439\u0442\u0435 `python <\u043a\u0430\u0442\u0430\u043b\u043e\u0433 \u0441\u043a\u0438\u043b\u043b\u0430>/scripts/pit_check.py`).\n- \u0412 \u043e\u043a\u0440\u0443\u0436\u0435\u043d\u0438\u0438 \u043f\u0440\u043e\u0446\u0435\u0441\u0441\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438 \u043d\u0435 \u0434\u043e\u043b\u0436\u043d\u043e \u0431\u044b\u0442\u044c \u043a\u043b\u044e\u0447\u0435\u0439 LLM-\u043f\u0440\u043e\u0432\u0430\u0439\u0434\u0435\u0440\u0430\n  (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`). \u0421\u043a\u0440\u0438\u043f\u0442\n  \u0438\u0441\u043f\u043e\u043b\u043d\u044f\u0435\u0442 \u0441\u0433\u0435\u043d\u0435\u0440\u0438\u0440\u043e\u0432\u0430\u043d\u043d\u044b\u0439 \u043a\u043e\u0434 \u0438 \u043f\u0440\u0438 \u043d\u0430\u043b\u0438\u0447\u0438\u0438 \u043a\u043b\u044e\u0447\u0430 \u043e\u0442\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442\u0441\u044f \u0440\u0430\u0431\u043e\u0442\u0430\u0442\u044c.\n  \u041d\u0435 \u044d\u043a\u0441\u043f\u043e\u0440\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u043a\u043b\u044e\u0447\u0438 \u0438 \u043d\u0435 \u043e\u0431\u0445\u043e\u0434\u0438\u0442\u0435 \u043e\u0442\u043a\u0430\u0437: \u0441\u0435\u0442\u0435\u0432\u043e\u0439 \u044d\u0442\u0430\u043f \u0438 \u044d\u0442\u0430\u043f\n  \u0438\u0441\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u044f \u0434\u043e\u043b\u0436\u043d\u044b \u0431\u044b\u0442\u044c \u0440\u0430\u0437\u043d\u044b\u043c\u0438 \u043f\u0440\u043e\u0446\u0435\u0441\u0441\u0430\u043c\u0438.\n\n### 1. \u0414\u0435\u0442\u0435\u043a\u0446\u0438\u044f\n\n```bash\npit-check --code get_features.py\n```\n\n\u0421\u043a\u0440\u0438\u043f\u0442 \u0432\u044b\u0437\u044b\u0432\u0430\u0435\u0442 \u0444\u0443\u043d\u043a\u0446\u0438\u044e \u0442\u0440\u0438\u0436\u0434\u044b \u043d\u0430 \u043a\u0430\u0436\u0434\u043e\u043c \u043c\u043e\u043c\u0435\u043d\u0442\u0435: \u043d\u0430 \u043f\u043e\u043b\u043d\u043e\u0439 \u0431\u0430\u0437\u0435, \u043d\u0430 \u0431\u0430\u0437\u0435,\n\u0443\u0441\u0435\u0447\u0451\u043d\u043d\u043e\u0439 \u043f\u043e `seed_time` (`oracle.truncate`), \u0438 \u043d\u0430 \u0431\u0430\u0437\u0435 \u0441 \u0442\u0438\u043f\u043e\u0432\u044b\u043c\ncanary-\u0432\u043e\u0437\u043c\u0443\u0449\u0435\u043d\u0438\u0435\u043c \u043f\u043e\u0437\u0434\u043d\u043e \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0445 \u043f\u043e\u043b\u0435\u0439 (`oracle.perturb_canary`).\n\u041c\u043e\u043c\u0435\u043d\u0442\u044b \u043f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e: \u0434\u0438\u0430\u0433\u043d\u043e\u0441\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0435 `2018-01-01, 2018-04-01, 2018-07-01`\n\u0438 held-out `2017-10-01, 2018-02-01, 2018-06-01`; \u0432\u044b\u0437\u044b\u0432\u0430\u044e\u0449\u0438\u0439 \u043c\u043e\u0436\u0435\u0442 \u043f\u0435\u0440\u0435\u0434\u0430\u0442\u044c\n\u0441\u0432\u043e\u0438 \u0447\u0435\u0440\u0435\u0437 `--dev-seeds` / `--held-out-seeds`.\n\n\u0414\u0432\u0435 \u0441\u0442\u0440\u043e\u043a\u0438 \u0432 \u0432\u044b\u0432\u043e\u0434\u0435:\n\n- `witness` \u2014 \u0441\u0442\u043e\u043b\u0431\u0446\u044b, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u0440\u0430\u0437\u043e\u0448\u043b\u0438\u0441\u044c \u043c\u0435\u0436\u0434\u0443 \u043f\u043e\u043b\u043d\u043e\u0439 \u0438 \u0443\u0441\u0435\u0447\u0451\u043d\u043d\u043e\u0439 \u0431\u0430\u0437\u043e\u0439.\n  \u042d\u0442\u043e \u0434\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e: \u0444\u0443\u043d\u043a\u0446\u0438\u044f \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043b\u0430 \u0441\u0442\u0440\u043e\u043a\u0438 \u0441 \u0432\u0440\u0435\u043c\u0435\u043d\u0435\u043c \u043f\u043e\u0437\u0436\u0435 `seed_time`.\n- `canary` \u2014 \u0441\u0442\u043e\u043b\u0431\u0446\u044b, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u0440\u0430\u0437\u043e\u0448\u043b\u0438\u0441\u044c \u043c\u0435\u0436\u0434\u0443 \u043f\u043e\u043b\u043d\u043e\u0439 \u0438 \u0432\u043e\u0437\u043c\u0443\u0449\u0451\u043d\u043d\u043e\u0439 \u0431\u0430\u0437\u043e\u0439.\n  \u0424\u0443\u043d\u043a\u0446\u0438\u044f \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043b\u0430 \u043f\u043e\u043b\u044f, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u0437\u0430\u043f\u043e\u043b\u043d\u044f\u044e\u0442\u0441\u044f \u043f\u043e\u0437\u0436\u0435 \u043f\u043e\u043a\u0443\u043f\u043a\u0438 (\u0434\u0430\u0442\u0430 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438,\n  \u043e\u0442\u0437\u044b\u0432, \u043e\u0442\u0432\u0435\u0442 \u043d\u0430 \u043e\u0442\u0437\u044b\u0432, \u0441\u0442\u0430\u0442\u0443\u0441 \u0437\u0430\u043a\u0430\u0437\u0430).\n\n\u0412\u0435\u0440\u0434\u0438\u043a\u0442 `CLEAN` \u0442\u043e\u043b\u044c\u043a\u043e \u0435\u0441\u043b\u0438 \u043e\u0431\u0430 \u0443\u0440\u043e\u0432\u043d\u044f \u043c\u043e\u043b\u0447\u0430\u0442 \u043d\u0430 \u0432\u0441\u0435\u0445 \u0448\u0435\u0441\u0442\u0438 \u043c\u043e\u043c\u0435\u043d\u0442\u0430\u0445.\n\u0412\u0435\u0440\u0434\u0438\u043a\u0442 `CLEAN` \u043d\u0430 \u0438\u0442\u0435\u0440\u0430\u0446\u0438\u0438 0 \u043e\u0437\u043d\u0430\u0447\u0430\u0435\u0442, \u0447\u0442\u043e \u0447\u0438\u043d\u0438\u0442\u044c \u043d\u0435\u0447\u0435\u0433\u043e: \u0441\u043e\u043e\u0431\u0449\u0438\u0442\u0435 \u044d\u0442\u043e \u0438\n\u043e\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u0435\u0441\u044c. \u0412\u0435\u0440\u0434\u0438\u043a\u0442 `ERROR` \u043e\u0437\u043d\u0430\u0447\u0430\u0435\u0442, \u0447\u0442\u043e \u043a\u0430\u043d\u0434\u0438\u0434\u0430\u0442 \u043d\u0435 \u0438\u0441\u043f\u043e\u043b\u043d\u0438\u043b\u0441\u044f \u0432\n\u043f\u0435\u0441\u043e\u0447\u043d\u0438\u0446\u0435 (\u043e\u0448\u0438\u0431\u043a\u0430 \u0432\u0440\u0435\u043c\u0435\u043d\u0438 \u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u044f \u0438\u043b\u0438 \u0437\u0430\u043f\u0440\u0435\u0449\u0451\u043d\u043d\u0430\u044f \u043a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u044f, \u043d\u0430\u043f\u0440\u0438\u043c\u0435\u0440\n`locals()`, \u0444\u0430\u0439\u043b\u043e\u0432\u044b\u0439 \u0438\u043b\u0438 \u0441\u0435\u0442\u0435\u0432\u043e\u0439 \u0432\u044b\u0437\u043e\u0432): \u0443\u0441\u0442\u0440\u0430\u043d\u0438\u0442\u0435 \u043f\u0440\u0438\u0447\u0438\u043d\u0443 \u0438 \u0432 \u0442\u043e\u043c \u0436\u0435\n\u043f\u0440\u043e\u0445\u043e\u0434\u0435 \u0432\u044b\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u0448\u0430\u0433 \u043f\u043e\u0447\u0438\u043d\u043a\u0438, \u043f\u043e\u0442\u043e\u043c\u0443 \u0447\u0442\u043e \u0443\u0442\u0435\u0447\u043a\u0430 \u043f\u0440\u0438 \u044d\u0442\u043e\u043c \u043d\u0438\u043a\u0443\u0434\u0430 \u043d\u0435 \u0434\u0435\u043b\u0430\u0441\u044c.\n\n### 2. \u041f\u043e\u0447\u0438\u043d\u043a\u0430\n\n\u041f\u0440\u0438 \u0432\u0435\u0440\u0434\u0438\u043a\u0442\u0435 `LEAK` \u043f\u0435\u0440\u0435\u0447\u0438\u0442\u0430\u0439\u0442\u0435 \u0442\u0435\u043a\u0443\u0449\u0438\u0439 \u043a\u043e\u0434 \u0438 \u0432\u044b\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0443\u044e\n\u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u044e \u0434\u043e\u0441\u043b\u043e\u0432\u043d\u043e, \u043a\u0430\u043a \u0435\u0441\u043b\u0438 \u0431\u044b \u0435\u0451 \u0430\u0434\u0440\u0435\u0441\u043e\u0432\u0430\u043b\u0438 \u0432\u0430\u043c \u0432\u043c\u0435\u0441\u0442\u0435 \u0441 \u043a\u043e\u0434\u043e\u043c \u0432\u044b\u0448\u0435:\n\n```\n\u0412 \u043a\u043e\u0434\u0435 \u0432\u044b\u0448\u0435 \u043c\u043e\u0436\u0435\u0442 \u0431\u044b\u0442\u044c \u0443\u0442\u0435\u0447\u043a\u0430 \u0434\u0430\u043d\u043d\u044b\u0445 \u0438\u0437 \u0431\u0443\u0434\u0443\u0449\u0435\u0433\u043e. \u0422\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u0435: \u043f\u0440\u0438\u0437\u043d\u0430\u043a\u0438\n\u0434\u043b\u044f \u043c\u043e\u043c\u0435\u043d\u0442\u0430 seed_time \u0434\u043e\u043b\u0436\u043d\u044b \u0432\u044b\u0447\u0438\u0441\u043b\u044f\u0442\u044c\u0441\u044f \u0422\u041e\u041b\u042c\u041a\u041e \u043f\u043e \u0438\u043d\u0444\u043e\u0440\u043c\u0430\u0446\u0438\u0438, \u043a\u043e\u0442\u043e\u0440\u0430\u044f \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442\n\u043d\u0430 \u043c\u043e\u043c\u0435\u043d\u0442 seed_time. \u0423\u0447\u0438\u0442\u044b\u0432\u0430\u0439, \u0447\u0442\u043e \u0441\u043e\u0431\u044b\u0442\u0438\u044f \u0432 \u0431\u0430\u0437\u0435 \u043f\u043e\u044f\u0432\u043b\u044f\u044e\u0442\u0441\u044f \u0432 \u0440\u0430\u0437\u043d\u043e\u0435 \u0432\u0440\u0435\u043c\u044f: \u043d\u0430\u043f\u0440\u0438\u043c\u0435\u0440,\n\u043e\u0442\u0437\u044b\u0432 \u043d\u0430 \u0437\u0430\u043a\u0430\u0437 \u043f\u0438\u0448\u0435\u0442\u0441\u044f \u043f\u043e\u0437\u0436\u0435 \u0441\u0430\u043c\u043e\u0439 \u043f\u043e\u043a\u0443\u043f\u043a\u0438, \u0430 \u0434\u0430\u0442\u044b \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438 \u0437\u0430\u043f\u043e\u043b\u043d\u044f\u044e\u0442\u0441\u044f \u043f\u043e\u0441\u043b\u0435 \u043d\u0435\u0451.\n\u041f\u0440\u043e\u0432\u0435\u0440\u044c \u0441\u0432\u043e\u0439 \u043a\u043e\u0434 \u043d\u0430 \u044d\u0442\u043e \u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u0435 \u0438 \u0432\u0435\u0440\u043d\u0438 \u0438\u0441\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043d\u0443\u044e \u0432\u0435\u0440\u0441\u0438\u044e \u0444\u0443\u043d\u043a\u0446\u0438\u0438 get_features\n(\u0442\u0430 \u0436\u0435 \u0441\u0438\u0433\u043d\u0430\u0442\u0443\u0440\u0430), \u0432 \u043e\u0434\u043d\u043e\u043c \u0431\u043b\u043e\u043a\u0435 ```python ...```, \u0431\u0435\u0437 \u043f\u043e\u044f\u0441\u043d\u0435\u043d\u0438\u0439.\n```\n\n\u0417\u0430\u043f\u0438\u0448\u0438\u0442\u0435 \u0438\u0441\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043d\u0443\u044e \u0444\u0443\u043d\u043a\u0446\u0438\u044e \u0446\u0435\u043b\u0438\u043a\u043e\u043c \u0432 \u0442\u043e\u0442 \u0436\u0435 \u0444\u0430\u0439\u043b (`get_features.py`),\n\u0437\u0430\u043c\u0435\u043d\u0438\u0432 \u043f\u0440\u0435\u0436\u043d\u044e\u044e \u0432\u0435\u0440\u0441\u0438\u044e. \u0421\u0438\u0433\u043d\u0430\u0442\u0443\u0440\u0430 \u0438 \u0438\u043c\u044f \u0444\u0443\u043d\u043a\u0446\u0438\u0438 \u043e\u0441\u0442\u0430\u044e\u0442\u0441\u044f \u043f\u0440\u0435\u0436\u043d\u0438\u043c\u0438, \u0438\u043c\u043f\u043e\u0440\u0442\u044b\n\u0442\u043e\u043b\u044c\u043a\u043e `pandas`/`numpy`. \u0422\u0435\u043a\u0441\u0442 \u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u0438 \u0432\u044b\u0448\u0435 \u0437\u0430\u0444\u0438\u043a\u0441\u0438\u0440\u043e\u0432\u0430\u043d \u0432 \u044d\u043a\u0441\u043f\u0435\u0440\u0438\u043c\u0435\u043d\u0442\u0430\u0445\nA2/A4 (\u043f\u0440\u043e\u043c\u043f\u0442 F1); \u043d\u0435 \u043f\u0435\u0440\u0435\u0441\u043a\u0430\u0437\u044b\u0432\u0430\u0439\u0442\u0435 \u0435\u0433\u043e \u0438 \u043d\u0435 \u0434\u043e\u043f\u043e\u043b\u043d\u044f\u0439\u0442\u0435 \u0441\u0432\u043e\u0438\u043c\u0438\n\u043f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430\u043c\u0438 \u043e \u043a\u043e\u043d\u043a\u0440\u0435\u0442\u043d\u044b\u0445 \u0441\u0442\u043e\u043b\u0431\u0446\u0430\u0445: \u0441\u0440\u0430\u0432\u043d\u0438\u043c\u043e\u0441\u0442\u044c \u0441 \u044d\u0442\u0438\u043c\u0438 \u044d\u043a\u0441\u043f\u0435\u0440\u0438\u043c\u0435\u043d\u0442\u0430\u043c\u0438\n\u0434\u0435\u0440\u0436\u0438\u0442\u0441\u044f \u043d\u0430 \u043d\u0435\u0438\u0437\u043c\u0435\u043d\u043d\u043e\u0441\u0442\u0438 \u0444\u043e\u0440\u043c\u0443\u043b\u0438\u0440\u043e\u0432\u043a\u0438.\n\n### 3. \u041f\u043e\u0432\u0442\u043e\u0440\u043d\u0430\u044f \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430\n\n\u0417\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u0435 \u0442\u0443 \u0436\u0435 \u043a\u043e\u043c\u0430\u043d\u0434\u0443:\n\n```bash\npit-check --code get_features.py\n```\n\n\u0421\u043a\u0440\u0438\u043f\u0442 \u0441\u0430\u043c \u0432\u0435\u0434\u0451\u0442 \u0441\u0447\u0451\u0442 \u0438\u0442\u0435\u0440\u0430\u0446\u0438\u0439 \u0432 `pit_state.json` \u0440\u044f\u0434\u043e\u043c \u0441 \u043a\u043e\u0434\u043e\u043c \u0438 \u043a\u0430\u0436\u0434\u044b\u0439\n\u0440\u0430\u0437 \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u0442 \u0432\u0441\u0435 \u0448\u0435\u0441\u0442\u044c \u043c\u043e\u043c\u0435\u043d\u0442\u043e\u0432, \u0432\u043a\u043b\u044e\u0447\u0430\u044f held-out, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u043c\u043e\u0434\u0435\u043b\u044c \u043d\u0435\n\u0432\u0438\u0434\u0435\u043b\u0430 \u0432 \u0432\u0435\u0440\u0434\u0438\u043a\u0442\u0435 \u0434\u0435\u0442\u0435\u043a\u0446\u0438\u0438. \u041e\u0448\u0438\u0431\u043a\u0430 \u0438\u0441\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u044f \u043a\u0430\u043d\u0434\u0438\u0434\u0430\u0442\u0430 \u0442\u043e\u0436\u0435 \u0440\u0430\u0441\u0445\u043e\u0434\u0443\u0435\u0442\n\u0438\u0442\u0435\u0440\u0430\u0446\u0438\u044e: \u0442\u0430\u043a \u0441\u0447\u0438\u0442\u0430\u043b\u043e\u0441\u044c \u0432 A2.\n\n### 4. \u0426\u0438\u043a\u043b \u0438 \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0430\n\n\u041f\u043e\u0432\u0442\u043e\u0440\u044f\u0439\u0442\u0435 \u0448\u0430\u0433\u0438 2 \u0438 3, \u043f\u043e\u043a\u0430 \u043d\u0435 \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u0435 `CLEAN`, \u043d\u043e \u043d\u0435 \u0431\u043e\u043b\u044c\u0448\u0435 \u043f\u044f\u0442\u0438\n\u0438\u0442\u0435\u0440\u0430\u0446\u0438\u0439 \u043f\u043e\u0447\u0438\u043d\u043a\u0438. \u041f\u043e\u0441\u043b\u0435 \u043f\u044f\u0442\u043e\u0439 \u043d\u0435\u0443\u0434\u0430\u0447\u0438 \u0441\u043a\u0440\u0438\u043f\u0442 \u0441\u0442\u0430\u0432\u0438\u0442 \u0441\u0442\u0430\u0442\u0443\u0441 `failed` \u0438\n\u043f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 `FAILED`; \u0434\u0430\u043b\u044c\u0448\u0435 \u043d\u0435 \u0447\u0438\u043d\u0438\u0442\u0435, \u0430 \u043e\u0442\u0447\u0438\u0442\u0430\u0439\u0442\u0435\u0441\u044c. \u041d\u0435 \u0440\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u0443\u0439\u0442\u0435\n`pit_state.json` \u0440\u0443\u043a\u0430\u043c\u0438 \u0438 \u043d\u0435 \u0443\u0434\u0430\u043b\u044f\u0439\u0442\u0435 \u0435\u0433\u043e, \u0447\u0442\u043e\u0431\u044b \u00ab\u043e\u0431\u043d\u0443\u043b\u0438\u0442\u044c\u00bb \u0441\u0447\u0451\u0442\u0447\u0438\u043a.\n\n## \u0418\u0442\u043e\u0433\u043e\u0432\u044b\u0439 \u043e\u0442\u0447\u0451\u0442\n\n\u0417\u0430\u0432\u0435\u0440\u0448\u0430\u0439\u0442\u0435 \u0440\u0430\u0431\u043e\u0442\u0443 \u043a\u043e\u0440\u043e\u0442\u043a\u0438\u043c \u043e\u0442\u0447\u0451\u0442\u043e\u043c \u0442\u0430\u043a\u043e\u0433\u043e \u0432\u0438\u0434\u0430 (\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u044f \u0431\u0435\u0440\u0438\u0442\u0435 \u0438\u0437\n\u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0435\u0433\u043e JSON-\u0432\u044b\u0432\u043e\u0434\u0430 `pit-check` \u0438 \u0438\u0437 `pit_state.json`):\n\n```\npit-repair: verdict=<CLEAN|FAILED>, clean_at=<\u0438\u0442\u0435\u0440\u0430\u0446\u0438\u044f \u0438\u043b\u0438 null>,\niterations_used=<n>, witness_final=[...], canary_final=[...],\nstate=<\u043f\u0443\u0442\u044c \u043a pit_state.json>\n```\n\n## \u041a\u0430\u043a \u0447\u0438\u0442\u0430\u0442\u044c \u0441\u043f\u043e\u0440\u043d\u044b\u0435 \u0441\u043b\u0443\u0447\u0430\u0438\n\n- Witness \u2014 \u0434\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e, canary \u2014 \u0441\u0438\u043b\u044c\u043d\u044b\u0439 \u0441\u0438\u0433\u043d\u0430\u043b. \u041d\u0430 \u0437\u0430\u0432\u0435\u0434\u043e\u043c\u043e \u0447\u0438\u0441\u0442\u044b\u0445\n  \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0430\u0445 canary \u0434\u0430\u0451\u0442 \u043b\u043e\u0436\u043d\u043e\u0435 \u0441\u0440\u0430\u0431\u0430\u0442\u044b\u0432\u0430\u043d\u0438\u0435 \u0432 4 \u0438\u0437 30 \u0441\u043b\u0443\u0447\u0430\u0435\u0432 (13.3%, A5).\n  \u041e\u0434\u043d\u043e \u0441\u0440\u0430\u0431\u0430\u0442\u044b\u0432\u0430\u043d\u0438\u0435 canary \u043d\u0430 \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0435, \u0443 \u043a\u043e\u0442\u043e\u0440\u043e\u0439 witness \u043c\u043e\u043b\u0447\u0438\u0442,\n  \u0444\u043e\u0440\u043c\u0430\u043b\u044c\u043d\u043e \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u00ab\u043d\u0435 CLEAN\u00bb \u043f\u043e \u043f\u0440\u043e\u0442\u043e\u043a\u043e\u043b\u0443, \u043d\u043e \u0441\u0442\u043e\u0438\u0442 \u043d\u0430\u0437\u0432\u0430\u0442\u044c \u0441\u0442\u043e\u043b\u0431\u0435\u0446 \u0438\n  \u043c\u0435\u0445\u0430\u043d\u0438\u0437\u043c \u0432 \u043e\u0442\u0447\u0451\u0442\u0435, \u0447\u0442\u043e\u0431\u044b \u0447\u0435\u043b\u043e\u0432\u0435\u043a \u043c\u043e\u0433 \u043e\u0442\u043b\u0438\u0447\u0438\u0442\u044c \u043b\u043e\u0436\u043d\u043e\u0435 \u0441\u0440\u0430\u0431\u0430\u0442\u044b\u0432\u0430\u043d\u0438\u0435 \u043e\u0442\n  \u0440\u0435\u0430\u043b\u044c\u043d\u043e\u0439 \u0443\u0442\u0435\u0447\u043a\u0438.\n- \u0422\u0440\u0438 \u043a\u0430\u043d\u0430\u043b\u0430, \u043d\u0430 \u043a\u043e\u0442\u043e\u0440\u044b\u0445 \u0447\u0442\u0435\u043d\u0438\u0435 \u043a\u043e\u0434\u0430 \u043c\u043e\u0434\u0435\u043b\u044c\u044e \u0440\u0430\u0441\u0445\u043e\u0434\u0438\u0442\u0441\u044f \u0441 \u043a\u0430\u0440\u0442\u043e\u0439 \u0447\u0435\u043a\u0435\u0440\u0430\n  (A3): \u0438\u0437\u043c\u0435\u043d\u044f\u0435\u043c\u044b\u0439 `order_status`, \u0437\u0430\u0434\u0435\u0440\u0436\u0430\u043d\u043d\u0430\u044f \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e\u0441\u0442\u044c \u043f\u043b\u0430\u0442\u0435\u0436\u0430,\n  `review_answer_timestamp` \u0432\u043c\u0435\u0441\u0442\u043e \u043f\u0440\u0438\u043d\u044f\u0442\u043e\u0433\u043e \u043a\u0430\u0440\u0442\u043e\u0439 `review_creation_date`.\n  \u0415\u0441\u043b\u0438 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u043b\u043e\u0432\u0438\u0442 \u0438\u043c\u0435\u043d\u043d\u043e \u0438\u0445, \u0447\u0438\u043d\u0438\u0442\u0435 \u043f\u043e\u0434 \u043a\u0430\u0440\u0442\u0443 \u0447\u0435\u043a\u0435\u0440\u0430: \u043e\u043d\u0430 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f\n  \u0440\u0435\u0444\u0435\u0440\u0435\u043d\u0441\u043e\u043c \u043f\u0440\u043e\u0442\u043e\u043a\u043e\u043b\u0430, \u0438 \u0441\u043f\u043e\u0440 \u0441 \u043d\u0435\u0439 \u0432 \u043e\u0442\u0447\u0451\u0442\u0435 \u0443\u043c\u0435\u0441\u0442\u0435\u043d, \u0430 \u0432 \u043a\u043e\u0434\u0435 \u043d\u0435\u0442.\n- \u0418\u0437\u0432\u0435\u0441\u0442\u043d\u044b\u0439 \u043f\u0440\u043e\u0432\u0430\u043b \u043f\u0440\u044f\u043c\u043e\u0433\u043e \u0432\u044b\u0437\u043e\u0432\u0430: `delivered_recency_days` \u043d\u0430 \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0435\n  `f1cade690ca333e8` (A2) \u0434\u0435\u0440\u0436\u0438\u0442\u0441\u044f \u043d\u0430 canary \u043f\u043e\u0441\u043b\u0435 \u043f\u044f\u0442\u0438 \u0438\u0442\u0435\u0440\u0430\u0446\u0438\u0439. \u0422\u0430\u043a\u043e\u0439 \u0436\u0435\n  \u0438\u0441\u0445\u043e\u0434 \u0437\u0434\u0435\u0441\u044c \u043e\u0436\u0438\u0434\u0430\u0435\u043c \u0438 \u043d\u0435 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u0434\u0435\u0444\u0435\u043a\u0442\u043e\u043c \u0441\u043a\u0438\u043b\u043b\u0430.\n\n\u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438, \u0447\u0438\u0441\u043b\u0430 \u0438 \u043f\u0440\u043e\u0438\u0441\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u0435 \u043f\u0440\u043e\u0442\u043e\u043a\u043e\u043b\u0430: `references/background.md`.\n", "is_error": false}
+{"type": "assistant_complete", "text": ""}
+{"type": "tool_started", "tool_name": "bash", "tool_input": {"command": "ls -la /home/stas/Documents/GitHub/pitbull/pilot/d1_runs/b1d4448578a845b6"}}
+{"type": "tool_started", "tool_name": "read_file", "tool_input": {"path": "/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/b1d4448578a845b6/get_features.py"}}
+{"type": "tool_completed", "tool_name": "bash", "output": "total 28\ndrwxrwxr-x  3 stas stas 4096 Sep 18 23:46 .\ndrwxrwxr-x 46 stas stas 4096 Sep 18 23:46 ..\n-rw-rw-r--  1 stas stas 4519 Sep 18 23:46 get_features.py\ndrwxrwxr-x  3 stas stas 4096 Sep 18 23:46 .openharness\n-rw-rw-r--  1 stas stas 5914 Sep 18 23:46 prompt.txt", "is_error": false}
+{"type": "tool_completed", "tool_name": "read_file", "output": "     1\tdef get_features(db, entity_ids, seed_time):\n     2\t    entity_ids = list(entity_ids)\n     3\t    items = db['order_items']\n     4\t    orders = db['orders']\n     5\t    reviews = db['reviews']\n     6\t    payments = db['payments']\n     7\t\n     8\t    # Filter history (purchases strictly before seed_time)\n     9\t    hist_mask = items['product_id'].isin(entity_ids) & (items['ts'] < seed_time)\n    10\t    hist_items = items[hist_mask].copy()\n    11\t\n    12\t    feature_columns = [\n    13\t        'num_orders', 'num_items', 'sum_price', 'sum_sales', 'mean_price',\n    14\t        'std_price', 'min_price', 'max_price', 'sum_freight', 'mean_freight',\n    15\t        'mean_delivery_days', 'avg_review_score', 'count_reviews',\n    16\t        'positive_review_ratio', 'avg_installments', 'avg_payment_value',\n    17\t        'credit_card_ratio', 'recency', 'sales_30', 'sales_90'\n    18\t    ]\n    19\t\n    20\t    # No history -> all NaNs for every product\n    21\t    if hist_items.empty:\n    22\t        return pd.DataFrame(columns=feature_columns, index=entity_ids, dtype=float)\n    23\t\n    24\t    # Get order ids that appear in the filtered items\n    25\t    order_ids = hist_items['order_id'].unique()\n    26\t\n    27\t    # --- Orders ---\n    28\t    orders_sub = orders[orders['order_id'].isin(order_ids)].copy()\n    29\t    orders_sub['delivery_time_days'] = (\n    30\t        orders_sub['order_delivered_customer_date'] - orders_sub['order_purchase_timestamp']\n    31\t    ).dt.total_seconds() / 86400.0\n    32\t\n    33\t    # --- Reviews ---\n    34\t    reviews_sub = reviews[reviews['order_id'].isin(order_ids)]\n    35\t    if not reviews_sub.empty:\n    36\t        review_agg = reviews_sub.groupby('order_id').agg(\n    37\t            review_count=('review_score', 'count'),\n    38\t            avg_review_score=('review_score', 'mean'),\n    39\t            positive_review_ratio=('review_score', lambda x: (x >= 4).mean())\n    40\t        ).reset_index()\n    41\t    else:\n    42\t        review_agg = pd.DataFrame({\n    43\t            'order_id': order_ids,\n    44\t            'review_count': 0,\n    45\t            'avg_review_score': np.nan,\n    46\t            'positive_review_ratio': np.nan\n    47\t        })\n    48\t\n    49\t    # --- Payments ---\n    50\t    payments_sub = payments[payments['order_id'].isin(order_ids)]\n    51\t    if not payments_sub.empty:\n    52\t        payment_agg = payments_sub.groupby('order_id').agg(\n    53\t            sum_payment=('payment_value', 'sum'),\n    54\t            mean_payment=('payment_value', 'mean'),\n    55\t            avg_inst=('payment_installments', 'mean'),\n    56\t            credit_ratio=('payment_type', lambda x: (x == 'credit_card').mean())\n    57\t        ).reset_index()\n    58\t    else:\n    59\t        payment_agg = pd.DataFrame({\n    60\t            'order_id': order_ids,\n    61\t            'sum_payment': 0,\n    62\t            'mean_payment': 0,\n    63\t            'avg_inst': 0,\n    64\t            'credit_ratio': 0\n    65\t        })\n    66\t\n    67\t    # Merge order-level aggregates\n    68\t    orders_agg = orders_sub.merge(review_agg, on='order_id', how='left')\n    69\t    orders_agg = orders_agg.merge(payment_agg, on='order_id', how='left')\n    70\t\n    71\t    # Attach order aggregates to items\n    72\t    hist_items = hist_items.merge(orders_agg, on='order_id', how='left')\n    73\t\n    74\t    # Total sales per item line, age in days since purchase\n    75\t    hist_items['total'] = hist_items['price'] + hist_items['freight_value']\n    76\t    hist_items['age'] = (seed_time - hist_items['ts']).dt.days\n    77\t\n    78\t    # --- Group by product_id ---\n    79\t    grouped = hist_items.groupby('product_id').agg(\n    80\t        num_orders=('order_id', 'nunique'),\n    81\t        num_items=('product_id', 'count'),\n    82\t        sum_price=('price', 'sum'),\n    83\t        sum_sales=('total', 'sum'),\n    84\t        mean_price=('price', 'mean'),\n    85\t        std_price=('price', 'std'),\n    86\t        min_price=('price', 'min'),\n    87\t        max_price=('price', 'max'),\n    88\t        sum_freight=('freight_value', 'sum'),\n    89\t        mean_freight=('freight_value', 'mean'),\n    90\t        mean_delivery_days=('delivery_time_days', 'mean'),\n    91\t        avg_review_score=('avg_review_score', 'mean'),\n    92\t        count_reviews=('review_count', 'sum'),\n    93\t        positive_review_ratio=('positive_review_ratio', 'mean'),\n    94\t        avg_installments=('avg_inst', 'mean'),\n    95\t        avg_payment_value=('mean_payment', 'mean'),\n    96\t        credit_card_ratio=('credit_ratio', 'mean'),\n    97\t        last_purchase=('ts', 'max'),\n    98\t        sales_30=('age', lambda x: (x <= 30).sum()),\n    99\t        sales_90=('age', lambda x: (x <= 90).sum())\n   100\t    ).reset_index()\n   101\t\n   102\t    # Recency\n   103\t    grouped['recency'] = (seed_time - grouped['last_purchase']).dt.days\n   104\t    grouped.drop(columns=['last_purchase'], inplace=True)\n   105\t\n   106\t    # Reindex to exactly the requested entity_ids\n   107\t    grouped = grouped.set_index('product_id').reindex(entity_ids)\n   108\t\n   109\t    # Ensure all expected columns are present (in case some being missing)\n   110\t    for c in feature_columns:\n   111\t        if c not in grouped.columns:\n   112\t            grouped[c] = np.nan\n   113\t\n   114\t    return grouped[feature_columns]", "is_error": false}
+{"type": "assistant_delta", "text": "\u041a"}
+{"type": "assistant_delta", "text": "\u043e\u0434"}
+{"type": "assistant_delta", "text": " \u043f\u0440\u043e\u0447\u0438\u0442"}
+{"type": "assistant_delta", "text": "\u0430\u043b"}
+{"type": "assistant_delta", "text": "."}
+{"type": "assistant_delta", "text": " \u0424"}
+{"type": "assistant_delta", "text": "\u0438"}
+{"type": "assistant_delta", "text": "\u043b\u044c\u0442"}
+{"type": "assistant_delta", "text": "\u0440\u0430\u0446\u0438\u044f"}
+{"type": "assistant_delta", "text": " \u0438\u0441\u0442\u043e\u0440\u0438\u0438"}
+{"type": "assistant_delta", "text": " \u043f\u043e"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "ts"}
+{"type": "assistant_delta", "text": " "}
+{"type": "assistant_delta", "text": "< seed"}
+{"type": "assistant_delta", "text": "_time"}
+{"type": "assistant_delta", "text": "`"}
+{"type": "assistant_delta", "text": " \u0435\u0441\u0442\u044c"}
+{"type": "assistant_delta", "text": ","}
+{"type": "assistant_delta", "text": " \u043d\u043e"}
+{"type": "assistant_delta", "text": " \u043f\u043e\u0434\u043e\u0437"}
+{"type": "assistant_delta", "text": "\u0440"}
+{"type": "assistant_delta", "text": "\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0435"}
+{"type": "assistant_delta", "text": " \u043c\u0435\u0441\u0442\u0430"}
+{"type": "assistant_delta", "text": ":"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "order"}
+{"type": "assistant_delta", "text": "_del"}
+{"type": "assistant_delta", "text": "ivered"}
+{"type": "assistant_delta", "text": "_customer"}
+{"type": "assistant_delta", "text": "_date"}
+{"type": "assistant_delta", "text": "`"}
+{"type": "assistant_delta", "text": " ("}
+{"type": "assistant_delta", "text": "\u0437"}
+{"type": "assistant_delta", "text": "\u0430\u043f"}
+{"type": "assistant_delta", "text": "\u043e\u043b"}
+{"type": "assistant_delta", "text": "\u043d\u044f\u0435\u0442\u0441\u044f"}
+{"type": "assistant_delta", "text": " \u043f\u043e\u0441\u043b\u0435"}
+{"type": "assistant_delta", "text": " \u043f\u043e\u043a\u0443\u043f\u043a\u0438"}
+{"type": "assistant_delta", "text": "),"}
+{"type": "assistant_delta", "text": " \u043e\u0442\u0437\u044b\u0432\u044b"}
+{"type": "assistant_delta", "text": " (`"}
+{"type": "assistant_delta", "text": "review"}
+{"type": "assistant_delta", "text": "_creation"}
+{"type": "assistant_delta", "text": "_date"}
+{"type": "assistant_delta", "text": "`"}
+{"type": "assistant_delta", "text": " \u043c\u043e\u0436\u0435\u0442"}
+{"type": "assistant_delta", "text": " \u0431\u044b\u0442\u044c"}
+{"type": "assistant_delta", "text": " \u043f\u043e\u0437\u0436\u0435"}
+{"type": "assistant_delta", "text": " seed"}
+{"type": "assistant_delta", "text": "_time"}
+{"type": "assistant_delta", "text": ")"}
+{"type": "assistant_delta", "text": " \u0438"}
+{"type": "assistant_delta", "text": " \u043f\u043b\u0430\u0442\u0435\u0436"}
+{"type": "assistant_delta", "text": "\u0438"}
+{"type": "assistant_delta", "text": " \u0431\u0435\u0437"}
+{"type": "assistant_delta", "text": " \u0444"}
+{"type": "assistant_delta", "text": "\u0438"}
+{"type": "assistant_delta", "text": "\u043b\u044c\u0442"}
+{"type": "assistant_delta", "text": "\u0440\u0430"}
+{"type": "assistant_delta", "text": " \u043f\u043e"}
+{"type": "assistant_delta", "text": " \u0432\u0440\u0435\u043c\u0435\u043d\u0438"}
+{"type": "assistant_delta", "text": "."}
+{"type": "assistant_delta", "text": " \u0417\u0430\u043f"}
+{"type": "assistant_delta", "text": "\u0443\u0441"}
+{"type": "assistant_delta", "text": "\u043a\u0430"}
+{"type": "assistant_delta", "text": "\u044e"}
+{"type": "assistant_delta", "text": " \u0434\u0435\u0442"}
+{"type": "assistant_delta", "text": "\u0435\u043a"}
+{"type": "assistant_delta", "text": "\u0446\u0438\u044e"}
+{"type": "assistant_delta", "text": " \u043f\u043e"}
+{"type": "assistant_delta", "text": " \u043f\u0440\u043e\u0442"}
+{"type": "assistant_delta", "text": "\u043e\u043a\u043e\u043b"}
+{"type": "assistant_delta", "text": "\u0443"}
+{"type": "assistant_delta", "text": " pit"}
+{"type": "assistant_delta", "text": "-re"}
+{"type": "assistant_delta", "text": "pair"}
+{"type": "assistant_delta", "text": "."}
+{"type": "assistant_complete", "text": "\u041a\u043e\u0434 \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043b. \u0424\u0438\u043b\u044c\u0442\u0440\u0430\u0446\u0438\u044f \u0438\u0441\u0442\u043e\u0440\u0438\u0438 \u043f\u043e `ts < seed_time` \u0435\u0441\u0442\u044c, \u043d\u043e \u043f\u043e\u0434\u043e\u0437\u0440\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043c\u0435\u0441\u0442\u0430: `order_delivered_customer_date` (\u0437\u0430\u043f\u043e\u043b\u043d\u044f\u0435\u0442\u0441\u044f \u043f\u043e\u0441\u043b\u0435 \u043f\u043e\u043a\u0443\u043f\u043a\u0438), \u043e\u0442\u0437\u044b\u0432\u044b (`review_creation_date` \u043c\u043e\u0436\u0435\u0442 \u0431\u044b\u0442\u044c \u043f\u043e\u0437\u0436\u0435 seed_time) \u0438 \u043f\u043b\u0430\u0442\u0435\u0436\u0438 \u0431\u0435\u0437 \u0444\u0438\u043b\u044c\u0442\u0440\u0430 \u043f\u043e \u0432\u0440\u0435\u043c\u0435\u043d\u0438. \u0417\u0430\u043f\u0443\u0441\u043a\u0430\u044e \u0434\u0435\u0442\u0435\u043a\u0446\u0438\u044e \u043f\u043e \u043f\u0440\u043e\u0442\u043e\u043a\u043e\u043b\u0443 pit-repair."}
+{"type": "tool_started", "tool_name": "bash", "tool_input": {"command": "which pit-check || ls /home/stas/Documents/GitHub/pitbull 2>/dev/null | head; echo \"P3_OLIST=$P3_OLIST\"; env | grep -i -E 'openrouter|openai|anthropic' || echo \"no llm keys\""}}
+{"type": "tool_completed", "tool_name": "bash", "output": "/home/stas/Documents/GitHub/pitbull/.claude/skills/pit-repair/bin/pit-check\nP3_OLIST=/home/stas/Documents/GitHub/pitbull/PITFALL_olist_data\nno llm keys", "is_error": false}
+{"type": "assistant_complete", "text": ""}
+{"type": "tool_started", "tool_name": "bash", "tool_input": {"command": "pit-check --code get_features.py", "cwd": "/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/b1d4448578a845b6", "timeout_seconds": 600}}
+{"type": "tool_completed", "tool_name": "bash", "output": "[pit-repair] iteration 0: LEAK\n  witness (\u0434\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e \u0447\u0442\u0435\u043d\u0438\u044f \u0431\u0443\u0434\u0443\u0449\u0435\u0433\u043e): avg_review_score, count_reviews, positive_review_ratio\n  canary (\u0447\u0442\u0435\u043d\u0438\u0435 \u043f\u043e\u0437\u0434\u043d\u043e \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0445 \u043f\u043e\u043b\u0435\u0439): avg_review_score, mean_delivery_days, positive_review_ratio\n  dev      2018-01-01: witness=1 canary=1\n  dev      2018-04-01: witness=1 canary=1\n  dev      2018-07-01: witness=1 canary=1\n  held_out 2017-10-01: witness=1 canary=1\n  held_out 2018-02-01: witness=1 canary=1\n  held_out 2018-06-01: witness=1 canary=1\n  next: \u0443\u0442\u0435\u0447\u043a\u0430 \u043d\u0430\u0439\u0434\u0435\u043d\u0430; \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u043e 0/5 \u0438\u0442\u0435\u0440\u0430\u0446\u0438\u0439 \u043f\u043e\u0447\u0438\u043d\u043a\u0438. \u041f\u0435\u0440\u0435\u043f\u0438\u0448\u0438\u0442\u0435 get_features \u043f\u043e \u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u0438 \u043f\u043e\u0447\u0438\u043d\u043a\u0438 \u0438\u0437 SKILL.md \u0438 \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u0435 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443 \u0441\u043d\u043e\u0432\u0430.\n{\"verdict\": \"LEAK\", \"iteration\": 0, \"program_uid\": \"b1d4448578a845b6\", \"witness_columns\": [\"avg_review_score\", \"count_reviews\", \"positive_review_ratio\"], \"canary_columns\": [\"avg_review_score\", \"mean_delivery_days\", \"positive_review_ratio\"], \"per_seed\": [{\"seed\": \"2018-01-01\", \"split\": \"dev\", \"witness\": true, \"canary\": true}, {\"seed\": \"2018-04-01\", \"split\": \"dev\", \"witness\": true, \"canary\": true}, {\"seed\": \"2018-07-01\", \"split\": \"dev\", \"witness\": true, \"canary\": true}, {\"seed\": \"2017-10-01\", \"split\": \"held_out\", \"witness\": true, \"canary\": true}, {\"seed\": \"2018-02-01\", \"split\": \"held_out\", \"witness\": true, \"canary\": true}, {\"seed\": \"2018-06-01\", \"split\": \"held_out\", \"witness\": true, \"canary\": true}], \"status\": \"pending\", \"clean_at\": null, \"state_file\": \"pit_state.json\", \"next_action\": \"\u0443\u0442\u0435\u0447\u043a\u0430 \u043d\u0430\u0439\u0434\u0435\u043d\u0430; \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u043e 0/5 \u0438\u0442\u0435\u0440\u0430\u0446\u0438\u0439 \u043f\u043e\u0447\u0438\u043d\u043a\u0438. \u041f\u0435\u0440\u0435\u043f\u0438\u0448\u0438\u0442\u0435 get_features \u043f\u043e \u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u0438 \u043f\u043e\u0447\u0438\u043d\u043a\u0438 \u0438\u0437 SKILL.md \u0438 \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u0435 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443 \u0441\u043d\u043e\u0432\u0430.\"}", "is_error": true}
+{"type": "assistant_delta", "text": "\u0412"}
+{"type": "assistant_delta", "text": "\u0435\u0440\u0434"}
+{"type": "assistant_delta", "text": "\u0438\u043a"}
+{"type": "assistant_delta", "text": "\u0442"}
+{"type": "assistant_delta", "text": " LE"}
+{"type": "assistant_delta", "text": "AK"}
+{"type": "assistant_delta", "text": " \u043d\u0430"}
+{"type": "assistant_delta", "text": " \u0438"}
+{"type": "assistant_delta", "text": "\u0442\u0435\u0440"}
+{"type": "assistant_delta", "text": "\u0430\u0446\u0438\u0438"}
+{"type": "assistant_delta", "text": " "}
+{"type": "assistant_delta", "text": "0"}
+{"type": "assistant_delta", "text": "."}
+{"type": "assistant_delta", "text": " Witness"}
+{"type": "assistant_delta", "text": " \u043b\u043e\u0432"}
+{"type": "assistant_delta", "text": "\u0438\u0442"}
+{"type": "assistant_delta", "text": " \u043e\u0442\u0437\u044b\u0432\u044b"}
+{"type": "assistant_delta", "text": " ("}
+{"type": "assistant_delta", "text": "\u0447\u0438\u0442"}
+{"type": "assistant_delta", "text": "\u0430\u044e\u0442\u0441\u044f"}
+{"type": "assistant_delta", "text": " \u0438\u0437"}
+{"type": "assistant_delta", "text": " \u0431\u0443\u0434\u0443\u0449\u0435\u0433\u043e"}
+{"type": "assistant_delta", "text": "),"}
+{"type": "assistant_delta", "text": " can"}
+{"type": "assistant_delta", "text": "ary"}
+{"type": "assistant_delta", "text": " \u2014"}
+{"type": "assistant_delta", "text": " \u043e\u0442\u0437\u044b\u0432\u044b"}
+{"type": "assistant_delta", "text": " \u0438"}
+{"type": "assistant_delta", "text": " \u0434"}
+{"type": "assistant_delta", "text": "\u0430\u0442\u0443"}
+{"type": "assistant_delta", "text": " \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438"}
+{"type": "assistant_delta", "text": "."}
+{"type": "assistant_delta", "text": " \u041f\u0435\u0440\u0435\u0434"}
+{"type": "assistant_delta", "text": " \u043f\u043e\u0447"}
+{"type": "assistant_delta", "text": "\u0438\u043d"}
+{"type": "assistant_delta", "text": "\u043a\u043e\u0439"}
+{"type": "assistant_delta", "text": " \u043f\u043e\u0441"}
+{"type": "assistant_delta", "text": "\u043c\u043e\u0442\u0440"}
+{"type": "assistant_delta", "text": "\u044e"}
+{"type": "assistant_delta", "text": " \u043a\u0430\u0440\u0442\u0443"}
+{"type": "assistant_delta", "text": " \u043f\u043e\u0437\u0434"}
+{"type": "assistant_delta", "text": "\u043d\u043e"}
+{"type": "assistant_delta", "text": " \u0434\u043e\u0441\u0442\u0443\u043f"}
+{"type": "assistant_delta", "text": "\u043d\u044b\u0445"}
+{"type": "assistant_delta", "text": " \u043f\u043e\u043b"}
+{"type": "assistant_delta", "text": "\u0435\u0439"}
+{"type": "assistant_delta", "text": " \u0432"}
+{"type": "assistant_delta", "text": " \u0447"}
+{"type": "assistant_delta", "text": "\u0435\u043a"}
+{"type": "assistant_delta", "text": "\u0435\u0440\u0435"}
+{"type": "assistant_delta", "text": ","}
+{"type": "assistant_delta", "text": " \u0447\u0442\u043e\u0431\u044b"}
+{"type": "assistant_delta", "text": " \u0447"}
+{"type": "assistant_delta", "text": "\u0438\u043d"}
+{"type": "assistant_delta", "text": "\u0438\u0442\u044c"}
+{"type": "assistant_delta", "text": " \u043f\u043e\u0434"}
+{"type": "assistant_delta", "text": " \u043d\u0435\u0451"}
+{"type": "assistant_delta", "text": "."}
+{"type": "assistant_complete", "text": "\u0412\u0435\u0440\u0434\u0438\u043a\u0442 LEAK \u043d\u0430 \u0438\u0442\u0435\u0440\u0430\u0446\u0438\u0438 0. Witness \u043b\u043e\u0432\u0438\u0442 \u043e\u0442\u0437\u044b\u0432\u044b (\u0447\u0438\u0442\u0430\u044e\u0442\u0441\u044f \u0438\u0437 \u0431\u0443\u0434\u0443\u0449\u0435\u0433\u043e), canary \u2014 \u043e\u0442\u0437\u044b\u0432\u044b \u0438 \u0434\u0430\u0442\u0443 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438. \u041f\u0435\u0440\u0435\u0434 \u043f\u043e\u0447\u0438\u043d\u043a\u043e\u0439 \u043f\u043e\u0441\u043c\u043e\u0442\u0440\u044e \u043a\u0430\u0440\u0442\u0443 \u043f\u043e\u0437\u0434\u043d\u043e \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0445 \u043f\u043e\u043b\u0435\u0439 \u0432 \u0447\u0435\u043a\u0435\u0440\u0435, \u0447\u0442\u043e\u0431\u044b \u0447\u0438\u043d\u0438\u0442\u044c \u043f\u043e\u0434 \u043d\u0435\u0451."}
+{"type": "tool_started", "tool_name": "bash", "tool_input": {"command": "sed -n 1,200p /home/stas/Documents/GitHub/pitbull/.claude/skills/pit-repair/scripts/pit_check.py"}}
+{"type": "tool_completed", "tool_name": "bash", "output": "#!/usr/bin/env python3\n\"\"\"pit-repair: \u0434\u0438\u0444\u0444\u0435\u0440\u0435\u043d\u0446\u0438\u0430\u043b\u044c\u043d\u0430\u044f \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0444\u0443\u043d\u043a\u0446\u0438\u0438 \u043f\u0440\u0438\u0437\u043d\u0430\u043a\u043e\u0432 \u043d\u0430 \u0447\u0442\u0435\u043d\u0438\u0435 \u0431\u0443\u0434\u0443\u0449\u0435\u0433\u043e.\n\n\u041e\u0434\u0438\u043d \u0432\u044b\u0437\u043e\u0432 = \u043e\u0434\u043d\u0430 \u0438\u0442\u0435\u0440\u0430\u0446\u0438\u044f \u0446\u0438\u043a\u043b\u0430 \u00ab\u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u2192 \u043f\u043e\u0447\u0438\u043d\u043a\u0430 \u2192 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430\u00bb:\n\n    pit_check.py --code get_features.py [--state pit_state.json]\n\n\u0427\u0442\u043e \u0434\u0435\u043b\u0430\u0435\u0442:\n  1. \u041e\u0442\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442\u0441\u044f \u0440\u0430\u0431\u043e\u0442\u0430\u0442\u044c, \u0435\u0441\u043b\u0438 \u0432 \u043e\u043a\u0440\u0443\u0436\u0435\u043d\u0438\u0438 \u0435\u0441\u0442\u044c \u043a\u043b\u044e\u0447 LLM-\u043f\u0440\u043e\u0432\u0430\u0439\u0434\u0435\u0440\u0430\n     (OPENROUTER_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY). \u0421\u043a\u0440\u0438\u043f\u0442\n     \u0438\u0441\u043f\u043e\u043b\u043d\u044f\u0435\u0442 \u043d\u0435\u043f\u0440\u043e\u0432\u0435\u0440\u0435\u043d\u043d\u044b\u0439 \u043a\u043e\u0434, \u0441\u0433\u0435\u043d\u0435\u0440\u0438\u0440\u043e\u0432\u0430\u043d\u043d\u044b\u0439 \u043c\u043e\u0434\u0435\u043b\u044c\u044e; \u0441\u0435\u0442\u0435\u0432\u043e\u0439 \u044d\u0442\u0430\u043f \u0438\n     \u044d\u0442\u0430\u043f \u0438\u0441\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u044f \u0434\u043e\u043b\u0436\u043d\u044b \u0431\u044b\u0442\u044c \u0440\u0430\u0437\u043d\u044b\u043c\u0438 \u043f\u0440\u043e\u0446\u0435\u0441\u0441\u0430\u043c\u0438 (\u0434\u0438\u0441\u0446\u0438\u043f\u043b\u0438\u043d\u0430 A2).\n  2. \u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442 \u043a\u043e\u0434 \u0432 \u043f\u0435\u0441\u043e\u0447\u043d\u0438\u0446\u0435 (AST-\u0444\u0438\u043b\u044c\u0442\u0440 + \u0443\u0440\u0435\u0437\u0430\u043d\u043d\u044b\u0435 builtins,\n     \u043a\u0430\u043a \u0432 pilot/a2_draft_validate.py) \u0438 \u0432\u044b\u0437\u044b\u0432\u0430\u0435\u0442 get_features \u0442\u0440\u0438\u0436\u0434\u044b \u043d\u0430\n     \u043a\u0430\u0436\u0434\u043e\u043c \u043c\u043e\u043c\u0435\u043d\u0442\u0435: \u043f\u043e\u043b\u043d\u0430\u044f \u0431\u0430\u0437\u0430 / \u0443\u0441\u0435\u0447\u0451\u043d\u043d\u0430\u044f \u0431\u0430\u0437\u0430 (oracle.truncate) /\n     \u0431\u0430\u0437\u0430 \u0441 canary-\u0432\u043e\u0437\u043c\u0443\u0449\u0435\u043d\u0438\u0435\u043c (oracle.perturb_canary).\n  3. \u0420\u0430\u0441\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u0435 full-vs-truncated = witness (\u0434\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e \u0447\u0442\u0435\u043d\u0438\u044f \u0441\u0442\u0440\u043e\u043a\n     \u0441 \u0432\u0440\u0435\u043c\u0435\u043d\u0435\u043c > seed_time). \u0420\u0430\u0441\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u0435 full-vs-canary = canary\n     (\u0447\u0442\u0435\u043d\u0438\u0435 \u043f\u043e\u0437\u0434\u043d\u043e \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0445 \u043f\u043e\u043b\u0435\u0439). \u041f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0430 \u00ab\u0447\u0438\u0441\u0442\u0430\u044f\u00bb, \u0442\u043e\u043b\u044c\u043a\u043e \u0435\u0441\u043b\u0438 \u043e\u0431\u0430\n     \u0443\u0440\u043e\u0432\u043d\u044f \u043c\u043e\u043b\u0447\u0430\u0442 \u043d\u0430 \u0432\u0441\u0435\u0445 \u043c\u043e\u043c\u0435\u043d\u0442\u0430\u0445: \u0434\u0438\u0430\u0433\u043d\u043e\u0441\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0445 \u0438 held-out.\n  4. \u041f\u0438\u0448\u0435\u0442 \u0438\u0441\u0442\u043e\u0440\u0438\u044e \u0438\u0442\u0435\u0440\u0430\u0446\u0438\u0439 \u0432 state-\u0444\u0430\u0439\u043b (\u0441\u043e\u0441\u0442\u0430\u0432 \u043f\u043e\u043b\u0435\u0439 \u043a\u0430\u043a \u0432\n     pilot/a2_full_manifest.json: clean, clean_at, history[...].checks).\n\n\u041a\u043e\u0434\u044b \u0432\u044b\u0445\u043e\u0434\u0430: 0 = CLEAN, 1 = LEAK (\u043d\u0443\u0436\u043d\u0430 \u043f\u043e\u0447\u0438\u043d\u043a\u0430), 2 = \u043a\u0430\u043d\u0434\u0438\u0434\u0430\u0442 \u043d\u0435\n\u0438\u0441\u043f\u043e\u043b\u043d\u0438\u043b\u0441\u044f, 3 = \u043e\u0442\u043a\u0430\u0437 \u043f\u043e \u0434\u0438\u0441\u0446\u0438\u043f\u043b\u0438\u043d\u0435 \u0431\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e\u0441\u0442\u0438 / \u043e\u0448\u0438\u0431\u043a\u0430 \u0430\u0440\u0433\u0443\u043c\u0435\u043d\u0442\u043e\u0432,\n4 = \u0431\u044e\u0434\u0436\u0435\u0442 \u0438\u0442\u0435\u0440\u0430\u0446\u0438\u0439 \u0438\u0441\u0447\u0435\u0440\u043f\u0430\u043d (\u0441\u0442\u0430\u0442\u0443\u0441 failed).\n\n\u0417\u0430\u0432\u0438\u0441\u0438\u043c\u043e\u0441\u0442\u0438: prestudy/oracle.py \u0438 prestudy/p3_baseline_run.py \u0438\u0437 \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u044f\nPITBULL (\u043a\u043e\u0440\u0435\u043d\u044c \u0438\u0449\u0435\u0442\u0441\u044f \u043e\u0442 \u0440\u0430\u0441\u043f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u044f \u044d\u0442\u043e\u0433\u043e \u0444\u0430\u0439\u043b\u0430, \u043b\u0438\u0431\u043e --pitbull-root /\nPITBULL_ROOT). \u0414\u0430\u043d\u043d\u044b\u0435 Olist: P3_OLIST \u0438\u043b\u0438 <root>/PITFALL_olist_data.\n\"\"\"\nimport argparse\nimport ast\nimport datetime as _dt\nimport hashlib\nimport json\nimport os\nimport sys\nimport time\nimport types\nfrom pathlib import Path\n\nFORBIDDEN_ENV = (\"OPENROUTER_API_KEY\", \"OPENAI_API_KEY\", \"ANTHROPIC_API_KEY\")\nDEFAULT_DEV_SEEDS = [\"2018-01-01\", \"2018-04-01\", \"2018-07-01\"]\nDEFAULT_HELD_OUT_SEEDS = [\"2017-10-01\", \"2018-02-01\", \"2018-06-01\"]\nDEFAULT_MAX_ITERATIONS = 5\nN_ENTITIES = 15\n\n# \u0422\u043e\u0442 \u0436\u0435 AST-\u0444\u0438\u043b\u044c\u0442\u0440, \u0447\u0442\u043e \u0432 pilot/a2_draft_validate.py (A2/A4).\nALLOWED_IMPORTS = {\"pandas\", \"numpy\"}\nBANNED_NAMES = {\"open\", \"exec\", \"eval\", \"compile\", \"input\", \"breakpoint\", \"help\", \"globals\",\n                \"locals\", \"vars\", \"getattr\", \"setattr\", \"delattr\", \"__import__\"}\nBANNED_METHODS = {\n    \"read_csv\", \"read_json\", \"read_parquet\", \"read_pickle\", \"read_excel\", \"read_sql\",\n    \"read_fwf\", \"read_feather\", \"read_hdf\", \"read_html\", \"read_xml\", \"ExcelFile\", \"HDFStore\",\n    \"to_csv\", \"to_json\", \"to_parquet\", \"to_pickle\", \"to_excel\", \"to_sql\", \"to_feather\", \"to_hdf\",\n    \"load\", \"save\", \"loadtxt\", \"savetxt\", \"memmap\", \"dump\", \"dumps\",\n    \"system\", \"popen\", \"spawn\", \"fork\", \"connect\", \"request\", \"urlopen\",\n}\n\n\ndef refuse_if_keys_in_env():\n    present = [k for k in FORBIDDEN_ENV if os.environ.get(k)]\n    if present:\n        sys.stderr.write(\n            \"pit_check: \u043e\u0442\u043a\u0430\u0437. \u0412 \u043e\u043a\u0440\u0443\u0436\u0435\u043d\u0438\u0438 \u0435\u0441\u0442\u044c \u043a\u043b\u044e\u0447 \u043f\u0440\u043e\u0432\u0430\u0439\u0434\u0435\u0440\u0430: \"\n            + \", \".join(present)\n            + \". \u042d\u0442\u043e\u0442 \u043f\u0440\u043e\u0446\u0435\u0441\u0441 \u0438\u0441\u043f\u043e\u043b\u043d\u044f\u0435\u0442 \u0441\u0433\u0435\u043d\u0435\u0440\u0438\u0440\u043e\u0432\u0430\u043d\u043d\u044b\u0439 \u043a\u043e\u0434; \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u0435 \u0435\u0433\u043e \u0432 \u043e\u043a\u0440\u0443\u0436\u0435\u043d\u0438\u0438 \"\n              \"\u0431\u0435\u0437 \u043a\u043b\u044e\u0447\u0435\u0439 (unset ...), \u043a\u0430\u043a \u0442\u0440\u0435\u0431\u0443\u0435\u0442 \u0434\u0438\u0441\u0446\u0438\u043f\u043b\u0438\u043d\u0430 A2.\\n\")\n        sys.exit(3)\n\n\ndef find_root(explicit):\n    candidates = []\n    if explicit:\n        candidates.append(Path(explicit))\n    if os.environ.get(\"PITBULL_ROOT\"):\n        candidates.append(Path(os.environ[\"PITBULL_ROOT\"]))\n    here = Path(__file__).resolve()\n    candidates.extend(here.parents)\n    for c in candidates:\n        if (c / \"prestudy\" / \"oracle.py\").exists() and (c / \"prestudy\" / \"p3_baseline_run.py\").exists():\n            return c.resolve()\n    sys.stderr.write(\"pit_check: \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d \u043a\u043e\u0440\u0435\u043d\u044c PITBULL (prestudy/oracle.py); \"\n                     \"\u0443\u043a\u0430\u0436\u0438\u0442\u0435 --pitbull-root \u0438\u043b\u0438 PITBULL_ROOT.\\n\")\n    sys.exit(3)\n\n\ndef load_harness(root):\n    # p3_baseline_run \u0438\u043c\u043f\u043e\u0440\u0442\u0438\u0440\u0443\u0435\u0442 litellm \u0440\u0430\u0434\u0438 \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u0438; \u0437\u0434\u0435\u0441\u044c \u0441\u0435\u0442\u044c \u043d\u0435 \u043d\u0443\u0436\u043d\u0430,\n    # \u0438 \u0432 \u043e\u043a\u0440\u0443\u0436\u0435\u043d\u0438\u0438 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438 \u043a\u043b\u0438\u0435\u043d\u0442\u0430 LLM \u0431\u044b\u0442\u044c \u043d\u0435 \u0434\u043e\u043b\u0436\u043d\u043e. \u041f\u043e\u0434\u043c\u0435\u043d\u044f\u0435\u043c \u043c\u043e\u0434\u0443\u043b\u044c \u043f\u0443\u0441\u0442\u044b\u0448\u043a\u043e\u0439.\n    sys.modules.setdefault(\"litellm\", types.ModuleType(\"litellm\"))\n    sys.path.insert(0, str(root / \"prestudy\"))\n    import p3_baseline_run as H  # noqa: E402\n    from oracle import frames_equal, perturb_canary, truncate  # noqa: E402\n    return H, frames_equal, perturb_canary, truncate\n\n\ndef inspect_code(code):\n    tree = ast.parse(code)\n    problems = []\n    for node in ast.walk(tree):\n        if isinstance(node, ast.Import):\n            for alias in node.names:\n                if alias.name.split(\".\")[0] not in ALLOWED_IMPORTS:\n                    problems.append(f\"import {alias.name}\")\n        elif isinstance(node, ast.ImportFrom):\n            if not node.module or node.module.split(\".\")[0] not in ALLOWED_IMPORTS:\n                problems.append(f\"from {node.module} import\")\n        elif isinstance(node, ast.Call):\n            if isinstance(node.func, ast.Name) and node.func.id in BANNED_NAMES:\n                problems.append(f\"call {node.func.id}\")\n            if isinstance(node.func, ast.Attribute) and node.func.attr in BANNED_METHODS:\n                problems.append(f\"method {node.func.attr}\")\n        elif isinstance(node, ast.Attribute) and node.attr.startswith(\"__\"):\n            problems.append(f\"dunder attribute {node.attr}\")\n    return sorted(set(problems))\n\n\ndef safe_import(name, globals=None, locals=None, fromlist=(), level=0):\n    if level or name.split(\".\")[0] not in ALLOWED_IMPORTS:\n        raise ImportError(f\"import blocked: {name}\")\n    return __import__(name, globals, locals, fromlist, level)\n\n\ndef load_program(code, pd, np):\n    problems = inspect_code(code)\n    if problems:\n        raise ValueError(\"unsafe code: \" + \", \".join(problems))\n    allowed = {\n        \"__import__\": safe_import, \"len\": len, \"range\": range, \"min\": min, \"max\": max,\n        \"sum\": sum, \"abs\": abs, \"round\": round, \"sorted\": sorted, \"enumerate\": enumerate,\n        \"zip\": zip, \"list\": list, \"dict\": dict, \"set\": set, \"tuple\": tuple, \"float\": float,\n        \"int\": int, \"str\": str, \"bool\": bool, \"any\": any, \"all\": all, \"isinstance\": isinstance,\n        \"Exception\": Exception, \"ValueError\": ValueError, \"TypeError\": TypeError,\n    }\n    namespace = {\"pd\": pd, \"np\": np, \"__builtins__\": allowed}\n    exec(compile(code, \"<candidate>\", \"exec\"), namespace)\n    fn = namespace.get(\"get_features\")\n    if not callable(fn):\n        raise ValueError(\"get_features missing\")\n    return fn\n\n\ndef make_checker(H, frames_equal, perturb_canary, truncate, timeout):\n    import numpy as np\n    import pandas as pd\n\n    def entities(seed):\n        _, products, _ = H.labels(seed)\n        return np.random.RandomState(0).choice(products, size=N_ENTITIES, replace=False)\n\n    def diff_columns(left, right):\n        if left is None or right is None or not hasattr(left, \"shape\") or not hasattr(right, \"shape\"):\n            return [\"__shape__\"] if left is not right else []\n        if left.shape != right.shape or list(left.columns) != list(right.columns):\n            return [\"__shape__\"]\n        return [col for col in left.columns if not frames_equal(left[[col]], right[[col]])]\n\n    def check(fn, seed):\n        t = pd.Timestamp(seed)\n        ids = entities(seed)\n        full = H._call_with_timeout(fn, H.DB, ids, t, timeout=timeout)\n        trunc = H._call_with_timeout(fn, truncate(H.DB, t), ids, t, timeout=timeout)\n        canary = H._call_with_timeout(fn, perturb_canary(H.DB, t), ids, t, timeout=timeout)\n        witness_cols = diff_columns(full, trunc)\n        canary_cols = diff_columns(full, canary)\n        return {\"seed\": seed, \"witness\": bool(witness_cols), \"canary\": bool(canary_cols),\n                \"witness_columns\": witness_cols, \"canary_columns\": canary_cols,\n                \"n_columns\": len(full.columns) if hasattr(full, \"columns\") else None}\n\n    return check\n\n\ndef sha(text):\n    return hashlib.sha256(text.encode()).hexdigest()\n\n\ndef load_state(path, code, args):\n    if path.exists():\n        return json.loads(path.read_text(encoding=\"utf-8\"))\n    return {\n        \"tool\": \"pit-repair\", \"program_uid\": sha(code)[:16], \"source_sha256\": sha(code),\n        \"source_code\": code, \"max_iterations\": args.max_iterations,\n        \"dev_seeds\": args.dev_seeds, \"held_out_seeds\": args.held_out_seeds,\n        \"status\": \"pending\", \"clean_at\": None, \"history\": [],\n    }\n\n\ndef main():\n    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)\n    parser.add_argument(\"--code\", required=True, help=\"\u0444\u0430\u0439\u043b \u0441 get_features (\u043a\u0430\u043d\u0434\u0438\u0434\u0430\u0442)\")\n    parser.add_argument(\"--state\", default=None, help=\"state-\u0444\u0430\u0439\u043b \u0438\u0441\u0442\u043e\u0440\u0438\u0438 (\u043f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e pit_state.json \u0440\u044f\u0434\u043e\u043c \u0441 \u043a\u043e\u0434\u043e\u043c)\")\n    parser.add_argument(\"--dev-seeds\", default=\",\".join(DEFAULT_DEV_SEEDS))\n    parser.add_argument(\"--held-out-seeds\", default=\",\".join(DEFAULT_HELD_OUT_SEEDS))\n    parser.add_argument(\"--max-iterations\", type=int, default=DEFAULT_MAX_ITERATIONS)\n    parser.add_argument(\"--timeout\", type=int, default=30, help=\"\u0441\u0435\u043a\u0443\u043d\u0434 \u043d\u0430 \u043e\u0434\u0438\u043d \u0432\u044b\u0437\u043e\u0432 get_features\")\n    parser.add_argument(\"--pitbull-root\", default=None)\n    parser.add_argument(\"--json\", action=\"store_true\", help=\"\u043f\u0435\u0447\u0430\u0442\u0430\u0442\u044c \u0442\u043e\u043b\u044c\u043a\u043e JSON-\u0438\u0442\u043e\u0433\")\n    args = parser.parse_args()", "is_error": false}
+{"type": "assistant_complete", "text": ""}
+{"type": "tool_started", "tool_name": "bash", "tool_input": {"command": "grep -n -A40 'def perturb_canary\\|def truncate\\|LATE\\|late_fields\\|CANARY' /home/stas/Documents/GitHub/pitbull/prestudy/oracle.py | head -120"}}
+{"type": "tool_completed", "tool_name": "bash", "output": "24:def truncate(db: dict, seed_time, time_cols=TIME_COLS) -> dict:\n25-    \"\"\"\u041e\u0441\u0442\u0430\u0432\u0438\u0442\u044c \u0442\u043e\u043b\u044c\u043a\u043e \u0441\u0442\u0440\u043e\u043a\u0438 \u0441 time <= seed_time. \u0421\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a\u0438 \u043d\u0435 \u0442\u0440\u043e\u0433\u0430\u0435\u043c.\"\"\"\n26-    seed_time = pd.Timestamp(seed_time)\n27-    out = {}\n28-    for name, df in db.items():\n29-        tc = time_cols.get(name)\n30-        if tc is None or tc not in df.columns:\n31-            out[name] = df\n32-        else:\n33-            out[name] = df[df[tc] <= seed_time]\n34-    return out\n35-\n36-\n37-def frames_equal(a: pd.DataFrame, b: pd.DataFrame, atol=1e-9, nan_equal=True) -> bool:\n38-    # \u0412\u0410\u0416\u041d\u041e (\u043d\u0430\u0439\u0434\u0435\u043d\u043e R3 PRESTUDY2_runbook.md, \u043e\u0442\u0440\u0438\u0446\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0439 \u043a\u043e\u043d\u0442\u0440\u043e\u043b\u044c): \u0431\u044b\u043b\u043e\n39-    # `return False` \u0431\u0435\u0437\u0443\u0441\u043b\u043e\u0432\u043d\u043e \u043f\u0440\u0438 \u043b\u044e\u0431\u043e\u043c None -- \u0437\u043d\u0430\u0447\u0438\u0442 \u0444\u0443\u043d\u043a\u0446\u0438\u044f, \u043a\u043e\u0442\u043e\u0440\u0430\u044f\n40-    # \u0434\u0435\u0442\u0435\u0440\u043c\u0438\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u043d\u043e \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u0432\u043e\u0437\u0432\u0440\u0430\u0449\u0430\u0435\u0442 (\u043d\u0430\u043f\u0440\u0438\u043c\u0435\u0440, \u0437\u0430\u0431\u044b\u043b\u0430 return), \u0434\u0430\u0432\u0430\u043b\u0430\n41-    # False on None even in identical calls \u0438 \u0432\u0441\u0435\u0433\u0434\u0430 \u043f\u043e\u043b\u0443\u0447\u0430\u043b\u0430 LEAK, \u0445\u043e\u0442\u044f \u043f\u043e\u043b\u043d\u044b\u0439\n42-    # \u0438 \u0443\u0441\u0435\u0447\u0451\u043d\u043d\u044b\u0439 \u0432\u044b\u0437\u043e\u0432 \u0444\u0438\u0437\u0438\u0447\u0435\u0441\u043a\u0438 \u043d\u0435 \u043c\u043e\u0433\u043b\u0438 \u0440\u0430\u0437\u043e\u0439\u0442\u0438\u0441\u044c. a is b \u043a\u043e\u0440\u0440\u0435\u043a\u0442\u043d\u043e \u0443\u0440\u0430\u0432\u043d\u0438\u0432\u0430\u0435\u0442\n43-    # \u0434\u0432\u0430 None \u043c\u0435\u0436\u0434\u0443 \u0441\u043e\u0431\u043e\u0439, \u043e\u0441\u0442\u0430\u0432\u043b\u044f\u044f \u043e\u0434\u0438\u043d\u043e\u0447\u043d\u044b\u0439 None \u043a\u0430\u043a \u0440\u0430\u0441\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u0435 (\u0437\u0430\u043a\u043e\u043d\u043d\u044b\u0439 LEAK/\u043e\u0448\u0438\u0431\u043a\u0430).\n44-    if a is None or b is None:\n45-        return a is b\n46-    if a.shape != b.shape:\n47-        return False\n48-    if list(a.columns) != list(b.columns):\n49-        return False\n50-    a = a.sort_index(axis=0)\n51-    b = b.reindex(a.index)\n52-    for c in a.columns:\n53-        x, y = a[c], b[c]\n54-        if pd.api.types.is_numeric_dtype(x) and pd.api.types.is_numeric_dtype(y):\n55-            xv, yv = x.to_numpy(dtype=\"float64\"), y.to_numpy(dtype=\"float64\")\n56-            both_nan = np.isnan(xv) & np.isnan(yv)\n57-            if not nan_equal and both_nan.any():\n58-                return False\n59-            diff = np.abs(np.where(both_nan, 0.0, xv - yv))\n60-            if not np.all(np.where(both_nan, True, diff <= atol)):\n61-                return False\n62-        else:\n63-            xs, ys = x.astype(object).where(x.notna(), None), y.astype(object).where(y.notna(), None)\n64-            if not xs.equals(ys):\n--\n120:CANARY_NUM_SHIFT = 7919.0            # \u0431\u043e\u043b\u044c\u0448\u043e\u0435 \u043f\u0440\u043e\u0441\u0442\u043e\u0435: \u0441\u0434\u0432\u0438\u0433 \u0437\u0430\u043c\u0435\u0442\u0435\u043d \u043b\u044e\u0431\u043e\u0439 \u0430\u0433\u0440\u0435\u0433\u0430\u0446\u0438\u0435\u0439\n121:CANARY_CAT_SENTINEL = \"__canary_sentinel__\"\n122:CANARY_DATE_MARGIN_DAYS = 3650       # 10 \u043b\u0435\u0442 \u0437\u0430 \u0433\u043e\u0440\u0438\u0437\u043e\u043d\u0442\u043e\u043c \u2014 \u043d\u0435 \u0441\u043f\u0443\u0442\u0430\u0442\u044c \u0441 \u0440\u0435\u0430\u043b\u044c\u043d\u043e\u0439 \u0434\u0430\u0442\u043e\u0439\n123-\n124-\n125-def _data_horizon(db, time_cols=TIME_COLS, self_avail_cols=None):\n126-    \"\"\"\u041c\u0430\u043a\u0441\u0438\u043c\u0430\u043b\u044c\u043d\u0430\u044f \u0434\u0430\u0442\u0430, \u0440\u0435\u0430\u043b\u044c\u043d\u043e \u0432\u0441\u0442\u0440\u0435\u0447\u0435\u043d\u043d\u0430\u044f \u0432 \u0434\u0430\u043d\u043d\u044b\u0445 (\u043f\u043e time_cols \u0438, \u0435\u0441\u043b\u0438\n127-    \u0437\u0430\u0434\u0430\u043d\u044b, \u043f\u043e self-availability \u043a\u0430\u043d\u0430\u043b\u0430\u043c) \u2014 \u0442\u043e\u0447\u043a\u0430 \u043e\u0442\u0441\u0447\u0451\u0442\u0430 \u0434\u043b\u044f \u0441\u0434\u0432\u0438\u0433\u0430 \u0434\u0430\u0442.\"\"\"\n128-    self_avail_cols = self_avail_cols or {}\n129-    stamps = []\n130-    for name, df in db.items():\n131-        tc = time_cols.get(name)\n132-        if tc is not None and tc in df.columns:\n133-            m = df[tc].max()\n134-            if pd.notna(m):\n135-                stamps.append(pd.Timestamp(m))\n136-        for c in self_avail_cols.get(name, []):\n137-            if c in df.columns:\n138-                m = df[c].max()\n139-                if pd.notna(m):\n140-                    stamps.append(pd.Timestamp(m))\n141-    if not stamps:\n142-        raise ValueError(\"\u043d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u043f\u0440\u0435\u0434\u0435\u043b\u0438\u0442\u044c \u0433\u043e\u0440\u0438\u0437\u043e\u043d\u0442 \u0434\u0430\u043d\u043d\u044b\u0445: \u043d\u0435\u0442 \u043d\u0438 \u043e\u0434\u043d\u043e\u0439 \u043d\u0435\u043f\u0443\u0441\u0442\u043e\u0439 \u0432\u0440\u0435\u043c\u0435\u043d\u043d\u043e\u0439 \u043a\u043e\u043b\u043e\u043d\u043a\u0438\")\n143-    return max(stamps)\n144-\n145-\n146-def _check_sentinel_safe(db, sentinel, protected_by_table, key_hints=KEY_HINTS):\n147-    \"\"\"\u041e\u0442\u043a\u0430\u0437 \u0433\u0440\u043e\u043c\u043a\u043e, \u0430 \u043d\u0435 \u043c\u043e\u043b\u0447\u0430, \u0435\u0441\u043b\u0438 sentinel \u0443\u0436\u0435 \u0432\u0441\u0442\u0440\u0435\u0447\u0430\u0435\u0442\u0441\u044f \u0432 \u0434\u0430\u043d\u043d\u044b\u0445 \u043a\u0430\u043a\n148-    \u043d\u0430\u0441\u0442\u043e\u044f\u0449\u0435\u0435 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u2014 \u0438\u043d\u0430\u0447\u0435 canary \u043f\u0435\u0440\u0435\u0441\u0442\u0430\u0451\u0442 \u0431\u044b\u0442\u044c \u043e\u0442\u043b\u0438\u0447\u0438\u043c\u044b\u043c \u043e\u0442 \u0440\u0435\u0430\u043b\u044c\u043d\u043e\u0433\u043e.\"\"\"\n149-    for name, df in db.items():\n150-        protected = protected_by_table.get(name, set())\n151-        for c in df.columns:\n152-            if c in protected or any(h in c.lower() for h in key_hints):\n153-                continue\n154-            is_textlike = pd.api.types.is_object_dtype(df[c]) or isinstance(df[c].dtype, pd.CategoricalDtype)\n155-            if is_textlike and (df[c] == sentinel).any():\n156-                raise ValueError(\n157:                    f\"CANARY_CAT_SENTINEL {sentinel!r} \u0443\u0436\u0435 \u0432\u0441\u0442\u0440\u0435\u0447\u0430\u0435\u0442\u0441\u044f \u043a\u0430\u043a \u043d\u0430\u0441\u0442\u043e\u044f\u0449\u0435\u0435 \"\n158-                    f\"\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u0432 {name}.{c} \u2014 \u043d\u0443\u0436\u0435\u043d \u0434\u0440\u0443\u0433\u043e\u0439 sentinel\"\n159-                )\n160-\n161-\n162:def perturb_canary(db: dict, seed_time, time_cols=TIME_COLS,\n163-                    self_avail_cols=SELF_AVAILABILITY_COLS,\n164-                    gatekeeper_cols=GATEKEEPER_COLS,\n165-                    key_hints=KEY_HINTS,\n166:                    num_shift=CANARY_NUM_SHIFT,\n167:                    cat_sentinel=CANARY_CAT_SENTINEL,\n168:                    date_margin_days=CANARY_DATE_MARGIN_DAYS) -> dict:\n169-    \"\"\"\u0422\u0438\u043f\u043e\u0432\u043e\u0435 canary-\u0432\u043e\u0437\u043c\u0443\u0449\u0435\u043d\u0438\u0435 (harness-v1). \u0421\u043c. \u0431\u043b\u043e\u043a \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0435\u0432 \u0432\u044b\u0448\u0435 \u0437\u0430\n170-    \u0440\u0430\u0437\u0431\u043e\u0440\u043e\u043c \u0442\u0440\u0451\u0445 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0439 \u043a\u0430\u043d\u0430\u043b\u043e\u0432.\"\"\"\n171-    seed_time = pd.Timestamp(seed_time)\n172-    horizon = _data_horizon(db, time_cols, self_avail_cols)\n173-    date_target = horizon + pd.Timedelta(days=date_margin_days)\n174-\n175-    protected_by_table = {\n176-        name: {time_cols.get(name)} | set(gatekeeper_cols.get(name, []))\n177-        for name in db\n178-    }\n179-    _check_sentinel_safe(db, cat_sentinel, protected_by_table, key_hints)\n180-\n181-    out = {}\n182-    for name, df in db.items():\n183-        tc = time_cols.get(name)\n184-        df2 = df.copy()\n185-        protected = protected_by_table[name]\n186-        self_avail = set(self_avail_cols.get(name, []))\n187-\n188-        future_mask = (df2[tc] > seed_time) if (tc is not None and tc in df2.columns) \\\n189-            else pd.Series(False, index=df2.index)\n190-\n191-        for c in df2.columns:\n192-            if c in protected:\n193-                continue\n194-            if c in self_avail:\n195-                not_avail = df2[c].isna() | (df2[c] > seed_time)\n196-                if not_avail.any():\n197-                    df2.loc[not_avail, c] = date_target", "is_error": false}
+{"type": "assistant_complete", "text": ""}
+{"type": "tool_started", "tool_name": "bash", "tool_input": {"command": "sed -n 1,24p /home/stas/Documents/GitHub/pitbull/prestudy/oracle.py; grep -n -B2 -A20 'SELF_AVAILABILITY_COLS\\s*=' /home/stas/Documents/GitHub/pitbull/prestudy/oracle.py | head -60"}}
+{"type": "tool_completed", "tool_name": "bash", "output": "\"\"\"\n\u041e\u0440\u0430\u043a\u0443\u043b \u043a\u043e\u0440\u0440\u0435\u043a\u0442\u043d\u043e\u0441\u0442\u0438 \u043f\u043e \u0432\u0440\u0435\u043c\u0435\u043d\u0438 \u2014 \u0434\u0438\u0444\u0444\u0435\u0440\u0435\u043d\u0446\u0438\u0430\u043b\u044c\u043d\u043e\u0435 \u0438\u0441\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u0435 (\u00a74 \u0448\u0430\u0433 1 runbook).\n\n\u0421\u0432\u043e\u0439\u0441\u0442\u0432\u043e: \u0440\u0430\u0441\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u0435 \u0432\u044b\u0445\u043e\u0434\u043e\u0432 \u043d\u0430 \u043f\u043e\u043b\u043d\u043e\u0439 \u0438 \u0443\u0441\u0435\u0447\u0451\u043d\u043d\u043e\u0439 \u0431\u0430\u0437\u0435 \u0435\u0441\u0442\u044c \u0414\u041e\u041a\u0410\u0417\u0410\u0422\u0415\u041b\u042c\u0421\u0422\u0412\u041e \u0442\u043e\u0433\u043e,\n\u0447\u0442\u043e \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0430 \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043b\u0430 \u0441\u0442\u0440\u043e\u043a\u0443 \u0441 \u0432\u0440\u0435\u043c\u0435\u043d\u0435\u043c > \u043c\u043e\u043c\u0435\u043d\u0442\u0430 \u043f\u0440\u0435\u0434\u0441\u043a\u0430\u0437\u0430\u043d\u0438\u044f. \u041d\u0435 \u043f\u043e\u0434\u043e\u0437\u0440\u0435\u043d\u0438\u0435.\n\n\u041e\u0431\u0440\u0430\u0442\u043d\u043e\u0435 \u043d\u0435\u0432\u0435\u0440\u043d\u043e: \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0435 \u043d\u0435 \u0434\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u043a\u043e\u0440\u0440\u0435\u043a\u0442\u043d\u043e\u0441\u0442\u044c (\u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0430 \u043c\u043e\u0433\u043b\u0430 \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u0442\u044c\n\u0431\u0443\u0434\u0443\u0449\u0435\u0435 \u0438 \u043d\u0435 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c \u0435\u0433\u043e). \u042d\u0442\u043e \u043e\u0441\u043e\u0437\u043d\u0430\u043d\u043d\u0430\u044f \u043e\u0434\u043d\u043e\u0441\u0442\u043e\u0440\u043e\u043d\u043d\u043e\u0441\u0442\u044c, \u043e\u043d\u0430 \u043d\u0430\u043c \u0438 \u043d\u0443\u0436\u043d\u0430:\n\u0432\u0441\u0435 \u0432\u0435\u0440\u0434\u0438\u043a\u0442\u044b \u00ab\u043d\u0430\u0440\u0443\u0448\u0435\u043d\u0438\u0435\u00bb \u2014 \u0436\u0435\u043b\u0435\u0437\u043d\u044b\u0435.\n\"\"\"\nimport numpy as np\nimport pandas as pd\n\n# \u043a\u0430\u043a\u0438\u0435 \u0442\u0430\u0431\u043b\u0438\u0446\u044b Olist \u043f\u043e \u043a\u0430\u043a\u043e\u0439 \u043a\u043e\u043b\u043e\u043d\u043a\u0435 \u0436\u0438\u0432\u0443\u0442 \u0432\u043e \u0432\u0440\u0435\u043c\u0435\u043d\u0438\nTIME_COLS = {\n    \"orders\": \"order_purchase_timestamp\",\n    \"order_items\": \"ts\",\n    \"reviews\": \"review_creation_date\",\n    \"payments\": \"ts\",\n    # sellers / products / customers \u2014 \u0441\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a\u0438 \u0431\u0435\u0437 \u0432\u0440\u0435\u043c\u0435\u043d\u0438\n}\n\n\ndef truncate(db: dict, seed_time, time_cols=TIME_COLS) -> dict:\n107-#      \u043d\u0435 \u043f\u043e \u043d\u0435\u0434\u043e\u0441\u043c\u043e\u0442\u0440\u0443); \u0435\u0441\u043b\u0438 \u043d\u0430\u0439\u0434\u0443\u0442\u0441\u044f \u2014 \u043f\u0443\u0431\u043b\u0438\u043a\u0443\u044e\u0442\u0441\u044f \u043a\u0430\u043a \u0438\u0437\u0432\u0435\u0441\u0442\u043d\u043e\u0435 \u0441\u043b\u0435\u043f\u043e\u0435 \u043f\u044f\u0442\u043d\u043e.\n108-\n109:SELF_AVAILABILITY_COLS = {\n110-    \"orders\": [\"order_approved_at\", \"order_delivered_carrier_date\", \"order_delivered_customer_date\"],\n111-    \"reviews\": [\"review_answer_timestamp\"],\n112-}\n113-\n114-GATEKEEPER_COLS: dict = {}\n115-\n116-# \u041f\u043e\u0434\u0441\u0442\u0440\u043e\u043a\u0438, \u043f\u043e \u043a\u043e\u0442\u043e\u0440\u044b\u043c \u043a\u0430\u043d\u0430\u043b \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u043a\u043b\u044e\u0447\u043e\u043c/\u0438\u0434\u0435\u043d\u0442\u0438\u0444\u0438\u043a\u0430\u0442\u043e\u0440\u043e\u043c \u0438 \u043d\u0435 \u0432\u043e\u0437\u043c\u0443\u0449\u0430\u0435\u0442\u0441\u044f\n117-# \u043d\u0438\u043a\u043e\u0433\u0434\u0430 (\u043f\u0435\u0440\u0435\u043d\u0435\u0441\u0435\u043d\u043e \u0438\u0437 pilot/pilot_bc_density_canary.py, \u0433\u0434\u0435 \u0440\u0430\u043d\u044c\u0448\u0435 \u0436\u0438\u043b\u043e).\n118-KEY_HINTS = (\"_id\", \"id\", \"zip\", \"prefix\", \"order_item\")\n119-\n120-CANARY_NUM_SHIFT = 7919.0            # \u0431\u043e\u043b\u044c\u0448\u043e\u0435 \u043f\u0440\u043e\u0441\u0442\u043e\u0435: \u0441\u0434\u0432\u0438\u0433 \u0437\u0430\u043c\u0435\u0442\u0435\u043d \u043b\u044e\u0431\u043e\u0439 \u0430\u0433\u0440\u0435\u0433\u0430\u0446\u0438\u0435\u0439\n121-CANARY_CAT_SENTINEL = \"__canary_sentinel__\"\n122-CANARY_DATE_MARGIN_DAYS = 3650       # 10 \u043b\u0435\u0442 \u0437\u0430 \u0433\u043e\u0440\u0438\u0437\u043e\u043d\u0442\u043e\u043c \u2014 \u043d\u0435 \u0441\u043f\u0443\u0442\u0430\u0442\u044c \u0441 \u0440\u0435\u0430\u043b\u044c\u043d\u043e\u0439 \u0434\u0430\u0442\u043e\u0439\n123-\n124-\n125-def _data_horizon(db, time_cols=TIME_COLS, self_avail_cols=None):\n126-    \"\"\"\u041c\u0430\u043a\u0441\u0438\u043c\u0430\u043b\u044c\u043d\u0430\u044f \u0434\u0430\u0442\u0430, \u0440\u0435\u0430\u043b\u044c\u043d\u043e \u0432\u0441\u0442\u0440\u0435\u0447\u0435\u043d\u043d\u0430\u044f \u0432 \u0434\u0430\u043d\u043d\u044b\u0445 (\u043f\u043e time_cols \u0438, \u0435\u0441\u043b\u0438\n127-    \u0437\u0430\u0434\u0430\u043d\u044b, \u043f\u043e self-availability \u043a\u0430\u043d\u0430\u043b\u0430\u043c) \u2014 \u0442\u043e\u0447\u043a\u0430 \u043e\u0442\u0441\u0447\u0451\u0442\u0430 \u0434\u043b\u044f \u0441\u0434\u0432\u0438\u0433\u0430 \u0434\u0430\u0442.\"\"\"\n128-    self_avail_cols = self_avail_cols or {}\n129-    stamps = []", "is_error": false}
+{"type": "assistant_delta", "text": "\u041a\u0430\u0440"}
+{"type": "assistant_delta", "text": "\u0442\u0430"}
+{"type": "assistant_delta", "text": " \u0447"}
+{"type": "assistant_delta", "text": "\u0435\u043a"}
+{"type": "assistant_delta", "text": "\u0435\u0440\u0430"}
+{"type": "assistant_delta", "text": " \u044f\u0441"}
+{"type": "assistant_delta", "text": "\u043d\u0430"}
+{"type": "assistant_delta", "text": ":"}
+{"type": "assistant_delta", "text": " \u0442\u0430\u0431\u043b\u0438\u0446"}
+{"type": "assistant_delta", "text": "\u044b"}
+{"type": "assistant_delta", "text": " \u0436\u0438\u0432\u0443\u0442"}
+{"type": "assistant_delta", "text": " \u043f\u043e"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "order"}
+{"type": "assistant_delta", "text": "_purchase"}
+{"type": "assistant_delta", "text": "_timestamp"}
+{"type": "assistant_delta", "text": "`"}
+{"type": "assistant_delta", "text": " /"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "ts"}
+{"type": "assistant_delta", "text": "`"}
+{"type": "assistant_delta", "text": " /"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "review"}
+{"type": "assistant_delta", "text": "_creation"}
+{"type": "assistant_delta", "text": "_date"}
+{"type": "assistant_delta", "text": "`,"}
+{"type": "assistant_delta", "text": " \u0430"}
+{"type": "assistant_delta", "text": " \u0434"}
+{"type": "assistant_delta", "text": "\u0430\u0442\u044b"}
+{"type": "assistant_delta", "text": " \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438"}
+{"type": "assistant_delta", "text": " \u0438"}
+{"type": "assistant_delta", "text": " \u043e\u0434\u043e\u0431"}
+{"type": "assistant_delta", "text": "\u0440\u0435\u043d\u0438\u044f"}
+{"type": "assistant_delta", "text": " \u0434\u043e\u0441\u0442\u0443\u043f"}
+{"type": "assistant_delta", "text": "\u044b"}
+{"type": "assistant_delta", "text": " \u0442\u043e\u043b\u044c\u043a\u043e"}
+{"type": "assistant_delta", "text": " \u0435\u0441\u043b\u0438"}
+{"type": "assistant_delta", "text": " \u0438\u0445"}
+{"type": "assistant_delta", "text": " \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435"}
+{"type": "assistant_delta", "text": " \u0443\u0436\u0435"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "<="}
+{"type": "assistant_delta", "text": " seed"}
+{"type": "assistant_delta", "text": "_time"}
+{"type": "assistant_delta", "text": "`."}
+{"type": "assistant_delta", "text": " \u0413"}
+{"type": "assistant_delta", "text": "\u043b\u044f"}
+{"type": "assistant_delta", "text": "\u043d\u0443"}
+{"type": "assistant_delta", "text": " \u0445"}
+{"type": "assistant_delta", "text": "\u0432\u043e\u0441\u0442"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "pert"}
+{"type": "assistant_delta", "text": "urb"}
+{"type": "assistant_delta", "text": "_can"}
+{"type": "assistant_delta", "text": "ary"}
+{"type": "assistant_delta", "text": "`"}
+{"type": "assistant_delta", "text": " \u0434\u043b\u044f"}
+{"type": "assistant_delta", "text": " \u043f\u043e\u043b"}
+{"type": "assistant_delta", "text": "\u043d"}
+{"type": "assistant_delta", "text": "\u043e\u0442\u044b"}
+{"type": "assistant_delta", "text": " \u0438"}
+{"type": "assistant_delta", "text": " \u0437\u0430\u0442\u0435\u043c"}
+{"type": "assistant_delta", "text": " \u043f\u0435\u0440\u0435\u043f"}
+{"type": "assistant_delta", "text": "\u0438\u0448"}
+{"type": "assistant_delta", "text": "\u0443"}
+{"type": "assistant_delta", "text": " \u0444\u0443\u043d\u043a\u0446\u0438"}
+{"type": "assistant_delta", "text": "\u044e"}
+{"type": "assistant_delta", "text": "."}
+{"type": "assistant_complete", "text": "\u041a\u0430\u0440\u0442\u0430 \u0447\u0435\u043a\u0435\u0440\u0430 \u044f\u0441\u043d\u0430: \u0442\u0430\u0431\u043b\u0438\u0446\u044b \u0436\u0438\u0432\u0443\u0442 \u043f\u043e `order_purchase_timestamp` / `ts` / `review_creation_date`, \u0430 \u0434\u0430\u0442\u044b \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438 \u0438 \u043e\u0434\u043e\u0431\u0440\u0435\u043d\u0438\u044f \u0434\u043e\u0441\u0442\u0443\u043f\u044b \u0442\u043e\u043b\u044c\u043a\u043e \u0435\u0441\u043b\u0438 \u0438\u0445 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u0443\u0436\u0435 `<= seed_time`. \u0413\u043b\u044f\u043d\u0443 \u0445\u0432\u043e\u0441\u0442 `perturb_canary` \u0434\u043b\u044f \u043f\u043e\u043b\u043d\u043e\u0442\u044b \u0438 \u0437\u0430\u0442\u0435\u043c \u043f\u0435\u0440\u0435\u043f\u0438\u0448\u0443 \u0444\u0443\u043d\u043a\u0446\u0438\u044e."}
+{"type": "tool_started", "tool_name": "bash", "tool_input": {"command": "sed -n 197,240p /home/stas/Documents/GitHub/pitbull/prestudy/oracle.py"}}
+{"type": "tool_completed", "tool_name": "bash", "output": "df2.loc[not_avail, c] = date_target\n                continue\n            if any(h in c.lower() for h in key_hints):\n                continue\n            if not future_mask.any():\n                continue\n            if pd.api.types.is_datetime64_any_dtype(df2[c]):\n                df2.loc[future_mask, c] = date_target\n            elif pd.api.types.is_numeric_dtype(df2[c]):\n                df2.loc[future_mask, c] = df2.loc[future_mask, c] + num_shift\n            elif isinstance(df2[c].dtype, pd.CategoricalDtype):\n                if cat_sentinel not in df2[c].cat.categories:\n                    df2[c] = df2[c].cat.add_categories([cat_sentinel])\n                df2.loc[future_mask, c] = cat_sentinel\n            else:\n                df2.loc[future_mask, c] = cat_sentinel\n        out[name] = df2\n    return out", "is_error": false}
+{"type": "assistant_delta", "text": "\u041a\u0430\u0440"}
+{"type": "assistant_delta", "text": "\u0442\u0430"}
+{"type": "assistant_delta", "text": " \u0447"}
+{"type": "assistant_delta", "text": "\u0435\u043a"}
+{"type": "assistant_delta", "text": "\u0435\u0440\u0430"}
+{"type": "assistant_delta", "text": " \u043f\u043e\u043b"}
+{"type": "assistant_delta", "text": "\u043d\u0430\u044f"}
+{"type": "assistant_delta", "text": "."}
+{"type": "assistant_delta", "text": " \u041f"}
+{"type": "assistant_delta", "text": "\u0438\u0448"}
+{"type": "assistant_delta", "text": "\u0443"}
+{"type": "assistant_delta", "text": " \u0438\u0441\u043f\u0440\u0430\u0432"}
+{"type": "assistant_delta", "text": "\u043b\u0435\u043d"}
+{"type": "assistant_delta", "text": "\u043d\u0443\u044e"}
+{"type": "assistant_delta", "text": " \u0432\u0435\u0440\u0441\u0438\u044e"}
+{"type": "assistant_delta", "text": ":"}
+{"type": "assistant_delta", "text": " \u0438\u0441\u0442\u043e\u0440\u0438\u044f"}
+{"type": "assistant_delta", "text": " \u0442\u043e\u0432\u0430\u0440\u043e\u0432"}
+{"type": "assistant_delta", "text": " \u043f\u043e"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "ts"}
+{"type": "assistant_delta", "text": "`,"}
+{"type": "assistant_delta", "text": " \u043e\u0442\u0437\u044b\u0432\u044b"}
+{"type": "assistant_delta", "text": " \u043f\u043e"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "review"}
+{"type": "assistant_delta", "text": "_creation"}
+{"type": "assistant_delta", "text": "_date"}
+{"type": "assistant_delta", "text": "`,"}
+{"type": "assistant_delta", "text": " \u043f\u043b\u0430\u0442\u0435\u0436"}
+{"type": "assistant_delta", "text": "\u0438"}
+{"type": "assistant_delta", "text": " \u043f\u043e"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "ts"}
+{"type": "assistant_delta", "text": "`,"}
+{"type": "assistant_delta", "text": " \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0430"}
+{"type": "assistant_delta", "text": " \u2014"}
+{"type": "assistant_delta", "text": " \u0442\u043e\u043b\u044c\u043a\u043e"}
+{"type": "assistant_delta", "text": " \u043f\u043e"}
+{"type": "assistant_delta", "text": " \u0437\u0430\u043a\u0430\u0437"}
+{"type": "assistant_delta", "text": "\u0430\u043c"}
+{"type": "assistant_delta", "text": ","}
+{"type": "assistant_delta", "text": " \u0434\u043e\u0441\u0442\u0430\u0432"}
+{"type": "assistant_delta", "text": "\u043b\u0435\u043d\u043d\u044b\u043c"}
+{"type": "assistant_delta", "text": " \u0441\u0442\u0440\u043e\u0433\u043e"}
+{"type": "assistant_delta", "text": " \u0434\u043e"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "seed"}
+{"type": "assistant_delta", "text": "_time"}
+{"type": "assistant_delta", "text": "`,"}
+{"type": "assistant_delta", "text": " \u0441"}
+{"type": "assistant_delta", "text": " fallback"}
+{"type": "assistant_delta", "text": " \u043d\u0430"}
+{"type": "assistant_delta", "text": " \u043e\u0446\u0435\u043d"}
+{"type": "assistant_delta", "text": "\u043a\u0443"}
+{"type": "assistant_delta", "text": " \u043f\u043e"}
+{"type": "assistant_delta", "text": " estimated"}
+{"type": "assistant_delta", "text": "-"}
+{"type": "assistant_delta", "text": "\u0434"}
+{"type": "assistant_delta", "text": "\u0430\u0442\u0435"}
+{"type": "assistant_delta", "text": "."}
+{"type": "assistant_complete", "text": "\u041a\u0430\u0440\u0442\u0430 \u0447\u0435\u043a\u0435\u0440\u0430 \u043f\u043e\u043b\u043d\u0430\u044f. \u041f\u0438\u0448\u0443 \u0438\u0441\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043d\u0443\u044e \u0432\u0435\u0440\u0441\u0438\u044e: \u0438\u0441\u0442\u043e\u0440\u0438\u044f \u0442\u043e\u0432\u0430\u0440\u043e\u0432 \u043f\u043e `ts`, \u043e\u0442\u0437\u044b\u0432\u044b \u043f\u043e `review_creation_date`, \u043f\u043b\u0430\u0442\u0435\u0436\u0438 \u043f\u043e `ts`, \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0430 \u2014 \u0442\u043e\u043b\u044c\u043a\u043e \u043f\u043e \u0437\u0430\u043a\u0430\u0437\u0430\u043c, \u0434\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u043d\u044b\u043c \u0441\u0442\u0440\u043e\u0433\u043e \u0434\u043e `seed_time`, \u0441 fallback \u043d\u0430 \u043e\u0446\u0435\u043d\u043a\u0443 \u043f\u043e estimated-\u0434\u0430\u0442\u0435."}
+{"type": "tool_started", "tool_name": "write_file", "tool_input": {"content": "def get_features(db, entity_ids, seed_time):\n    entity_ids = list(entity_ids)\n    items = db['order_items']\n    orders = db['orders']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    feature_columns = [\n        'num_orders', 'num_items', 'sum_price', 'sum_sales', 'mean_price',\n        'std_price', 'min_price', 'max_price', 'sum_freight', 'mean_freight',\n        'mean_delivery_days', 'avg_review_score', 'count_reviews',\n        'positive_review_ratio', 'avg_installments', 'avg_payment_value',\n        'credit_card_ratio', 'recency', 'sales_30', 'sales_90'\n    ]\n\n    # History of the requested products: purchases strictly before seed_time\n    hist_mask = items['product_id'].isin(entity_ids) & (items['ts'] < seed_time)\n    hist_items = items.loc[hist_mask].copy()\n\n    # No history -> all NaNs for every product\n    if hist_items.empty:\n        return pd.DataFrame(columns=feature_columns, index=pd.Index(entity_ids, name='product_id'), dtype=float)\n\n    # Orders of the historical items, purchased strictly before seed_time\n    order_ids = hist_items['order_id'].unique()\n    hist_orders = orders.loc[orders['order_id'].isin(order_ids) & (orders['order_purchase_timestamp'] < seed_time)].copy()\n    hist_items = hist_items.loc[hist_items['order_id'].isin(hist_orders['order_id'])]\n\n    # Delivery speed: only from orders already delivered before seed_time;\n    # fallback: typical ratio of estimated delivery window, from pre-seed orders\n    delivered = hist_orders.loc[\n        hist_orders['order_delivered_customer_date'].notna()\n        & (hist_orders['order_delivered_customer_date'] < seed_time)\n    ]\n    delivery_days = (delivered['order_delivered_customer_date'] - delivered['order_purchase_timestamp']).dt.total_seconds() / 86400.0\n    delivery_days = delivery_days.loc[delivery_days > 0]\n    est_window = (delivered['order_estimated_delivery_date'] - delivered['order_purchase_timestamp']).dt.total_seconds() / 86400.0\n    est_window = est_window.loc[est_window > 0]\n    typical_window = (hist_orders['order_estimated_delivery_date'] - hist_orders['order_purchase_timestamp']).dt.total_seconds() / 86400.0\n    typical_window = typical_window.loc[typical_window > 0]\n    if not delivery_days.empty:\n        ratio = est_window.mean() / typical_window.mean() if not typical_window.empty else 1.0\n        delivery_estimate = float(delivery_days.mean()) / ratio if ratio > 0 else float(delivery_days.mean())\n        if not np.isfinite(delivery_estimate):\n            delivery_estimate = np.nan\n    else:\n        delivery_estimate = np.nan\n    hist_items['delivery_time_days'] = delivery_estimate\n\n    # Reviews: only those already created before seed_time\n    valid_order_ids = hist_orders['order_id']\n    reviews_sub = reviews.loc[reviews['order_id'].isin(valid_order_ids) & (reviews['review_creation_date'] < seed_time)]\n    if not reviews_sub.empty:\n        review_agg = reviews_sub.groupby('order_id').agg(\n            review_count=('review_score', 'count'),\n            avg_review_score=('review_score', 'mean'),\n            positive_review_ratio=('review_score', lambda x: (x >= 4).mean())\n        ).reset_index()\n    else:\n        review_agg = pd.DataFrame({\n            'order_id': valid_order_ids.iloc[:0],\n            'review_count': np.nan,\n            'avg_review_score': np.nan,\n            'positive_review_ratio': np.nan\n        })\n\n    # Payments: only records already existing before seed_time\n    payments_sub = payments.loc[payments['order_id'].isin(valid_order_ids) & (payments['ts'] < seed_time)]\n    if not payments_sub.empty:\n        payment_agg = payments_sub.groupby('order_id').agg(\n            mean_payment=('payment_value', 'mean'),\n            avg_inst=('payment_installments', 'mean'),\n            credit_ratio=('payment_type', lambda x: (x == 'credit_card').mean())\n        ).reset_index()\n    else:\n        payment_agg = pd.DataFrame({\n            'order_id': valid_order_ids.iloc[:0],\n            'mean_payment': np.nan,\n            'avg_inst': np.nan,\n            'credit_ratio': np.nan\n        })\n\n    hist_items = hist_items.merge(review_agg, on='order_id', how='left')\n    hist_items = hist_items.merge(payment_agg, on='order_id', how='left')\n\n    # Per-line totals and age in days (age is computed from ts, known at seed_time)\n    hist_items['total'] = hist_items['price'] + hist_items['freight_value']\n    hist_items['age'] = (seed_time - hist_items['ts']).dt.days\n\n    grouped = hist_items.groupby('product_id').agg(\n        num_orders=('order_id', 'nunique'),\n        num_items=('product_id', 'count'),\n        sum_price=('price', 'sum'),\n        sum_sales=('total', 'sum'),\n        mean_price=('price', 'mean'),\n        std_price=('price', 'std'),\n        min_price=('price', 'min'),\n        max_price=('price', 'max'),\n        sum_freight=('freight_value', 'sum'),\n        mean_freight=('freight_value', 'mean'),\n        mean_delivery_days=('delivery_time_days', 'mean'),\n        avg_review_score=('avg_review_score', 'mean'),\n        count_reviews=('review_count', 'sum'),\n        positive_review_ratio=('positive_review_ratio', 'mean'),\n        avg_installments=('avg_inst', 'mean'),\n        avg_payment_value=('mean_payment', 'mean'),\n        credit_card_ratio=('credit_ratio', 'mean'),\n        last_purchase=('ts', 'max'),\n        sales_30=('age', lambda x: (x <= 30).sum()),\n        sales_90=('age', lambda x: (x <= 90).sum())\n    ).reset_index()\n\n    grouped['recency'] = (seed_time - grouped['last_purchase']).dt.days\n    grouped.drop(columns=['last_purchase'], inplace=True)\n\n    grouped = grouped.set_index('product_id').reindex(entity_ids)\n\n    for c in feature_columns:\n        if c not in grouped.columns:\n            grouped[c] = np.nan\n\n    return grouped[feature_columns]\n", "path": "/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/b1d4448578a845b6/get_features.py"}}
+{"type": "tool_completed", "tool_name": "write_file", "output": "Wrote /home/stas/Documents/GitHub/pitbull/pilot/d1_runs/b1d4448578a845b6/get_features.py", "is_error": false}
+{"type": "assistant_complete", "text": ""}
+{"type": "tool_started", "tool_name": "bash", "tool_input": {"command": "pit-check --code get_features.py", "cwd": "/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/b1d4448578a845b6", "timeout_seconds": 600}}
+{"type": "tool_completed", "tool_name": "bash", "output": "[pit-repair] iteration 1: CLEAN\n  dev      2018-01-01: witness=0 canary=0\n  dev      2018-04-01: witness=0 canary=0\n  dev      2018-07-01: witness=0 canary=0\n  held_out 2017-10-01: witness=0 canary=0\n  held_out 2018-02-01: witness=0 canary=0\n  held_out 2018-06-01: witness=0 canary=0\n  next: \u043f\u043e\u0447\u0438\u043d\u043a\u0430 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0430 \u043d\u0430 \u0438\u0442\u0435\u0440\u0430\u0446\u0438\u0438 1; \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u0435\u0441\u044c.\n{\"verdict\": \"CLEAN\", \"iteration\": 1, \"program_uid\": \"b1d4448578a845b6\", \"witness_columns\": [], \"canary_columns\": [], \"per_seed\": [{\"seed\": \"2018-01-01\", \"split\": \"dev\", \"witness\": false, \"canary\": false}, {\"seed\": \"2018-04-01\", \"split\": \"dev\", \"witness\": false, \"canary\": false}, {\"seed\": \"2018-07-01\", \"split\": \"dev\", \"witness\": false, \"canary\": false}, {\"seed\": \"2017-10-01\", \"split\": \"held_out\", \"witness\": false, \"canary\": false}, {\"seed\": \"2018-02-01\", \"split\": \"held_out\", \"witness\": false, \"canary\": false}, {\"seed\": \"2018-06-01\", \"split\": \"held_out\", \"witness\": false, \"canary\": false}], \"status\": \"clean\", \"clean_at\": 1, \"state_file\": \"pit_state.json\", \"next_action\": \"\u043f\u043e\u0447\u0438\u043d\u043a\u0430 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0430 \u043d\u0430 \u0438\u0442\u0435\u0440\u0430\u0446\u0438\u0438 1; \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u0435\u0441\u044c.\"}", "is_error": false}
+{"type": "assistant_delta", "text": "\u041f"}
+{"type": "assistant_delta", "text": "\u0440\u043e\u0432\u0435\u0440"}
+{"type": "assistant_delta", "text": "\u043a\u0430"}
+{"type": "assistant_delta", "text": " \u043f\u0440\u043e\u0448\u043b\u0430"}
+{"type": "assistant_delta", "text": " \u043d\u0430"}
+{"type": "assistant_delta", "text": " \u0432\u0441\u0435\u0445"}
+{"type": "assistant_delta", "text": " \u0448"}
+{"type": "assistant_delta", "text": "\u0435\u0441\u0442\u0438"}
+{"type": "assistant_delta", "text": " \u043c\u043e\u043c\u0435\u043d\u0442\u0430"}
+{"type": "assistant_delta", "text": "\u0445"}
+{"type": "assistant_delta", "text": ","}
+{"type": "assistant_delta", "text": " \u0432\u043a\u043b\u044e\u0447\u0430\u044f"}
+{"type": "assistant_delta", "text": " held"}
+{"type": "assistant_delta", "text": "-out"}
+{"type": "assistant_delta", "text": "."}
+{"type": "assistant_delta", "text": " \u0424"}
+{"type": "assistant_delta", "text": "\u0438\u043d\u0430"}
+{"type": "assistant_delta", "text": "\u043b\u044c"}
+{"type": "assistant_delta", "text": "\u043d\u044b\u0439"}
+{"type": "assistant_delta", "text": " \u043e\u0442\u0447"}
+{"type": "assistant_delta", "text": "\u0451\u0442"}
+{"type": "assistant_delta", "text": ":\n\n"}
+{"type": "assistant_delta", "text": "``"}
+{"type": "assistant_delta", "text": "`\n"}
+{"type": "assistant_delta", "text": "pit"}
+{"type": "assistant_delta", "text": "-re"}
+{"type": "assistant_delta", "text": "pair"}
+{"type": "assistant_delta", "text": ":"}
+{"type": "assistant_delta", "text": " verdict"}
+{"type": "assistant_delta", "text": "="}
+{"type": "assistant_delta", "text": "CLE"}
+{"type": "assistant_delta", "text": "AN"}
+{"type": "assistant_delta", "text": ","}
+{"type": "assistant_delta", "text": " clean"}
+{"type": "assistant_delta", "text": "_at"}
+{"type": "assistant_delta", "text": "="}
+{"type": "assistant_delta", "text": "1"}
+{"type": "assistant_delta", "text": ","}
+{"type": "assistant_delta", "text": " iterations"}
+{"type": "assistant_delta", "text": "_used"}
+{"type": "assistant_delta", "text": "="}
+{"type": "assistant_delta", "text": "1"}
+{"type": "assistant_delta", "text": ",\n"}
+{"type": "assistant_delta", "text": "w"}
+{"type": "assistant_delta", "text": "itness"}
+{"type": "assistant_delta", "text": "_final"}
+{"type": "assistant_delta", "text": "=[],"}
+{"type": "assistant_delta", "text": " can"}
+{"type": "assistant_delta", "text": "ary"}
+{"type": "assistant_delta", "text": "_final"}
+{"type": "assistant_delta", "text": "=["}
+{"type": "assistant_delta", "text": "],\n"}
+{"type": "assistant_delta", "text": "state"}
+{"type": "assistant_delta", "text": "=/"}
+{"type": "assistant_delta", "text": "home"}
+{"type": "assistant_delta", "text": "/st"}
+{"type": "assistant_delta", "text": "as"}
+{"type": "assistant_delta", "text": "/Documents"}
+{"type": "assistant_delta", "text": "/G"}
+{"type": "assistant_delta", "text": "it"}
+{"type": "assistant_delta", "text": "Hub"}
+{"type": "assistant_delta", "text": "/p"}
+{"type": "assistant_delta", "text": "it"}
+{"type": "assistant_delta", "text": "bull"}
+{"type": "assistant_delta", "text": "/p"}
+{"type": "assistant_delta", "text": "ilot"}
+{"type": "assistant_delta", "text": "/d"}
+{"type": "assistant_delta", "text": "1"}
+{"type": "assistant_delta", "text": "_runs"}
+{"type": "assistant_delta", "text": "/b"}
+{"type": "assistant_delta", "text": "1"}
+{"type": "assistant_delta", "text": "d"}
+{"type": "assistant_delta", "text": "44"}
+{"type": "assistant_delta", "text": "4"}
+{"type": "assistant_delta", "text": "85"}
+{"type": "assistant_delta", "text": "7"}
+{"type": "assistant_delta", "text": "8"}
+{"type": "assistant_delta", "text": "a"}
+{"type": "assistant_delta", "text": "8"}
+{"type": "assistant_delta", "text": "45"}
+{"type": "assistant_delta", "text": "b"}
+{"type": "assistant_delta", "text": "6"}
+{"type": "assistant_delta", "text": "/p"}
+{"type": "assistant_delta", "text": "it"}
+{"type": "assistant_delta", "text": "_state"}
+{"type": "assistant_delta", "text": ".json"}
+{"type": "assistant_delta", "text": "\n"}
+{"type": "assistant_delta", "text": "``"}
+{"type": "assistant_delta", "text": "`\n\n"}
+{"type": "assistant_delta", "text": "**"}
+{"type": "assistant_delta", "text": "\u0427\u0442\u043e"}
+{"type": "assistant_delta", "text": " \u0431\u044b\u043b\u043e"}
+{"type": "assistant_delta", "text": " \u0441\u043b"}
+{"type": "assistant_delta", "text": "\u043e\u043c"}
+{"type": "assistant_delta", "text": "\u0430\u043d\u043e"}
+{"type": "assistant_delta", "text": "**"}
+{"type": "assistant_delta", "text": " ("}
+{"type": "assistant_delta", "text": "\u0438\u0442\u0435\u0440"}
+{"type": "assistant_delta", "text": "\u0430\u0446\u0438\u044f"}
+{"type": "assistant_delta", "text": " "}
+{"type": "assistant_delta", "text": "0"}
+{"type": "assistant_delta", "text": ","}
+{"type": "assistant_delta", "text": " \u0432\u0435\u0440"}
+{"type": "assistant_delta", "text": "\u0434"}
+{"type": "assistant_delta", "text": "\u0438\u043a"}
+{"type": "assistant_delta", "text": "\u0442"}
+{"type": "assistant_delta", "text": " LE"}
+{"type": "assistant_delta", "text": "AK"}
+{"type": "assistant_delta", "text": "):\n"}
+{"type": "assistant_delta", "text": "-"}
+{"type": "assistant_delta", "text": " Witness"}
+{"type": "assistant_delta", "text": "-"}
+{"type": "assistant_delta", "text": "\u0434"}
+{"type": "assistant_delta", "text": "\u043e\u043a\u0430\u0437"}
+{"type": "assistant_delta", "text": "\u0430\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e"}
+{"type": "assistant_delta", "text": ":"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "avg"}
+{"type": "assistant_delta", "text": "_review"}
+{"type": "assistant_delta", "text": "_score"}
+{"type": "assistant_delta", "text": "`,"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "count"}
+{"type": "assistant_delta", "text": "_reviews"}
+{"type": "assistant_delta", "text": "`,"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "positive"}
+{"type": "assistant_delta", "text": "_review"}
+{"type": "assistant_delta", "text": "_ratio"}
+{"type": "assistant_delta", "text": "`."}
+{"type": "assistant_delta", "text": " \u041e\u0442"}
+{"type": "assistant_delta", "text": "\u0437\u044b\u0432\u044b"}
+{"type": "assistant_delta", "text": " \u0430\u0433\u0440\u0435\u0433"}
+{"type": "assistant_delta", "text": "\u0438\u0440\u043e\u0432"}
+{"type": "assistant_delta", "text": "\u0430\u043b\u0438\u0441\u044c"}
+{"type": "assistant_delta", "text": " \u043f\u043e"}
+{"type": "assistant_delta", "text": " \u0432\u0441\u0435\u043c"}
+{"type": "assistant_delta", "text": " \u0441\u0442\u0440\u043e\u043a"}
+{"type": "assistant_delta", "text": "\u0430\u043c"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "reviews"}
+{"type": "assistant_delta", "text": "`,"}
+{"type": "assistant_delta", "text": " \u0432\u043a\u043b\u044e\u0447\u0430\u044f"}
+{"type": "assistant_delta", "text": " \u043d\u0430\u043f\u0438\u0441"}
+{"type": "assistant_delta", "text": "\u0430\u043d\u043d\u044b\u0435"}
+{"type": "assistant_delta", "text": " \u043f\u043e\u0441\u043b\u0435"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "seed"}
+{"type": "assistant_delta", "text": "_time"}
+{"type": "assistant_delta", "text": "`"}
+{"type": "assistant_delta", "text": " ("}
+{"type": "assistant_delta", "text": "\u0443"}
+{"type": "assistant_delta", "text": " \u043e\u0442\u0437\u044b\u0432"}
+{"type": "assistant_delta", "text": "\u043e\u0432"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "review"}
+{"type": "assistant_delta", "text": "_creation"}
+{"type": "assistant_delta", "text": "_date"}
+{"type": "assistant_delta", "text": "`"}
+{"type": "assistant_delta", "text": " \u043d\u0430\u0441\u0442\u0443\u043f"}
+{"type": "assistant_delta", "text": "\u0430\u0435\u0442"}
+{"type": "assistant_delta", "text": " \u043f\u043e\u0437\u0436\u0435"}
+{"type": "assistant_delta", "text": " \u043f\u043e\u043a\u0443\u043f\u043a\u0438"}
+{"type": "assistant_delta", "text": ").\n"}
+{"type": "assistant_delta", "text": "-"}
+{"type": "assistant_delta", "text": " Canary"}
+{"type": "assistant_delta", "text": ":"}
+{"type": "assistant_delta", "text": " \u0442\u0435"}
+{"type": "assistant_delta", "text": " \u0436\u0435"}
+{"type": "assistant_delta", "text": " \u0441\u0442\u043e\u043b"}
+{"type": "assistant_delta", "text": "\u0431"}
+{"type": "assistant_delta", "text": "\u0446\u044b"}
+{"type": "assistant_delta", "text": " \u043f\u043b\u044e\u0441"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "mean"}
+{"type": "assistant_delta", "text": "_delivery"}
+{"type": "assistant_delta", "text": "_days"}
+{"type": "assistant_delta", "text": "`."}
+{"type": "assistant_delta", "text": " \u0421"}
+{"type": "assistant_delta", "text": "\u0440\u043e\u043a"}
+{"type": "assistant_delta", "text": " \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438"}
+{"type": "assistant_delta", "text": " \u0441\u0447\u0438\u0442"}
+{"type": "assistant_delta", "text": "\u0430\u043b\u0441\u044f"}
+{"type": "assistant_delta", "text": " \u0438\u0437"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "order"}
+{"type": "assistant_delta", "text": "_del"}
+{"type": "assistant_delta", "text": "ivered"}
+{"type": "assistant_delta", "text": "_customer"}
+{"type": "assistant_delta", "text": "_date"}
+{"type": "assistant_delta", "text": "`"}
+{"type": "assistant_delta", "text": " \u0437\u0430\u043a\u0430\u0437"}
+{"type": "assistant_delta", "text": "\u043e\u0432"}
+{"type": "assistant_delta", "text": ","}
+{"type": "assistant_delta", "text": " \u043a\u043e\u0442\u043e\u0440\u044b\u0435"}
+{"type": "assistant_delta", "text": " \u043d\u0430"}
+{"type": "assistant_delta", "text": " \u043c\u043e\u043c\u0435\u043d\u0442"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "seed"}
+{"type": "assistant_delta", "text": "_time"}
+{"type": "assistant_delta", "text": "`"}
+{"type": "assistant_delta", "text": " \u0435\u0449\u0451"}
+{"type": "assistant_delta", "text": " \u043d\u0435"}
+{"type": "assistant_delta", "text": " \u0434\u043e\u0441\u0442\u0430\u0432"}
+{"type": "assistant_delta", "text": "\u043b\u0435\u043d\u044b"}
+{"type": "assistant_delta", "text": "."}
+{"type": "assistant_delta", "text": " \u041f"}
+{"type": "assistant_delta", "text": "\u043b\u0430\u0442"}
+{"type": "assistant_delta", "text": "\u0435\u0436"}
+{"type": "assistant_delta", "text": "\u0438"}
+{"type": "assistant_delta", "text": " \u0434\u043e\u043f"}
+{"type": "assistant_delta", "text": "\u043e\u043b\u043d"}
+{"type": "assistant_delta", "text": "\u0438\u0442\u0435\u043b\u044c\u043d\u043e"}
+{"type": "assistant_delta", "text": " \u0444"}
+{"type": "assistant_delta", "text": "\u0438"}
+{"type": "assistant_delta", "text": "\u043b\u044c\u0442"}
+{"type": "assistant_delta", "text": "\u0440\u043e\u0432"}
+{"type": "assistant_delta", "text": "\u0430\u043b\u0438\u0441\u044c"}
+{"type": "assistant_delta", "text": " \u0442\u043e\u043b\u044c\u043a\u043e"}
+{"type": "assistant_delta", "text": " \u043f\u043e"}
+{"type": "assistant_delta", "text": " \u043f\u0440\u0438\u043d\u0430\u0434\u043b\u0435\u0436"}
+{"type": "assistant_delta", "text": "\u043d\u043e\u0441\u0442\u0438"}
+{"type": "assistant_delta", "text": " \u0437\u0430\u043a\u0430\u0437"}
+{"type": "assistant_delta", "text": "\u0443"}
+{"type": "assistant_delta", "text": ","}
+{"type": "assistant_delta", "text": " \u0430"}
+{"type": "assistant_delta", "text": " \u043d\u0435"}
+{"type": "assistant_delta", "text": " \u043f\u043e"}
+{"type": "assistant_delta", "text": " \u0432\u0440\u0435\u043c\u0435\u043d\u0438"}
+{"type": "assistant_delta", "text": " (`"}
+{"type": "assistant_delta", "text": "payments"}
+{"type": "assistant_delta", "text": ".ts"}
+{"type": "assistant_delta", "text": "`"}
+{"type": "assistant_delta", "text": ").\n\n"}
+{"type": "assistant_delta", "text": "**"}
+{"type": "assistant_delta", "text": "\u041f\u043e\u0447"}
+{"type": "assistant_delta", "text": "\u0438\u043d\u043a\u0430"}
+{"type": "assistant_delta", "text": "**"}
+{"type": "assistant_delta", "text": " ("}
+{"type": "assistant_delta", "text": "get"}
+{"type": "assistant_delta", "text": "_features"}
+{"type": "assistant_delta", "text": ".py"}
+{"type": "assistant_delta", "text": "):\n"}
+{"type": "assistant_delta", "text": "-"}
+{"type": "assistant_delta", "text": " \u041e\u0442"}
+{"type": "assistant_delta", "text": "\u0437\u044b\u0432\u044b"}
+{"type": "assistant_delta", "text": ":"}
+{"type": "assistant_delta", "text": " \u0444"}
+{"type": "assistant_delta", "text": "\u0438"}
+{"type": "assistant_delta", "text": "\u043b\u044c\u0442"}
+{"type": "assistant_delta", "text": "\u0440"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "review"}
+{"type": "assistant_delta", "text": "_creation"}
+{"type": "assistant_delta", "text": "_date"}
+{"type": "assistant_delta", "text": " "}
+{"type": "assistant_delta", "text": "< seed"}
+{"type": "assistant_delta", "text": "_time"}
+{"type": "assistant_delta", "text": "`.\n"}
+{"type": "assistant_delta", "text": "-"}
+{"type": "assistant_delta", "text": " \u041f"}
+{"type": "assistant_delta", "text": "\u043b\u0430\u0442"}
+{"type": "assistant_delta", "text": "\u0435\u0436"}
+{"type": "assistant_delta", "text": "\u0438"}
+{"type": "assistant_delta", "text": ":"}
+{"type": "assistant_delta", "text": " \u0444"}
+{"type": "assistant_delta", "text": "\u0438"}
+{"type": "assistant_delta", "text": "\u043b\u044c\u0442"}
+{"type": "assistant_delta", "text": "\u0440"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "ts"}
+{"type": "assistant_delta", "text": " "}
+{"type": "assistant_delta", "text": "< seed"}
+{"type": "assistant_delta", "text": "_time"}
+{"type": "assistant_delta", "text": "`.\n"}
+{"type": "assistant_delta", "text": "-"}
+{"type": "assistant_delta", "text": " \u0417\u0430\u043a\u0430\u0437"}
+{"type": "assistant_delta", "text": "\u044b"}
+{"type": "assistant_delta", "text": ":"}
+{"type": "assistant_delta", "text": " \u043e\u0441\u0442\u0430\u0432"}
+{"type": "assistant_delta", "text": "\u043b\u0435\u043d\u044b"}
+{"type": "assistant_delta", "text": " \u0442\u043e\u043b\u044c\u043a\u043e"}
+{"type": "assistant_delta", "text": " \u043a\u0443\u043f"}
+{"type": "assistant_delta", "text": "\u043b\u0435\u043d\u043d\u044b\u0435"}
+{"type": "assistant_delta", "text": " \u0434\u043e"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "seed"}
+{"type": "assistant_delta", "text": "_time"}
+{"type": "assistant_delta", "text": "`;"}
+{"type": "assistant_delta", "text": " \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0430"}
+{"type": "assistant_delta", "text": " \u0430\u0433\u0440\u0435\u0433"}
+{"type": "assistant_delta", "text": "\u0438\u0440\u0443\u0435\u0442\u0441\u044f"}
+{"type": "assistant_delta", "text": " \u0438\u0437"}
+{"type": "assistant_delta", "text": " \u0437\u0430\u043a\u0430\u0437"}
+{"type": "assistant_delta", "text": "\u043e\u0432"}
+{"type": "assistant_delta", "text": ","}
+{"type": "assistant_delta", "text": " \u0440\u0435\u0430\u043b\u044c\u043d\u043e"}
+{"type": "assistant_delta", "text": " \u0434\u043e\u0441\u0442\u0430\u0432"}
+{"type": "assistant_delta", "text": "\u043b\u0435\u043d\u043d\u044b\u0445"}
+{"type": "assistant_delta", "text": " \u0434\u043e"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "seed"}
+{"type": "assistant_delta", "text": "_time"}
+{"type": "assistant_delta", "text": "`,"}
+{"type": "assistant_delta", "text": " \u0438\u043d\u0430\u0447\u0435"}
+{"type": "assistant_delta", "text": " \u0433\u043b\u043e\u0431"}
+{"type": "assistant_delta", "text": "\u0430\u043b\u044c\u043d\u0430\u044f"}
+{"type": "assistant_delta", "text": " \u043e\u0446\u0435\u043d\u043a\u0430"}
+{"type": "assistant_delta", "text": " ("}
+{"type": "assistant_delta", "text": "\u0441"}
+{"type": "assistant_delta", "text": "\u0440\u0435\u0434"}
+{"type": "assistant_delta", "text": "\u043d\u0435\u0435"}
+{"type": "assistant_delta", "text": " \u0440\u0435"}
+{"type": "assistant_delta", "text": "\u0430\u043b\u044c\u043d\u043e\u0435"}
+{"type": "assistant_delta", "text": " \u0432\u0440\u0435\u043c\u044f"}
+{"type": "assistant_delta", "text": ","}
+{"type": "assistant_delta", "text": " \u0434\u0435\u043b"}
+{"type": "assistant_delta", "text": "\u0451\u043d"}
+{"type": "assistant_delta", "text": "\u043d\u043e\u0435"}
+{"type": "assistant_delta", "text": " \u043d\u0430"}
+{"type": "assistant_delta", "text": " \u043e\u0442\u043d\u043e\u0448\u0435\u043d\u0438\u0435"}
+{"type": "assistant_delta", "text": " \u043e\u0446\u0435\u043d"}
+{"type": "assistant_delta", "text": "\u043e\u0447\u043d\u044b\u0445"}
+{"type": "assistant_delta", "text": " \u043e\u043a\u043e\u043d"}
+{"type": "assistant_delta", "text": ").\n"}
+{"type": "assistant_delta", "text": "-"}
+{"type": "assistant_delta", "text": " \u0412\u0441\u0435"}
+{"type": "assistant_delta", "text": " \u043e\u0441\u0442"}
+{"type": "assistant_delta", "text": "\u0430\u043b\u044c\u043d\u043e\u0435"}
+{"type": "assistant_delta", "text": " ("}
+{"type": "assistant_delta", "text": "\u0446"}
+{"type": "assistant_delta", "text": "\u0435\u043d\u044b"}
+{"type": "assistant_delta", "text": ","}
+{"type": "assistant_delta", "text": " \u0444"}
+{"type": "assistant_delta", "text": "\u0440\u0430\u0445"}
+{"type": "assistant_delta", "text": "\u0442"}
+{"type": "assistant_delta", "text": ","}
+{"type": "assistant_delta", "text": " rec"}
+{"type": "assistant_delta", "text": "ency"}
+{"type": "assistant_delta", "text": ","}
+{"type": "assistant_delta", "text": " \u043e\u043a\u043d\u0430"}
+{"type": "assistant_delta", "text": " "}
+{"type": "assistant_delta", "text": "30"}
+{"type": "assistant_delta", "text": "/"}
+{"type": "assistant_delta", "text": "90"}
+{"type": "assistant_delta", "text": " \u0434\u043d\u0435\u0439"}
+{"type": "assistant_delta", "text": ")"}
+{"type": "assistant_delta", "text": " \u0441\u0447\u0438\u0442"}
+{"type": "assistant_delta", "text": "\u0430\u043b\u043e\u0441\u044c"}
+{"type": "assistant_delta", "text": " \u043f\u043e"}
+{"type": "assistant_delta", "text": " `"}
+{"type": "assistant_delta", "text": "ts"}
+{"type": "assistant_delta", "text": "`"}
+{"type": "assistant_delta", "text": "/"}
+{"type": "assistant_delta", "text": "`"}
+{"type": "assistant_delta", "text": "price"}
+{"type": "assistant_delta", "text": "`"}
+{"type": "assistant_delta", "text": " \u0438"}
+{"type": "assistant_delta", "text": " \u0431\u044b\u043b\u043e"}
+{"type": "assistant_delta", "text": " \u0447\u0438\u0441\u0442"}
+{"type": "assistant_delta", "text": "\u044b\u043c"}
+{"type": "assistant_delta", "text": "."}
+{"type": "assistant_complete", "text": "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u043f\u0440\u043e\u0448\u043b\u0430 \u043d\u0430 \u0432\u0441\u0435\u0445 \u0448\u0435\u0441\u0442\u0438 \u043c\u043e\u043c\u0435\u043d\u0442\u0430\u0445, \u0432\u043a\u043b\u044e\u0447\u0430\u044f held-out. \u0424\u0438\u043d\u0430\u043b\u044c\u043d\u044b\u0439 \u043e\u0442\u0447\u0451\u0442:\n\n```\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1,\nwitness_final=[], canary_final=[],\nstate=/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/b1d4448578a845b6/pit_state.json\n```\n\n**\u0427\u0442\u043e \u0431\u044b\u043b\u043e \u0441\u043b\u043e\u043c\u0430\u043d\u043e** (\u0438\u0442\u0435\u0440\u0430\u0446\u0438\u044f 0, \u0432\u0435\u0440\u0434\u0438\u043a\u0442 LEAK):\n- Witness-\u0434\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e: `avg_review_score`, `count_reviews`, `positive_review_ratio`. \u041e\u0442\u0437\u044b\u0432\u044b \u0430\u0433\u0440\u0435\u0433\u0438\u0440\u043e\u0432\u0430\u043b\u0438\u0441\u044c \u043f\u043e \u0432\u0441\u0435\u043c \u0441\u0442\u0440\u043e\u043a\u0430\u043c `reviews`, \u0432\u043a\u043b\u044e\u0447\u0430\u044f \u043d\u0430\u043f\u0438\u0441\u0430\u043d\u043d\u044b\u0435 \u043f\u043e\u0441\u043b\u0435 `seed_time` (\u0443 \u043e\u0442\u0437\u044b\u0432\u043e\u0432 `review_creation_date` \u043d\u0430\u0441\u0442\u0443\u043f\u0430\u0435\u0442 \u043f\u043e\u0437\u0436\u0435 \u043f\u043e\u043a\u0443\u043f\u043a\u0438).\n- Canary: \u0442\u0435 \u0436\u0435 \u0441\u0442\u043e\u043b\u0431\u0446\u044b \u043f\u043b\u044e\u0441 `mean_delivery_days`. \u0421\u0440\u043e\u043a \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438 \u0441\u0447\u0438\u0442\u0430\u043b\u0441\u044f \u0438\u0437 `order_delivered_customer_date` \u0437\u0430\u043a\u0430\u0437\u043e\u0432, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u043d\u0430 \u043c\u043e\u043c\u0435\u043d\u0442 `seed_time` \u0435\u0449\u0451 \u043d\u0435 \u0434\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u044b. \u041f\u043b\u0430\u0442\u0435\u0436\u0438 \u0434\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u043e \u0444\u0438\u043b\u044c\u0442\u0440\u043e\u0432\u0430\u043b\u0438\u0441\u044c \u0442\u043e\u043b\u044c\u043a\u043e \u043f\u043e \u043f\u0440\u0438\u043d\u0430\u0434\u043b\u0435\u0436\u043d\u043e\u0441\u0442\u0438 \u0437\u0430\u043a\u0430\u0437\u0443, \u0430 \u043d\u0435 \u043f\u043e \u0432\u0440\u0435\u043c\u0435\u043d\u0438 (`payments.ts`).\n\n**\u041f\u043e\u0447\u0438\u043d\u043a\u0430** (get_features.py):\n- \u041e\u0442\u0437\u044b\u0432\u044b: \u0444\u0438\u043b\u044c\u0442\u0440 `review_creation_date < seed_time`.\n- \u041f\u043b\u0430\u0442\u0435\u0436\u0438: \u0444\u0438\u043b\u044c\u0442\u0440 `ts < seed_time`.\n- \u0417\u0430\u043a\u0430\u0437\u044b: \u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u044b \u0442\u043e\u043b\u044c\u043a\u043e \u043a\u0443\u043f\u043b\u0435\u043d\u043d\u044b\u0435 \u0434\u043e `seed_time`; \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0430 \u0430\u0433\u0440\u0435\u0433\u0438\u0440\u0443\u0435\u0442\u0441\u044f \u0438\u0437 \u0437\u0430\u043a\u0430\u0437\u043e\u0432, \u0440\u0435\u0430\u043b\u044c\u043d\u043e \u0434\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u043d\u044b\u0445 \u0434\u043e `seed_time`, \u0438\u043d\u0430\u0447\u0435 \u0433\u043b\u043e\u0431\u0430\u043b\u044c\u043d\u0430\u044f \u043e\u0446\u0435\u043d\u043a\u0430 (\u0441\u0440\u0435\u0434\u043d\u0435\u0435 \u0440\u0435\u0430\u043b\u044c\u043d\u043e\u0435 \u0432\u0440\u0435\u043c\u044f, \u0434\u0435\u043b\u0451\u043d\u043d\u043e\u0435 \u043d\u0430 \u043e\u0442\u043d\u043e\u0448\u0435\u043d\u0438\u0435 \u043e\u0446\u0435\u043d\u043e\u0447\u043d\u044b\u0445 \u043e\u043a\u043e\u043d).\n- \u0412\u0441\u0435 \u043e\u0441\u0442\u0430\u043b\u044c\u043d\u043e\u0435 (\u0446\u0435\u043d\u044b, \u0444\u0440\u0430\u0445\u0442, recency, \u043e\u043a\u043d\u0430 30/90 \u0434\u043d\u0435\u0439) \u0441\u0447\u0438\u0442\u0430\u043b\u043e\u0441\u044c \u043f\u043e `ts`/`price` \u0438 \u0431\u044b\u043b\u043e \u0447\u0438\u0441\u0442\u044b\u043c."}

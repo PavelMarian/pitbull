@@ -1,0 +1,196 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "82feae377655715c",
+ "source_sha256": "82feae377655715c909c944d35b652f2541737cf44310eb9993025209ce7c66f",
+ "source_code": "def get_features(db, entity_ids, seed_time):\n    # Извлекаем таблицы\n    order_items = db[\"order_items\"]\n    orders = db[\"orders\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]  # может пригодиться, но здесь не используем\n\n    entities = list(entity_ids)\n\n    # Отбираем только прошлые продажи (до seed_time)\n    items_past = order_items[\n        (order_items[\"product_id\"].isin(entities)) &\n        (order_items[\"ts\"] <= seed_time)\n    ]\n\n    # Строим feature-датафрейм с индексом = entity_ids\n    features = pd.DataFrame(index=entities)\n\n    # 1. Агрегаты за всю предшествующую историю\n    if not items_past.empty:\n        agg_all = items_past.groupby(\"product_id\").agg(\n            n_orders=(\"order_id\", \"nunique\"),\n            n_items=(\"order_item_id\", \"count\"),\n            total_price=(\"price\", \"sum\"),\n            total_freight=(\"freight_value\", \"sum\"),\n            mean_price=(\"price\", \"mean\"),\n            mean_freight=(\"freight_value\", \"mean\"),\n            std_price=(\"price\", \"std\"),\n            std_freight=(\"freight_value\", \"std\"),\n            n_sellers=(\"seller_id\", \"nunique\"),\n            min_ts=(\"ts\", \"min\"),\n            max_ts=(\"ts\", \"max\")\n        )\n        features = features.join(agg_all)\n    else:\n        # Пустой датафрейм – всё останется NaN\n        pass\n\n    # 2. Признаки, связанные со временем\n    if \"max_ts\" in features.columns:\n        features[\"days_since_last\"] = (seed_time - features[\"max_ts\"]).dt.days\n        features[\"days_since_first\"] = (seed_time - features[\"min_ts\"]).dt.days\n        features[\"active_days\"] = (features[\"max_ts\"] - features[\"min_ts\"]).dt.days\n\n    # 3. Агрегаты по временным окнам (30, 60, 90, 180 дней)\n    windows = [30, 60, 90, 180]\n    for win in windows:\n        cutoff = seed_time - pd.Timedelta(days=win)\n        items_win = items_past[items_past[\"ts\"] > cutoff]  # строго последние win дней\n        if items_win.empty:\n            # Заполняем нулями (нет продаж в окне)\n            features[f\"cnt_orders_{win}\"] = 0\n            features[f\"cnt_items_{win}\"] = 0\n            features[f\"sum_price_{win}\"] = 0.0\n            features[f\"has_sales_{win}\"] = 0\n        else:\n            agg_win = items_win.groupby(\"product_id\").agg(\n                cnt_orders=(\"order_id\", \"nunique\"),\n                cnt_items=(\"order_item_id\", \"count\"),\n                sum_price=(\"price\", \"sum\"),\n                mean_price=(\"price\", \"mean\")\n            ).add_prefix(f\"win{win}_\")\n            features = features.join(agg_win)\n\n    # 4. Признаки на основе отзывов\n    if not items_past.empty and not reviews.empty:\n        # Средняя оценка по каждому заказу (может быть несколько отзывов на заказ)\n        order_rating = reviews.groupby(\"order_id\")[\"review_score\"].mean().rename(\"avg_review\").reset_index()\n\n        # Связываем заказы и товары\n        prod_orders = items_past[[\"product_id\", \"order_id\"]].drop_duplicates()\n        prod_orders = prod_orders.merge(order_rating, on=\"order_id\", how=\"left\")\n\n        if prod_orders[\"avg_review\"].notna().any():\n            rating_agg = prod_orders.groupby(\"product_id\")[\"avg_review\"].agg(\n                [\"mean\", \"count\", lambda x: (x >= 4).mean() * 100]  # процент положительных отзывов\n            ).rename(columns={\"mean\": \"avg_review_score\",\n                              \"count\": \"n_reviews\",\n                              \"<lambda_0>\": \"pct_positive_reviews\"})\n            features = features.join(rating_agg)\n\n    # 5. Дополнительные признаки: число платежей, доля способов оплаты и т.д.\n    # Это можно добавить, но для простоты пропустим.\n\n    # 6. Глобальные временные признаки\n    features[\"month\"] = seed_time.month\n    features[\"quarter\"] = seed_time.quarter\n    features[\"day_of_week\"] = seed_time.dayofweek\n    features[\"year\"] = seed_time.year\n\n    # 7. Признак \"есть ли вообще продажи\" – полезен, чтобы отличить 0 из-за малого периода\n    if \"n_orders\" in features.columns:\n        features[\"has_sales\"] = (features[\"n_orders\"].fillna(0) > 0).astype(int)\n    else:\n        features[\"has_sales\"] = 0\n\n    # 8. Заполняем оставшиеся пропуски нулями\n    features = features.fillna(0.0)\n\n    # 9. Переиндексируем в порядок входных entity_ids (они уже в features.index)\n    features = features.reindex(entity_ids, fill_value=0.0)\n    features.index.name = \"product_id\"\n\n    return features",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "82feae377655715c909c944d35b652f2541737cf44310eb9993025209ce7c66f",
+   "code": "def get_features(db, entity_ids, seed_time):\n    # Извлекаем таблицы\n    order_items = db[\"order_items\"]\n    orders = db[\"orders\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]  # может пригодиться, но здесь не используем\n\n    entities = list(entity_ids)\n\n    # Отбираем только прошлые продажи (до seed_time)\n    items_past = order_items[\n        (order_items[\"product_id\"].isin(entities)) &\n        (order_items[\"ts\"] <= seed_time)\n    ]\n\n    # Строим feature-датафрейм с индексом = entity_ids\n    features = pd.DataFrame(index=entities)\n\n    # 1. Агрегаты за всю предшествующую историю\n    if not items_past.empty:\n        agg_all = items_past.groupby(\"product_id\").agg(\n            n_orders=(\"order_id\", \"nunique\"),\n            n_items=(\"order_item_id\", \"count\"),\n            total_price=(\"price\", \"sum\"),\n            total_freight=(\"freight_value\", \"sum\"),\n            mean_price=(\"price\", \"mean\"),\n            mean_freight=(\"freight_value\", \"mean\"),\n            std_price=(\"price\", \"std\"),\n            std_freight=(\"freight_value\", \"std\"),\n            n_sellers=(\"seller_id\", \"nunique\"),\n            min_ts=(\"ts\", \"min\"),\n            max_ts=(\"ts\", \"max\")\n        )\n        features = features.join(agg_all)\n    else:\n        # Пустой датафрейм – всё останется NaN\n        pass\n\n    # 2. Признаки, связанные со временем\n    if \"max_ts\" in features.columns:\n        features[\"days_since_last\"] = (seed_time - features[\"max_ts\"]).dt.days\n        features[\"days_since_first\"] = (seed_time - features[\"min_ts\"]).dt.days\n        features[\"active_days\"] = (features[\"max_ts\"] - features[\"min_ts\"]).dt.days\n\n    # 3. Агрегаты по временным окнам (30, 60, 90, 180 дней)\n    windows = [30, 60, 90, 180]\n    for win in windows:\n        cutoff = seed_time - pd.Timedelta(days=win)\n        items_win = items_past[items_past[\"ts\"] > cutoff]  # строго последние win дней\n        if items_win.empty:\n            # Заполняем нулями (нет продаж в окне)\n            features[f\"cnt_orders_{win}\"] = 0\n            features[f\"cnt_items_{win}\"] = 0\n            features[f\"sum_price_{win}\"] = 0.0\n            features[f\"has_sales_{win}\"] = 0\n        else:\n            agg_win = items_win.groupby(\"product_id\").agg(\n                cnt_orders=(\"order_id\", \"nunique\"),\n                cnt_items=(\"order_item_id\", \"count\"),\n                sum_price=(\"price\", \"sum\"),\n                mean_price=(\"price\", \"mean\")\n            ).add_prefix(f\"win{win}_\")\n            features = features.join(agg_win)\n\n    # 4. Признаки на основе отзывов\n    if not items_past.empty and not reviews.empty:\n        # Средняя оценка по каждому заказу (может быть несколько отзывов на заказ)\n        order_rating = reviews.groupby(\"order_id\")[\"review_score\"].mean().rename(\"avg_review\").reset_index()\n\n        # Связываем заказы и товары\n        prod_orders = items_past[[\"product_id\", \"order_id\"]].drop_duplicates()\n        prod_orders = prod_orders.merge(order_rating, on=\"order_id\", how=\"left\")\n\n        if prod_orders[\"avg_review\"].notna().any():\n            rating_agg = prod_orders.groupby(\"product_id\")[\"avg_review\"].agg(\n                [\"mean\", \"count\", lambda x: (x >= 4).mean() * 100]  # процент положительных отзывов\n            ).rename(columns={\"mean\": \"avg_review_score\",\n                              \"count\": \"n_reviews\",\n                              \"<lambda_0>\": \"pct_positive_reviews\"})\n            features = features.join(rating_agg)\n\n    # 5. Дополнительные признаки: число платежей, доля способов оплаты и т.д.\n    # Это можно добавить, но для простоты пропустим.\n\n    # 6. Глобальные временные признаки\n    features[\"month\"] = seed_time.month\n    features[\"quarter\"] = seed_time.quarter\n    features[\"day_of_week\"] = seed_time.dayofweek\n    features[\"year\"] = seed_time.year\n\n    # 7. Признак \"есть ли вообще продажи\" – полезен, чтобы отличить 0 из-за малого периода\n    if \"n_orders\" in features.columns:\n        features[\"has_sales\"] = (features[\"n_orders\"].fillna(0) > 0).astype(int)\n    else:\n        features[\"has_sales\"] = 0\n\n    # 8. Заполняем оставшиеся пропуски нулями\n    features = features.fillna(0.0)\n\n    # 9. Переиндексируем в порядок входных entity_ids (они уже в features.index)\n    features = features.reindex(entity_ids, fill_value=0.0)\n    features.index.name = \"product_id\"\n\n    return features",
+   "timestamp": "2026-09-18T20:52:52+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "n_reviews",
+      "pct_positive_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "pct_positive_reviews"
+     ],
+     "n_columns": 38,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "n_reviews",
+      "pct_positive_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "pct_positive_reviews"
+     ],
+     "n_columns": 38,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "n_reviews",
+      "pct_positive_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 38,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "n_reviews",
+      "pct_positive_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "pct_positive_reviews"
+     ],
+     "n_columns": 38,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "n_reviews",
+      "pct_positive_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 38,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "n_reviews",
+      "pct_positive_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "pct_positive_reviews"
+     ],
+     "n_columns": 38,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 3.0
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "a170497cd43dc58d1f8ccb380bc3c9e2fbac2e79168f9229c99ce5e3f4da32ca",
+   "code": "def get_features(db, entity_ids, seed_time):\n    # Извлекаем таблицы\n    order_items = db[\"order_items\"]\n    orders = db[\"orders\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]  # может пригодиться, но здесь не используем\n\n    entities = list(entity_ids)\n\n    # Отбираем только прошлые продажи (до seed_time)\n    items_past = order_items[\n        (order_items[\"product_id\"].isin(entities)) &\n        (order_items[\"ts\"] <= seed_time)\n    ]\n\n    # Строим feature-датафрейм с индексом = entity_ids\n    features = pd.DataFrame(index=entities)\n\n    # 1. Агрегаты за всю предшествующую историю\n    if not items_past.empty:\n        agg_all = items_past.groupby(\"product_id\").agg(\n            n_orders=(\"order_id\", \"nunique\"),\n            n_items=(\"order_item_id\", \"count\"),\n            total_price=(\"price\", \"sum\"),\n            total_freight=(\"freight_value\", \"sum\"),\n            mean_price=(\"price\", \"mean\"),\n            mean_freight=(\"freight_value\", \"mean\"),\n            std_price=(\"price\", \"std\"),\n            std_freight=(\"freight_value\", \"std\"),\n            n_sellers=(\"seller_id\", \"nunique\"),\n            min_ts=(\"ts\", \"min\"),\n            max_ts=(\"ts\", \"max\")\n        )\n        features = features.join(agg_all)\n    else:\n        # Пустой датафрейм – всё останется NaN\n        pass\n\n    # 2. Признаки, связанные со временем\n    if \"max_ts\" in features.columns:\n        features[\"days_since_last\"] = (seed_time - features[\"max_ts\"]).dt.days\n        features[\"days_since_first\"] = (seed_time - features[\"min_ts\"]).dt.days\n        features[\"active_days\"] = (features[\"max_ts\"] - features[\"min_ts\"]).dt.days\n\n    # 3. Агрегаты по временным окнам (30, 60, 90, 180 дней)\n    windows = [30, 60, 90, 180]\n    for win in windows:\n        cutoff = seed_time - pd.Timedelta(days=win)\n        items_win = items_past[items_past[\"ts\"] > cutoff]  # строго последние win дней\n        if items_win.empty:\n            # Заполняем нулями (нет продаж в окне)\n            features[f\"cnt_orders_{win}\"] = 0\n            features[f\"cnt_items_{win}\"] = 0\n            features[f\"sum_price_{win}\"] = 0.0\n            features[f\"has_sales_{win}\"] = 0\n        else:\n            agg_win = items_win.groupby(\"product_id\").agg(\n                cnt_orders=(\"order_id\", \"nunique\"),\n                cnt_items=(\"order_item_id\", \"count\"),\n                sum_price=(\"price\", \"sum\"),\n                mean_price=(\"price\", \"mean\")\n            ).add_prefix(f\"win{win}_\")\n            features = features.join(agg_win)\n\n    # 4. Признаки на основе отзывов\n    if not items_past.empty and not reviews.empty:\n        # Используем только отзывы, которые уже существуют на момент seed_time\n        reviews_past = reviews[reviews[\"review_creation_date\"] <= seed_time]\n\n        # Средняя оценка по каждому заказу (может быть несколько отзывов на заказ)\n        order_rating = reviews_past.groupby(\"order_id\")[\"review_score\"].mean().rename(\"avg_review\").reset_index()\n\n        # Связываем заказы и товары\n        prod_orders = items_past[[\"product_id\", \"order_id\"]].drop_duplicates()\n        prod_orders = prod_orders.merge(order_rating, on=\"order_id\", how=\"left\")\n\n        if prod_orders[\"avg_review\"].notna().any():\n            rating_agg = prod_orders.groupby(\"product_id\")[\"avg_review\"].agg(\n                [\"mean\", \"count\", lambda x: (x >= 4).mean() * 100]  # процент положительных отзывов\n            ).rename(columns={\"mean\": \"avg_review_score\",\n                              \"count\": \"n_reviews\",\n                              \"<lambda_0>\": \"pct_positive_reviews\"})\n            features = features.join(rating_agg)\n\n    # 5. Дополнительные признаки: число платежей, доля способов оплаты и т.д.\n    # Это можно добавить, но для простоты пропустим.\n\n    # 6. Глобальные временные признаки\n    features[\"month\"] = seed_time.month\n    features[\"quarter\"] = seed_time.quarter\n    features[\"day_of_week\"] = seed_time.dayofweek\n    features[\"year\"] = seed_time.year\n\n    # 7. Признак \"есть ли вообще продажи\" – полезен, чтобы отличить 0 из-за малого периода\n    if \"n_orders\" in features.columns:\n        features[\"has_sales\"] = (features[\"n_orders\"].fillna(0) > 0).astype(int)\n    else:\n        features[\"has_sales\"] = 0\n\n    # 8. Заполняем оставшиеся пропуски нулями\n    features = features.fillna(0.0)\n\n    # 9. Переиндексируем в порядок входных entity_ids (они уже в features.index)\n    features = features.reindex(entity_ids, fill_value=0.0)\n    features.index.name = \"product_id\"\n\n    return features",
+   "timestamp": "2026-09-18T20:53:06+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 38,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 38,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 38,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 38,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 38,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 38,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 2.3
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

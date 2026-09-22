@@ -1,0 +1,186 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "a3843dc59a5527d2",
+ "source_sha256": "a3843dc59a5527d263bf48f18deede84f52196362c8f1407f888b6ffc4364b3b",
+ "source_code": "def get_features(db: dict, entity_ids, seed_time):\n    entity_ids = pd.unique(entity_ids)  # защита от дубликатов\n    \n    # Подготовка базовых данных\n    orders = db['orders'][['order_id', 'customer_id']]\n    items = db['order_items'][['order_id', 'product_id', 'seller_id', 'price', 'freight_value', 'ts']]\n    reviews = db['reviews'][['order_id', 'review_score']]\n    \n    df = items.merge(orders, on='order_id', how='left')\n    df = df.merge(reviews, on='order_id', how='left')\n    \n    # Только интересующие товары и заказы, созданные до seed_time\n    df = df[df['product_id'].isin(entity_ids) & (df['ts'] < seed_time)]\n    \n    # Пустой датасет (ни одного заказа среди entity_ids)\n    if df.empty:\n        features = pd.DataFrame(index=entity_ids)\n        features['total_orders'] = 0\n        features['total_units'] = 0\n        features['total_revenue'] = 0.0\n        features['total_freight'] = 0.0\n        features['avg_price'] = 0.0\n        features['avg_freight'] = 0.0\n        features['unique_customers'] = 0\n        features['unique_sellers'] = 0\n        features['total_reviews'] = 0\n        features['avg_review_score'] = 0.0\n        features['days_since_last_order'] = -1\n        features['orders_30d'] = 0\n        features['units_30d'] = 0\n        features['orders_60d'] = 0\n        features['units_60d'] = 0\n        features['orders_90d'] = 0\n        features['units_90d'] = 0\n        features['has_sales'] = 0\n        features['repeat_rate'] = 0.0\n        return features.reindex(entity_ids)\n    \n    # Базовые агрегации (по всей истории до seed_time)\n    base_group = df.groupby('product_id').agg(\n        total_orders=('order_id', 'nunique'),        # уникальных заказов\n        total_units=('price', 'count'),              # количество позиций (единиц)\n        total_revenue=('price', 'sum'),              # суммарная выручка\n        total_freight=('freight_value', 'sum'),      # суммарная стоимость доставки\n        avg_price=('price', 'mean'),\n        avg_freight=('freight_value', 'mean'),\n        unique_customers=('customer_id', 'nunique'), \n        unique_sellers=('seller_id', 'nunique'),\n        total_reviews=('review_score', 'count'),     # количество непустых отзывов\n        avg_review_score=('review_score', 'mean')\n    )\n    \n    # Дни с момента последнего заказа\n    last_ts = df.groupby('product_id')['ts'].max()\n    days_since = (seed_time - last_ts).dt.days\n    \n    # Агрегации за последние 30, 60, 90 дней\n    window_features = {}\n    for days in [30, 60, 90]:\n        mask = df['ts'] >= seed_time - pd.Timedelta(days=days)\n        sub = df[mask]\n        if len(sub) == 0:\n            orders_cnt = pd.Series(dtype=int)\n            units_cnt = pd.Series(dtype=int)\n        else:\n            orders_cnt = sub.groupby('product_id')['order_id'].nunique().rename(f'orders_{days}d')\n            units_cnt = sub.groupby('product_id')['price'].count().rename(f'units_{days}d')\n        window_features[f'orders_{days}d'] = orders_cnt\n        window_features[f'units_{days}d'] = units_cnt\n    \n    # Сбор итогового DataFrame\n    features = pd.DataFrame(index=entity_ids)\n    features = features.join(base_group)\n    features = features.join(days_since.rename('days_since_last_order'))\n    for col, series in window_features.items():\n        features = features.join(series, how='left')\n    \n    # Заполнение пропусков\n    cnt_cols = ['total_orders', 'total_units', 'total_revenue', 'total_freight',\n                'unique_customers', 'unique_sellers', 'total_reviews',\n                'orders_30d', 'units_30d', 'orders_60d', 'units_60d',\n                'orders_90d', 'units_90d']\n    features[cnt_cols] = features[cnt_cols].fillna(0)\n    \n    mean_cols = ['avg_price', 'avg_freight', 'avg_review_score']\n    features[mean_cols] = features[mean_cols].fillna(0.0)\n    \n    features['days_since_last_order'] = features['days_since_last_order'].fillna(-1)\n    \n    # Дополнительные конструкционные признаки\n    features['has_sales'] = (features['total_orders'] > 0).astype(int)\n    features['repeat_rate'] = np.where(\n        features['unique_customers'] > 0,\n        features['total_orders'] / features['unique_customers'],\n        0.0\n    )\n    \n    # Сохранение порядка исходного запроса\n    features = features.reindex(entity_ids)\n    return features",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "a3843dc59a5527d263bf48f18deede84f52196362c8f1407f888b6ffc4364b3b",
+   "code": "def get_features(db: dict, entity_ids, seed_time):\n    entity_ids = pd.unique(entity_ids)  # защита от дубликатов\n    \n    # Подготовка базовых данных\n    orders = db['orders'][['order_id', 'customer_id']]\n    items = db['order_items'][['order_id', 'product_id', 'seller_id', 'price', 'freight_value', 'ts']]\n    reviews = db['reviews'][['order_id', 'review_score']]\n    \n    df = items.merge(orders, on='order_id', how='left')\n    df = df.merge(reviews, on='order_id', how='left')\n    \n    # Только интересующие товары и заказы, созданные до seed_time\n    df = df[df['product_id'].isin(entity_ids) & (df['ts'] < seed_time)]\n    \n    # Пустой датасет (ни одного заказа среди entity_ids)\n    if df.empty:\n        features = pd.DataFrame(index=entity_ids)\n        features['total_orders'] = 0\n        features['total_units'] = 0\n        features['total_revenue'] = 0.0\n        features['total_freight'] = 0.0\n        features['avg_price'] = 0.0\n        features['avg_freight'] = 0.0\n        features['unique_customers'] = 0\n        features['unique_sellers'] = 0\n        features['total_reviews'] = 0\n        features['avg_review_score'] = 0.0\n        features['days_since_last_order'] = -1\n        features['orders_30d'] = 0\n        features['units_30d'] = 0\n        features['orders_60d'] = 0\n        features['units_60d'] = 0\n        features['orders_90d'] = 0\n        features['units_90d'] = 0\n        features['has_sales'] = 0\n        features['repeat_rate'] = 0.0\n        return features.reindex(entity_ids)\n    \n    # Базовые агрегации (по всей истории до seed_time)\n    base_group = df.groupby('product_id').agg(\n        total_orders=('order_id', 'nunique'),        # уникальных заказов\n        total_units=('price', 'count'),              # количество позиций (единиц)\n        total_revenue=('price', 'sum'),              # суммарная выручка\n        total_freight=('freight_value', 'sum'),      # суммарная стоимость доставки\n        avg_price=('price', 'mean'),\n        avg_freight=('freight_value', 'mean'),\n        unique_customers=('customer_id', 'nunique'), \n        unique_sellers=('seller_id', 'nunique'),\n        total_reviews=('review_score', 'count'),     # количество непустых отзывов\n        avg_review_score=('review_score', 'mean')\n    )\n    \n    # Дни с момента последнего заказа\n    last_ts = df.groupby('product_id')['ts'].max()\n    days_since = (seed_time - last_ts).dt.days\n    \n    # Агрегации за последние 30, 60, 90 дней\n    window_features = {}\n    for days in [30, 60, 90]:\n        mask = df['ts'] >= seed_time - pd.Timedelta(days=days)\n        sub = df[mask]\n        if len(sub) == 0:\n            orders_cnt = pd.Series(dtype=int)\n            units_cnt = pd.Series(dtype=int)\n        else:\n            orders_cnt = sub.groupby('product_id')['order_id'].nunique().rename(f'orders_{days}d')\n            units_cnt = sub.groupby('product_id')['price'].count().rename(f'units_{days}d')\n        window_features[f'orders_{days}d'] = orders_cnt\n        window_features[f'units_{days}d'] = units_cnt\n    \n    # Сбор итогового DataFrame\n    features = pd.DataFrame(index=entity_ids)\n    features = features.join(base_group)\n    features = features.join(days_since.rename('days_since_last_order'))\n    for col, series in window_features.items():\n        features = features.join(series, how='left')\n    \n    # Заполнение пропусков\n    cnt_cols = ['total_orders', 'total_units', 'total_revenue', 'total_freight',\n                'unique_customers', 'unique_sellers', 'total_reviews',\n                'orders_30d', 'units_30d', 'orders_60d', 'units_60d',\n                'orders_90d', 'units_90d']\n    features[cnt_cols] = features[cnt_cols].fillna(0)\n    \n    mean_cols = ['avg_price', 'avg_freight', 'avg_review_score']\n    features[mean_cols] = features[mean_cols].fillna(0.0)\n    \n    features['days_since_last_order'] = features['days_since_last_order'].fillna(-1)\n    \n    # Дополнительные конструкционные признаки\n    features['has_sales'] = (features['total_orders'] > 0).astype(int)\n    features['repeat_rate'] = np.where(\n        features['unique_customers'] > 0,\n        features['total_orders'] / features['unique_customers'],\n        0.0\n    )\n    \n    # Сохранение порядка исходного запроса\n    features = features.reindex(entity_ids)\n    return features",
+   "timestamp": "2026-09-18T20:51:44+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 19,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 19,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 19,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 19,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 19,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 19,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 2.8
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "1b9be792ab054343320b64f330c00a6eec96653b35d371e182028987cfd25100",
+   "code": "def get_features(db: dict, entity_ids, seed_time):\n    entity_ids = pd.unique(entity_ids)  # защита от дубликатов\n\n    # Подготовка базовых данных\n    orders = db['orders'][['order_id', 'customer_id']]\n    items = db['order_items'][['order_id', 'product_id', 'seller_id', 'price', 'freight_value', 'ts']]\n    reviews = db['reviews'][['order_id', 'review_score', 'review_creation_date']]\n\n    df = items.merge(orders, on='order_id', how='left')\n\n    # Только интересующие товары и заказы, созданные до seed_time\n    df = df[df['product_id'].isin(entity_ids) & (df['ts'] < seed_time)]\n\n    # Отзывы: учитываем только те, что уже существуют на момент seed_time\n    reviews = reviews[reviews['review_creation_date'] <= seed_time]\n    rv = df[['order_id', 'product_id']].merge(reviews, on='order_id', how='inner')\n\n    # Пустой датасет (ни одного заказа среди entity_ids)\n    if df.empty:\n        features = pd.DataFrame(index=entity_ids)\n        features['total_orders'] = 0\n        features['total_units'] = 0\n        features['total_revenue'] = 0.0\n        features['total_freight'] = 0.0\n        features['avg_price'] = 0.0\n        features['avg_freight'] = 0.0\n        features['unique_customers'] = 0\n        features['unique_sellers'] = 0\n        features['total_reviews'] = 0\n        features['avg_review_score'] = 0.0\n        features['days_since_last_order'] = -1\n        features['orders_30d'] = 0\n        features['units_30d'] = 0\n        features['orders_60d'] = 0\n        features['units_60d'] = 0\n        features['orders_90d'] = 0\n        features['units_90d'] = 0\n        features['has_sales'] = 0\n        features['repeat_rate'] = 0.0\n        return features.reindex(entity_ids)\n\n    # Базовые агрегации (по всей истории до seed_time)\n    base_group = df.groupby('product_id').agg(\n        total_orders=('order_id', 'nunique'),        # уникальных заказов\n        total_units=('price', 'count'),              # количество позиций (единиц)\n        total_revenue=('price', 'sum'),              # суммарная выручка\n        total_freight=('freight_value', 'sum'),      # суммарная стоимость доставки\n        avg_price=('price', 'mean'),\n        avg_freight=('freight_value', 'mean'),\n        unique_customers=('customer_id', 'nunique'),\n        unique_sellers=('seller_id', 'nunique'),\n    )\n\n    # Агрегации по отзывам, доступным на момент seed_time\n    review_group = rv.groupby('product_id').agg(\n        total_reviews=('review_score', 'count'),     # количество непустых отзывов\n        avg_review_score=('review_score', 'mean'),\n    )\n\n    # Дни с момента последнего заказа\n    last_ts = df.groupby('product_id')['ts'].max()\n    days_since = (seed_time - last_ts).dt.days\n\n    # Агрегации за последние 30, 60, 90 дней\n    window_features = {}\n    for days in [30, 60, 90]:\n        mask = df['ts'] >= seed_time - pd.Timedelta(days=days)\n        sub = df[mask]\n        if len(sub) == 0:\n            orders_cnt = pd.Series(dtype=int)\n            units_cnt = pd.Series(dtype=int)\n        else:\n            orders_cnt = sub.groupby('product_id')['order_id'].nunique().rename(f'orders_{days}d')\n            units_cnt = sub.groupby('product_id')['price'].count().rename(f'units_{days}d')\n        window_features[f'orders_{days}d'] = orders_cnt\n        window_features[f'units_{days}d'] = units_cnt\n\n    # Сбор итогового DataFrame\n    features = pd.DataFrame(index=entity_ids)\n    features = features.join(base_group)\n    features = features.join(review_group)\n    features = features.join(days_since.rename('days_since_last_order'))\n    for col, series in window_features.items():\n        features = features.join(series, how='left')\n\n    # Заполнение пропусков\n    cnt_cols = ['total_orders', 'total_units', 'total_revenue', 'total_freight',\n                'unique_customers', 'unique_sellers', 'total_reviews',\n                'orders_30d', 'units_30d', 'orders_60d', 'units_60d',\n                'orders_90d', 'units_90d']\n    features[cnt_cols] = features[cnt_cols].fillna(0)\n\n    mean_cols = ['avg_price', 'avg_freight', 'avg_review_score']\n    features[mean_cols] = features[mean_cols].fillna(0.0)\n\n    features['days_since_last_order'] = features['days_since_last_order'].fillna(-1)\n\n    # Дополнительные конструкционные признаки\n    features['has_sales'] = (features['total_orders'] > 0).astype(int)\n    features['repeat_rate'] = np.where(\n        features['unique_customers'] > 0,\n        features['total_orders'] / features['unique_customers'],\n        0.0\n    )\n\n    # Сохранение порядка исходного запроса\n    features = features.reindex(entity_ids)\n    return features\n",
+   "timestamp": "2026-09-18T20:52:18+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 19,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 19,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 19,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 19,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 19,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 19,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 3.2
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "program_uid": "38139aada1834411",
+ "program": "deepseek-v4-flash-0731#9",
+ "mechanism": "SELF_AVAILABILITY_CANARY",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 661.6,
+ "assistant_turns": 6,
+ "tool_calls": 6,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "pit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=pit_state.json\n\nИтоговый вердикт: утечка была и устранена.\n\n- Детекция (итерация 0): `LEAK`, canary на столбце `avg_delivery_days` на всех шести моментах (dev и held-out). Witness молчал: продажи, отзывы и платежи фильтровались по времени корректно.\n- Причина: блок расчёта средней задержки доставки брал `order_delivered_customer_date` для заказов, купленных до `seed_time`, без проверки самой даты доставки. Доставка происходит после покупки, поэтому в признак попадала информация из будущего (для предсказания 1 января учитывались доставки февраля и позже).\n- Починка (итерация 1): в `get_features.py:88` добавлен фильтр `order_delivered_customer_date <= seed_time`, остальные агрегаты не тронуты.\n- Повторная проверка: `CLEAN` на всех шести моментах, включая held-out.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 76724,
+   "output_tokens": 1335
+  },
+  "message_count": 12,
+  "session_id": "a70634ac71c9",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

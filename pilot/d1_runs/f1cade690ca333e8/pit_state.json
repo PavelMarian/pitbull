@@ -1,0 +1,186 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "f1cade690ca333e8",
+ "source_sha256": "f1cade690ca333e8184b3131599353c791128f2c3f3dec5309930022aef5bd30",
+ "source_code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # расчленяем исходные данные\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    # Фильтруем исторические заказы: только до seed_time и только нужные товары\n    product_set = set(entity_ids)\n    mask = order_items[\"product_id\"].isin(product_set) & (order_items[\"ts\"] < seed_time)\n    items = order_items.loc[mask, [\"order_id\", \"product_id\", \"seller_id\", \"price\", \"freight_value\", \"ts\"]].copy()\n\n    # Если истории для интересующих товаров не оказалось\n    if items.empty:\n        result = pd.DataFrame(index=entity_ids)\n        # создадим пустые признаки с нулями (все типы числовые)\n        # количество признаков здесь резервируем как в основной ветке\n        sample_features = [\n            \"order_count\", \"unique_orders\", \"unique_customers\", \"unique_sellers\",\n            \"total_price\", \"avg_price\", \"std_price\", \"max_price\", \"min_price\",\n            \"total_freight\", \"avg_freight\",\n            \"cnt_30\", \"cnt_60\", \"cnt_90\",\n            \"canceled_share\", \"delivered_share\",\n            \"avg_review\", \"std_review\", \"total_reviews\",\n            \"avg_installments\", \"avg_payment_value\",\n            \"credit_share\", \"debit_share\", \"voucher_share\",\n            \"last_purchase_days\", \"first_purchase_days\", \"avg_daily_orders\",\n        ]\n        for c in sample_features:\n            result[c] = 0.0\n        return result\n\n    # присоединяем информацию о заказе (customer_id, статус)\n    orders_sub = orders[[\"order_id\", \"customer_id\", \"order_status\"]]\n    items = items.merge(orders_sub, on=\"order_id\", how=\"left\")\n\n    # Агрегируем платежи по заказу\n    pay_agg = payments.groupby(\"order_id\").agg(\n        install_mean=(\"payment_installments\", \"mean\"),\n        total_pay=(\"payment_value\", \"sum\"),\n        credit_share=(\"payment_type\", lambda s: (s == \"credit_card\").mean()),\n        debit_share=(\"payment_type\", lambda s: (s == \"debit_card\").mean()),\n        voucher_share=(\"payment_type\", lambda s: (s == \"voucher\").mean()),\n    )\n\n    # Агрегируем отзывы по заказу\n    rev_agg = reviews.groupby(\"order_id\").agg(\n        rev_count=(\"review_id\", \"count\"),\n        rev_avg=(\"review_score\", \"mean\"),\n        rev_std=(\"review_score\", \"std\"),\n    )\n\n    items = items.merge(pay_agg, on=\"order_id\", how=\"left\")\n    items = items.merge(rev_agg, on=\"order_id\", how=\"left\")\n\n    # Вспомогательные флаги\n    items[\"cnt_30\"] = (items[\"ts\"] >= seed_time - pd.Timedelta(days=30)).astype(int)\n    items[\"cnt_60\"] = (items[\"ts\"] >= seed_time - pd.Timedelta(days=60)).astype(int)\n    items[\"cnt_90\"] = (items[\"ts\"] >= seed_time - pd.Timedelta(days=90)).astype(int)\n    items[\"is_canceled\"] = (items[\"order_status\"] == \"canceled\").astype(int)\n    items[\"is_delivered\"] = (items[\"order_status\"] == \"delivered\").astype(int)\n\n    # Главная группировка по товару\n    g = items.groupby(\"product_id\")\n    feat = g.agg(\n        order_count=(\"order_id\", \"count\"),\n        unique_orders=(\"order_id\", \"nunique\"),\n        unique_customers=(\"customer_id\", \"nunique\"),\n        unique_sellers=(\"seller_id\", \"nunique\"),\n        total_price=(\"price\", \"sum\"),\n        avg_price=(\"price\", \"mean\"),\n        std_price=(\"price\", \"std\"),\n        max_price=(\"price\", \"max\"),\n        min_price=(\"price\", \"min\"),\n        total_freight=(\"freight_value\", \"sum\"),\n        avg_freight=(\"freight_value\", \"mean\"),\n        cnt_30=(\"cnt_30\", \"sum\"),\n        cnt_60=(\"cnt_60\", \"sum\"),\n        cnt_90=(\"cnt_90\", \"sum\"),\n        canceled_share=(\"is_canceled\", \"mean\"),\n        delivered_share=(\"is_delivered\", \"mean\"),\n        avg_review=(\"rev_avg\", \"mean\"),\n        std_review=(\"rev_std\", \"mean\"),\n        total_reviews=(\"rev_count\", \"sum\"),\n        avg_installments=(\"install_mean\", \"mean\"),\n        avg_payment_value=(\"total_pay\", \"mean\"),\n        credit_share=(\"credit_share\", \"mean\"),\n        debit_share=(\"debit_share\", \"mean\"),\n        voucher_share=(\"voucher_share\", \"mean\"),\n        max_ts=(\"ts\", \"max\"),\n        min_ts=(\"ts\", \"min\"),\n    )\n\n    # Временные признаки: давность последней и первой покупки\n    last_purchase_days = (seed_time - feat[\"max_ts\"]) / pd.Timedelta(days=1)\n    first_purchase_days = (seed_time - feat[\"min_ts\"]) / pd.Timedelta(days=1)\n\n    feat[\"last_purchase_days\"] = last_purchase_days\n    feat[\"first_purchase_days\"] = first_purchase_days\n    feat[\"avg_daily_orders\"] = feat[\"order_count\"] / first_purchase_days.clip(lower=1)\n\n    # Убираем временные вспомогательные колонки\n    feat = feat.drop(columns=[\"max_ts\", \"min_ts\"])\n\n    # Связываем с запрошенными id (для отсутствующих товаров — значения по умолчанию)\n    result = pd.DataFrame(index=entity_ids)\n    result = result.join(feat, how=\"left\")\n    result = result.fillna(0.0)\n\n    # Убеждаемся, что индексы в том же порядке, как просили\n    result = result.reindex(entity_ids)\n    return result",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "f1cade690ca333e8184b3131599353c791128f2c3f3dec5309930022aef5bd30",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # расчленяем исходные данные\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    # Фильтруем исторические заказы: только до seed_time и только нужные товары\n    product_set = set(entity_ids)\n    mask = order_items[\"product_id\"].isin(product_set) & (order_items[\"ts\"] < seed_time)\n    items = order_items.loc[mask, [\"order_id\", \"product_id\", \"seller_id\", \"price\", \"freight_value\", \"ts\"]].copy()\n\n    # Если истории для интересующих товаров не оказалось\n    if items.empty:\n        result = pd.DataFrame(index=entity_ids)\n        # создадим пустые признаки с нулями (все типы числовые)\n        # количество признаков здесь резервируем как в основной ветке\n        sample_features = [\n            \"order_count\", \"unique_orders\", \"unique_customers\", \"unique_sellers\",\n            \"total_price\", \"avg_price\", \"std_price\", \"max_price\", \"min_price\",\n            \"total_freight\", \"avg_freight\",\n            \"cnt_30\", \"cnt_60\", \"cnt_90\",\n            \"canceled_share\", \"delivered_share\",\n            \"avg_review\", \"std_review\", \"total_reviews\",\n            \"avg_installments\", \"avg_payment_value\",\n            \"credit_share\", \"debit_share\", \"voucher_share\",\n            \"last_purchase_days\", \"first_purchase_days\", \"avg_daily_orders\",\n        ]\n        for c in sample_features:\n            result[c] = 0.0\n        return result\n\n    # присоединяем информацию о заказе (customer_id, статус)\n    orders_sub = orders[[\"order_id\", \"customer_id\", \"order_status\"]]\n    items = items.merge(orders_sub, on=\"order_id\", how=\"left\")\n\n    # Агрегируем платежи по заказу\n    pay_agg = payments.groupby(\"order_id\").agg(\n        install_mean=(\"payment_installments\", \"mean\"),\n        total_pay=(\"payment_value\", \"sum\"),\n        credit_share=(\"payment_type\", lambda s: (s == \"credit_card\").mean()),\n        debit_share=(\"payment_type\", lambda s: (s == \"debit_card\").mean()),\n        voucher_share=(\"payment_type\", lambda s: (s == \"voucher\").mean()),\n    )\n\n    # Агрегируем отзывы по заказу\n    rev_agg = reviews.groupby(\"order_id\").agg(\n        rev_count=(\"review_id\", \"count\"),\n        rev_avg=(\"review_score\", \"mean\"),\n        rev_std=(\"review_score\", \"std\"),\n    )\n\n    items = items.merge(pay_agg, on=\"order_id\", how=\"left\")\n    items = items.merge(rev_agg, on=\"order_id\", how=\"left\")\n\n    # Вспомогательные флаги\n    items[\"cnt_30\"] = (items[\"ts\"] >= seed_time - pd.Timedelta(days=30)).astype(int)\n    items[\"cnt_60\"] = (items[\"ts\"] >= seed_time - pd.Timedelta(days=60)).astype(int)\n    items[\"cnt_90\"] = (items[\"ts\"] >= seed_time - pd.Timedelta(days=90)).astype(int)\n    items[\"is_canceled\"] = (items[\"order_status\"] == \"canceled\").astype(int)\n    items[\"is_delivered\"] = (items[\"order_status\"] == \"delivered\").astype(int)\n\n    # Главная группировка по товару\n    g = items.groupby(\"product_id\")\n    feat = g.agg(\n        order_count=(\"order_id\", \"count\"),\n        unique_orders=(\"order_id\", \"nunique\"),\n        unique_customers=(\"customer_id\", \"nunique\"),\n        unique_sellers=(\"seller_id\", \"nunique\"),\n        total_price=(\"price\", \"sum\"),\n        avg_price=(\"price\", \"mean\"),\n        std_price=(\"price\", \"std\"),\n        max_price=(\"price\", \"max\"),\n        min_price=(\"price\", \"min\"),\n        total_freight=(\"freight_value\", \"sum\"),\n        avg_freight=(\"freight_value\", \"mean\"),\n        cnt_30=(\"cnt_30\", \"sum\"),\n        cnt_60=(\"cnt_60\", \"sum\"),\n        cnt_90=(\"cnt_90\", \"sum\"),\n        canceled_share=(\"is_canceled\", \"mean\"),\n        delivered_share=(\"is_delivered\", \"mean\"),\n        avg_review=(\"rev_avg\", \"mean\"),\n        std_review=(\"rev_std\", \"mean\"),\n        total_reviews=(\"rev_count\", \"sum\"),\n        avg_installments=(\"install_mean\", \"mean\"),\n        avg_payment_value=(\"total_pay\", \"mean\"),\n        credit_share=(\"credit_share\", \"mean\"),\n        debit_share=(\"debit_share\", \"mean\"),\n        voucher_share=(\"voucher_share\", \"mean\"),\n        max_ts=(\"ts\", \"max\"),\n        min_ts=(\"ts\", \"min\"),\n    )\n\n    # Временные признаки: давность последней и первой покупки\n    last_purchase_days = (seed_time - feat[\"max_ts\"]) / pd.Timedelta(days=1)\n    first_purchase_days = (seed_time - feat[\"min_ts\"]) / pd.Timedelta(days=1)\n\n    feat[\"last_purchase_days\"] = last_purchase_days\n    feat[\"first_purchase_days\"] = first_purchase_days\n    feat[\"avg_daily_orders\"] = feat[\"order_count\"] / first_purchase_days.clip(lower=1)\n\n    # Убираем временные вспомогательные колонки\n    feat = feat.drop(columns=[\"max_ts\", \"min_ts\"])\n\n    # Связываем с запрошенными id (для отсутствующих товаров — значения по умолчанию)\n    result = pd.DataFrame(index=entity_ids)\n    result = result.join(feat, how=\"left\")\n    result = result.fillna(0.0)\n\n    # Убеждаемся, что индексы в том же порядке, как просили\n    result = result.reindex(entity_ids)\n    return result",
+   "timestamp": "2026-09-18T20:53:34+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "total_reviews"
+     ],
+     "canary_columns": [
+      "avg_review"
+     ],
+     "n_columns": 27,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "total_reviews"
+     ],
+     "canary_columns": [
+      "avg_review"
+     ],
+     "n_columns": 27,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "total_reviews"
+     ],
+     "canary_columns": [
+      "avg_review"
+     ],
+     "n_columns": 27,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "total_reviews"
+     ],
+     "canary_columns": [
+      "avg_review"
+     ],
+     "n_columns": 27,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "total_reviews"
+     ],
+     "canary_columns": [
+      "avg_review"
+     ],
+     "n_columns": 27,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "total_reviews"
+     ],
+     "canary_columns": [
+      "avg_review"
+     ],
+     "n_columns": 27,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 237.8
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "9f607e18917230bc5501ab227cd9eb4c40a74f626e4f3bd10956a321ecebd41a",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    feature_cols = [\n        \"order_count\", \"unique_orders\", \"unique_customers\", \"unique_sellers\",\n        \"total_price\", \"avg_price\", \"std_price\", \"max_price\", \"min_price\",\n        \"total_freight\", \"avg_freight\",\n        \"cnt_30\", \"cnt_60\", \"cnt_90\",\n        \"delivered_share\",\n        \"avg_review\", \"std_review\", \"total_reviews\",\n        \"avg_installments\", \"avg_payment_value\",\n        \"credit_share\", \"debit_share\", \"voucher_share\",\n        \"last_purchase_days\", \"first_purchase_days\", \"avg_daily_orders\",\n    ]\n\n    # Только позиции, купленные строго до seed_time\n    product_set = set(entity_ids)\n    mask = order_items[\"product_id\"].isin(product_set) & (order_items[\"ts\"] < seed_time)\n    items = order_items.loc[mask, [\"order_id\", \"product_id\", \"seller_id\", \"price\", \"freight_value\", \"ts\"]].copy()\n\n    if items.empty:\n        result = pd.DataFrame(index=entity_ids)\n        for c in feature_cols:\n            result[c] = 0.0\n        return result\n\n    # Заказы: нужны customer_id и дата доставки (факт доставки на момент seed_time)\n    orders_sub = orders[[\"order_id\", \"customer_id\", \"order_delivered_customer_date\"]]\n    items = items.merge(orders_sub, on=\"order_id\", how=\"left\")\n\n    # Отзывы: доступны только те, что уже созданы к моменту seed_time\n    rev = reviews[reviews[\"review_creation_date\"] < seed_time]\n    rev_agg = rev.groupby(\"order_id\").agg(\n        rev_count=(\"review_id\", \"count\"),\n        rev_avg=(\"review_score\", \"mean\"),\n        rev_std=(\"review_score\", \"std\"),\n    )\n\n    # Платежи проходят в момент покупки, а покупки уже отфильтрованы по ts < seed_time\n    pay_agg = payments.groupby(\"order_id\").agg(\n        install_mean=(\"payment_installments\", \"mean\"),\n        total_pay=(\"payment_value\", \"sum\"),\n        credit_share=(\"payment_type\", lambda s: (s == \"credit_card\").mean()),\n        debit_share=(\"payment_type\", lambda s: (s == \"debit_card\").mean()),\n        voucher_share=(\"payment_type\", lambda s: (s == \"voucher\").mean()),\n    )\n\n    items = items.merge(pay_agg, on=\"order_id\", how=\"left\")\n    items = items.merge(rev_agg, on=\"order_id\", how=\"left\")\n\n    # Окна активности\n    items[\"cnt_30\"] = (items[\"ts\"] >= seed_time - pd.Timedelta(days=30)).astype(int)\n    items[\"cnt_60\"] = (items[\"ts\"] >= seed_time - pd.Timedelta(days=60)).astype(int)\n    items[\"cnt_90\"] = (items[\"ts\"] >= seed_time - pd.Timedelta(days=90)).astype(int)\n\n    # Доставлен = дата доставки уже наступила к seed_time (статус из выгрузки не используем)\n    delivered = items[\"order_delivered_customer_date\"]\n    items[\"is_delivered\"] = (delivered.notna() & (delivered <= seed_time)).astype(int)\n\n    g = items.groupby(\"product_id\")\n    feat = g.agg(\n        order_count=(\"order_id\", \"count\"),\n        unique_orders=(\"order_id\", \"nunique\"),\n        unique_customers=(\"customer_id\", \"nunique\"),\n        unique_sellers=(\"seller_id\", \"nunique\"),\n        total_price=(\"price\", \"sum\"),\n        avg_price=(\"price\", \"mean\"),\n        std_price=(\"price\", \"std\"),\n        max_price=(\"price\", \"max\"),\n        min_price=(\"price\", \"min\"),\n        total_freight=(\"freight_value\", \"sum\"),\n        avg_freight=(\"freight_value\", \"mean\"),\n        cnt_30=(\"cnt_30\", \"sum\"),\n        cnt_60=(\"cnt_60\", \"sum\"),\n        cnt_90=(\"cnt_90\", \"sum\"),\n        delivered_share=(\"is_delivered\", \"mean\"),\n        avg_review=(\"rev_avg\", \"mean\"),\n        std_review=(\"rev_std\", \"mean\"),\n        total_reviews=(\"rev_count\", \"sum\"),\n        avg_installments=(\"install_mean\", \"mean\"),\n        avg_payment_value=(\"total_pay\", \"mean\"),\n        credit_share=(\"credit_share\", \"mean\"),\n        debit_share=(\"debit_share\", \"mean\"),\n        voucher_share=(\"voucher_share\", \"mean\"),\n        max_ts=(\"ts\", \"max\"),\n        min_ts=(\"ts\", \"min\"),\n    )\n\n    last_purchase_days = (seed_time - feat[\"max_ts\"]) / pd.Timedelta(days=1)\n    first_purchase_days = (seed_time - feat[\"min_ts\"]) / pd.Timedelta(days=1)\n    feat[\"last_purchase_days\"] = last_purchase_days\n    feat[\"first_purchase_days\"] = first_purchase_days\n    feat[\"avg_daily_orders\"] = feat[\"order_count\"] / first_purchase_days.clip(lower=1)\n    feat = feat.drop(columns=[\"max_ts\", \"min_ts\"])\n\n    result = pd.DataFrame(index=entity_ids)\n    result = result.join(feat, how=\"left\")\n    result = result.fillna(0.0)\n    result = result.reindex(entity_ids)\n    return result\n",
+   "timestamp": "2026-09-18T20:58:32+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 26,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 26,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 26,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 26,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 26,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 26,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 260.2
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

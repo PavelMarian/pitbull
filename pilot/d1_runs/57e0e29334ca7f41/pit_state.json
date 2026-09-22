@@ -1,0 +1,226 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "57e0e29334ca7f41",
+ "source_sha256": "57e0e29334ca7f41efa32b84ba67b6f6317ee18c49e2b10ed9ed2633232e1408",
+ "source_code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Helper function to compute aggregate features for a time window\n    def get_agg_features(df, mask, suffix):\n        filtered = df[mask]\n        agg = filtered.groupby('product_id').agg(\n            # Sales metrics\n            units_sold=('order_item_id', 'count'),\n            num_orders=('order_id', 'nunique'),\n            total_revenue=('price', 'sum'),\n            total_freight=('freight_value', 'sum'),\n            avg_price=('price', 'mean'),\n            avg_freight=('freight_value', 'mean'),\n            # Order success metrics\n            num_successful_orders=('order_id', lambda x: filtered.loc[x.index, 'order_id'][filtered.loc[x.index, 'is_successful']].nunique()),\n            num_failed_orders=('order_id', lambda x: filtered.loc[x.index, 'order_id'][filtered.loc[x.index, 'is_failed']].nunique()),\n            # Delivery metrics\n            avg_delivery_delay=('delivery_delay_days', lambda x: x.dropna().mean()),\n            # Payment metrics\n            avg_total_payment=('total_payment', 'mean'),\n            avg_installments=('avg_payment_installments', 'mean'),\n            pct_credit_card=('has_credit_card', lambda x: x.sum() / x.count() if x.count() > 0 else 0),\n            pct_boleto=('has_boleto', lambda x: x.sum() / x.count() if x.count() > 0 else 0),\n            # Review metrics\n            avg_review_score=('avg_review_score', lambda x: x.dropna().mean()),\n            num_reviews=('num_reviews', 'sum'),\n            share_positive_reviews=('share_positive', lambda x: x.dropna().mean())\n        )\n        agg.columns = [f\"{col}_{suffix}\" for col in agg.columns]\n        return agg\n    # Create base DataFrame with all requested product IDs\n    base = pd.DataFrame(index=entity_ids)\n    base.index.name = 'product_id'\n    # Pre-aggregate payments to order level (handle split payments)\n    order_payments = db['payments'].groupby('order_id').agg(\n        total_payment=('payment_value', 'sum'),\n        avg_payment_installments=('payment_installments', 'mean'),\n        has_credit_card=('payment_type', lambda x: 1 if 'credit_card' in x.values else 0),\n        has_boleto=('payment_type', lambda x: 1 if 'boleto' in x.values else 0)\n    ).reset_index()\n    # Pre-aggregate reviews to order level\n    order_reviews = db['reviews'].groupby('order_id').agg(\n        avg_review_score=('review_score', 'mean'),\n        num_reviews=('review_id', 'count'),\n        share_positive=('review_score', lambda x: (x >= 4).sum() / len(x) if len(x) > 0 else 0)\n    ).reset_index()\n    # Filter relevant order items (target products, past purchases only)\n    relevant_items = db['order_items'][\n        db['order_items']['product_id'].isin(entity_ids) &\n        (db['order_items']['ts'] < seed_time)\n    ].copy()\n    # Merge with orders, payments, and reviews data\n    items_full = relevant_items.merge(\n        db['orders'][['order_id', 'order_status', 'order_delivered_customer_date', 'order_estimated_delivery_date']],\n        on='order_id', how='left'\n    ).merge(\n        order_payments, on='order_id', how='left'\n    ).merge(\n        order_reviews, on='order_id', how='left'\n    )\n    # Add derived columns for easier aggregation\n    if not items_full.empty:\n        items_full['days_before_seed'] = (seed_time - items_full['ts']).dt.days\n        items_full['window'] = pd.cut(\n            items_full['days_before_seed'],\n            bins=[-1, 90, 180, 360, float('inf')],\n            labels=['w1', 'w2', 'w3', 'older']\n        )\n        items_full['is_successful'] = ~items_full['order_status'].isin(['canceled', 'unavailable'])\n        items_full['is_failed'] = items_full['order_status'].isin(['canceled', 'unavailable'])\n        items_full['delivery_delay_days'] = (\n            items_full['order_delivered_customer_date'] - items_full['order_estimated_delivery_date']\n        ).dt.days\n    # Compute aggregates for each time window\n    if not items_full.empty:\n        agg_w1 = get_agg_features(items_full, items_full['window'] == 'w1', 'w1')\n        agg_w2 = get_agg_features(items_full, items_full['window'] == 'w2', 'w2')\n        agg_w3 = get_agg_features(items_full, items_full['window'] == 'w3', 'w3')\n        agg_older = get_agg_features(items_full, items_full['window'] == 'older', 'older')\n        # Compute global product history and recency\n        prod_history = items_full.groupby('product_id').agg(\n            last_purchase_ts=('ts', 'max'),\n            total_units_history=('order_item_id', 'count'),\n            total_revenue_history=('price', 'sum'),\n            avg_review_score_history=('avg_review_score', lambda x: x.dropna().mean()),\n            total_reviews_history=('num_reviews', 'sum')\n        ).reset_index()\n        prod_history['days_since_last_purchase'] = (seed_time - prod_history['last_purchase_ts']).dt.days\n        prod_history = prod_history.drop(columns=['last_purchase_ts'])\n        prod_history = prod_history.set_index('product_id')\n    else:\n        # Create empty aggregates if no historical data\n        agg_w1 = pd.DataFrame()\n        agg_w2 = pd.DataFrame()\n        agg_w3 = pd.DataFrame()\n        agg_older = pd.DataFrame()\n        prod_history = pd.DataFrame(\n            columns=['total_units_history', 'total_revenue_history', 'avg_review_score_history',\n                     'total_reviews_history', 'days_since_last_purchase'],\n            index=base.index\n        )\n        prod_history.index.name = 'product_id'\n    # Merge all features into base DataFrame\n    features = base.join(agg_w1, how='left')\n    features = features.join(agg_w2, how='left')\n    features = features.join(agg_w3, how='left')\n    features = features.join(agg_older, how='left')\n    features = features.join(prod_history, how='left')\n    # Add history flag and handle missing values\n    features['has_history'] = (~features['total_units_history'].isna()).astype(int)\n    # Fill all numeric columns with 0 first\n    numeric_cols = features.select_dtypes(include=[np.number]).columns.tolist()\n    features[numeric_cols] = features[numeric_cols].fillna(0)\n    # Correct recency for products with no history\n    features.loc[features['has_history'] == 0, 'days_since_last_purchase'] = 9999\n    # Add derived trend and ratio features\n    # Growth rates between windows\n    features['units_growth_w1_w2'] = (features['units_sold_w1'] - features['units_sold_w2']) / (features['units_sold_w2'] + 1e-6)\n    features['revenue_growth_w1_w2'] = (features['total_revenue_w1'] - features['total_revenue_w2']) / (features['total_revenue_w2'] + 1e-6)\n    features['units_growth_w2_w3'] = (features['units_sold_w2'] - features['units_sold_w3']) / (features['units_sold_w3'] + 1e-6)\n    # Average Order Value per window\n    features['aov_w1'] = features['total_revenue_w1'] / (features['num_orders_w1'] + 1e-6)\n    features['aov_w2'] = features['total_revenue_w2'] / (features['num_orders_w2'] + 1e-6)\n    features['aov_w3'] = features['total_revenue_w3'] / (features['num_orders_w3'] + 1e-6)\n    # Freight to revenue ratio per window\n    features['freight_ratio_w1'] = features['total_freight_w1'] / (features['total_revenue_w1'] + 1e-6)\n    features['freight_ratio_w2'] = features['total_freight_w2'] / (features['total_revenue_w2'] + 1e-6)\n    # Order success rate per window\n    features['success_rate_w1'] = features['num_successful_orders_w1'] / (features['num_orders_w1'] + 1e-6)\n    features['success_rate_w2'] = features['num_successful_orders_w2'] / (features['num_orders_w2'] + 1e-6)\n    # Reindex to exactly match input entity IDs\n    features = features.reindex(entity_ids)\n    return features",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "57e0e29334ca7f41efa32b84ba67b6f6317ee18c49e2b10ed9ed2633232e1408",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Helper function to compute aggregate features for a time window\n    def get_agg_features(df, mask, suffix):\n        filtered = df[mask]\n        agg = filtered.groupby('product_id').agg(\n            # Sales metrics\n            units_sold=('order_item_id', 'count'),\n            num_orders=('order_id', 'nunique'),\n            total_revenue=('price', 'sum'),\n            total_freight=('freight_value', 'sum'),\n            avg_price=('price', 'mean'),\n            avg_freight=('freight_value', 'mean'),\n            # Order success metrics\n            num_successful_orders=('order_id', lambda x: filtered.loc[x.index, 'order_id'][filtered.loc[x.index, 'is_successful']].nunique()),\n            num_failed_orders=('order_id', lambda x: filtered.loc[x.index, 'order_id'][filtered.loc[x.index, 'is_failed']].nunique()),\n            # Delivery metrics\n            avg_delivery_delay=('delivery_delay_days', lambda x: x.dropna().mean()),\n            # Payment metrics\n            avg_total_payment=('total_payment', 'mean'),\n            avg_installments=('avg_payment_installments', 'mean'),\n            pct_credit_card=('has_credit_card', lambda x: x.sum() / x.count() if x.count() > 0 else 0),\n            pct_boleto=('has_boleto', lambda x: x.sum() / x.count() if x.count() > 0 else 0),\n            # Review metrics\n            avg_review_score=('avg_review_score', lambda x: x.dropna().mean()),\n            num_reviews=('num_reviews', 'sum'),\n            share_positive_reviews=('share_positive', lambda x: x.dropna().mean())\n        )\n        agg.columns = [f\"{col}_{suffix}\" for col in agg.columns]\n        return agg\n    # Create base DataFrame with all requested product IDs\n    base = pd.DataFrame(index=entity_ids)\n    base.index.name = 'product_id'\n    # Pre-aggregate payments to order level (handle split payments)\n    order_payments = db['payments'].groupby('order_id').agg(\n        total_payment=('payment_value', 'sum'),\n        avg_payment_installments=('payment_installments', 'mean'),\n        has_credit_card=('payment_type', lambda x: 1 if 'credit_card' in x.values else 0),\n        has_boleto=('payment_type', lambda x: 1 if 'boleto' in x.values else 0)\n    ).reset_index()\n    # Pre-aggregate reviews to order level\n    order_reviews = db['reviews'].groupby('order_id').agg(\n        avg_review_score=('review_score', 'mean'),\n        num_reviews=('review_id', 'count'),\n        share_positive=('review_score', lambda x: (x >= 4).sum() / len(x) if len(x) > 0 else 0)\n    ).reset_index()\n    # Filter relevant order items (target products, past purchases only)\n    relevant_items = db['order_items'][\n        db['order_items']['product_id'].isin(entity_ids) &\n        (db['order_items']['ts'] < seed_time)\n    ].copy()\n    # Merge with orders, payments, and reviews data\n    items_full = relevant_items.merge(\n        db['orders'][['order_id', 'order_status', 'order_delivered_customer_date', 'order_estimated_delivery_date']],\n        on='order_id', how='left'\n    ).merge(\n        order_payments, on='order_id', how='left'\n    ).merge(\n        order_reviews, on='order_id', how='left'\n    )\n    # Add derived columns for easier aggregation\n    if not items_full.empty:\n        items_full['days_before_seed'] = (seed_time - items_full['ts']).dt.days\n        items_full['window'] = pd.cut(\n            items_full['days_before_seed'],\n            bins=[-1, 90, 180, 360, float('inf')],\n            labels=['w1', 'w2', 'w3', 'older']\n        )\n        items_full['is_successful'] = ~items_full['order_status'].isin(['canceled', 'unavailable'])\n        items_full['is_failed'] = items_full['order_status'].isin(['canceled', 'unavailable'])\n        items_full['delivery_delay_days'] = (\n            items_full['order_delivered_customer_date'] - items_full['order_estimated_delivery_date']\n        ).dt.days\n    # Compute aggregates for each time window\n    if not items_full.empty:\n        agg_w1 = get_agg_features(items_full, items_full['window'] == 'w1', 'w1')\n        agg_w2 = get_agg_features(items_full, items_full['window'] == 'w2', 'w2')\n        agg_w3 = get_agg_features(items_full, items_full['window'] == 'w3', 'w3')\n        agg_older = get_agg_features(items_full, items_full['window'] == 'older', 'older')\n        # Compute global product history and recency\n        prod_history = items_full.groupby('product_id').agg(\n            last_purchase_ts=('ts', 'max'),\n            total_units_history=('order_item_id', 'count'),\n            total_revenue_history=('price', 'sum'),\n            avg_review_score_history=('avg_review_score', lambda x: x.dropna().mean()),\n            total_reviews_history=('num_reviews', 'sum')\n        ).reset_index()\n        prod_history['days_since_last_purchase'] = (seed_time - prod_history['last_purchase_ts']).dt.days\n        prod_history = prod_history.drop(columns=['last_purchase_ts'])\n        prod_history = prod_history.set_index('product_id')\n    else:\n        # Create empty aggregates if no historical data\n        agg_w1 = pd.DataFrame()\n        agg_w2 = pd.DataFrame()\n        agg_w3 = pd.DataFrame()\n        agg_older = pd.DataFrame()\n        prod_history = pd.DataFrame(\n            columns=['total_units_history', 'total_revenue_history', 'avg_review_score_history',\n                     'total_reviews_history', 'days_since_last_purchase'],\n            index=base.index\n        )\n        prod_history.index.name = 'product_id'\n    # Merge all features into base DataFrame\n    features = base.join(agg_w1, how='left')\n    features = features.join(agg_w2, how='left')\n    features = features.join(agg_w3, how='left')\n    features = features.join(agg_older, how='left')\n    features = features.join(prod_history, how='left')\n    # Add history flag and handle missing values\n    features['has_history'] = (~features['total_units_history'].isna()).astype(int)\n    # Fill all numeric columns with 0 first\n    numeric_cols = features.select_dtypes(include=[np.number]).columns.tolist()\n    features[numeric_cols] = features[numeric_cols].fillna(0)\n    # Correct recency for products with no history\n    features.loc[features['has_history'] == 0, 'days_since_last_purchase'] = 9999\n    # Add derived trend and ratio features\n    # Growth rates between windows\n    features['units_growth_w1_w2'] = (features['units_sold_w1'] - features['units_sold_w2']) / (features['units_sold_w2'] + 1e-6)\n    features['revenue_growth_w1_w2'] = (features['total_revenue_w1'] - features['total_revenue_w2']) / (features['total_revenue_w2'] + 1e-6)\n    features['units_growth_w2_w3'] = (features['units_sold_w2'] - features['units_sold_w3']) / (features['units_sold_w3'] + 1e-6)\n    # Average Order Value per window\n    features['aov_w1'] = features['total_revenue_w1'] / (features['num_orders_w1'] + 1e-6)\n    features['aov_w2'] = features['total_revenue_w2'] / (features['num_orders_w2'] + 1e-6)\n    features['aov_w3'] = features['total_revenue_w3'] / (features['num_orders_w3'] + 1e-6)\n    # Freight to revenue ratio per window\n    features['freight_ratio_w1'] = features['total_freight_w1'] / (features['total_revenue_w1'] + 1e-6)\n    features['freight_ratio_w2'] = features['total_freight_w2'] / (features['total_revenue_w2'] + 1e-6)\n    # Order success rate per window\n    features['success_rate_w1'] = features['num_successful_orders_w1'] / (features['num_orders_w1'] + 1e-6)\n    features['success_rate_w2'] = features['num_successful_orders_w2'] / (features['num_orders_w2'] + 1e-6)\n    # Reindex to exactly match input entity IDs\n    features = features.reindex(entity_ids)\n    return features",
+   "timestamp": "2026-09-18T20:18:36+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score_w1",
+      "num_reviews_w1",
+      "share_positive_reviews_w1",
+      "avg_review_score_history",
+      "total_reviews_history"
+     ],
+     "canary_columns": [
+      "avg_delivery_delay_w1",
+      "avg_review_score_w1",
+      "share_positive_reviews_w1",
+      "avg_delivery_delay_w2",
+      "avg_review_score_history"
+     ],
+     "n_columns": 80,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score_w1",
+      "num_reviews_w1",
+      "avg_review_score_history",
+      "total_reviews_history"
+     ],
+     "canary_columns": [
+      "avg_delivery_delay_w1",
+      "avg_review_score_w1",
+      "share_positive_reviews_w1",
+      "avg_delivery_delay_w3",
+      "avg_review_score_history"
+     ],
+     "n_columns": 80,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score_w1",
+      "num_reviews_w1",
+      "avg_review_score_history",
+      "total_reviews_history"
+     ],
+     "canary_columns": [
+      "avg_delivery_delay_w1",
+      "avg_review_score_w1",
+      "avg_delivery_delay_w2",
+      "avg_delivery_delay_w3",
+      "avg_review_score_history"
+     ],
+     "n_columns": 80,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score_w1",
+      "num_reviews_w1",
+      "share_positive_reviews_w1",
+      "avg_review_score_history",
+      "total_reviews_history"
+     ],
+     "canary_columns": [
+      "avg_delivery_delay_w1",
+      "avg_review_score_w1",
+      "share_positive_reviews_w1",
+      "avg_delivery_delay_w2",
+      "avg_review_score_history"
+     ],
+     "n_columns": 80,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score_w1",
+      "num_reviews_w1",
+      "share_positive_reviews_w1",
+      "avg_review_score_history",
+      "total_reviews_history"
+     ],
+     "canary_columns": [
+      "avg_delivery_delay_w1",
+      "avg_review_score_w1",
+      "avg_delivery_delay_w3",
+      "avg_review_score_history"
+     ],
+     "n_columns": 80,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score_w1",
+      "num_reviews_w1",
+      "share_positive_reviews_w1",
+      "avg_review_score_history",
+      "total_reviews_history"
+     ],
+     "canary_columns": [
+      "avg_delivery_delay_w1",
+      "avg_review_score_w1",
+      "share_positive_reviews_w1",
+      "avg_delivery_delay_w2",
+      "avg_delivery_delay_w3",
+      "avg_review_score_history"
+     ],
+     "n_columns": 80,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 96.8
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "8a23b976b6348039bfc7403a52e41a14de9458fd53b0f7ee9d81f07f82f39939",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    base = pd.DataFrame(index=pd.Index(entity_ids, name='product_id'))\n\n    # Purchase history strictly before seed_time\n    items_all = db['order_items']\n    items = items_all[\n        items_all['product_id'].isin(entity_ids) & (items_all['ts'] < seed_time)\n    ].copy()\n\n    # Reviews are known at seed_time only if already created by then\n    rev = db['reviews']\n    rev = rev[rev['review_creation_date'] < seed_time]\n    order_reviews = rev.groupby('order_id').agg(\n        avg_review_score=('review_score', 'mean'),\n        num_reviews=('review_score', 'count'),\n        share_positive=('review_score', lambda x: (x >= 4).mean()),\n    ).reset_index()\n\n    # Delivery facts exist at seed_time only for orders delivered before it\n    orders = db['orders'][\n        ['order_id', 'order_delivered_customer_date', 'order_estimated_delivery_date']\n    ].copy()\n    known_delivery = orders['order_delivered_customer_date'] < seed_time\n    orders.loc[~known_delivery, 'order_delivered_customer_date'] = pd.NaT\n\n    items = items.merge(orders, on='order_id', how='left')\n    items = items.merge(order_reviews, on='order_id', how='left')\n\n    if not items.empty:\n        items['days_before_seed'] = (seed_time - items['ts']).dt.days\n        items['window'] = pd.cut(\n            items['days_before_seed'],\n            bins=[-1, 90, 180, 360, np.inf],\n            labels=['w1', 'w2', 'w3', 'older'],\n        )\n        items['delivery_delay_days'] = (\n            items['order_delivered_customer_date'] - items['order_estimated_delivery_date']\n        ).dt.days\n\n    def window_agg(mask, suffix):\n        if items.empty:\n            return pd.DataFrame()\n        f = items[mask]\n        agg = f.groupby('product_id').agg(\n            units_sold=('order_item_id', 'count'),\n            num_orders=('order_id', 'nunique'),\n            total_revenue=('price', 'sum'),\n            total_freight=('freight_value', 'sum'),\n            avg_price=('price', 'mean'),\n            avg_freight=('freight_value', 'mean'),\n            avg_delivery_delay=('delivery_delay_days', 'mean'),\n            avg_review_score=('avg_review_score', 'mean'),\n            num_reviews=('num_reviews', 'sum'),\n            share_positive_reviews=('share_positive', 'mean'),\n        )\n        agg = agg.add_suffix(f'_{suffix}')\n        return agg\n\n    aggs = []\n    if not items.empty:\n        for suffix, label in [('w1', 'w1'), ('w2', 'w2'), ('w3', 'w3'), ('older', 'older')]:\n            aggs.append(window_agg(items['window'] == label, suffix))\n        prod_history = items.groupby('product_id').agg(\n            total_units_history=('order_item_id', 'count'),\n            total_revenue_history=('price', 'sum'),\n            avg_review_score_history=('avg_review_score', 'mean'),\n            total_reviews_history=('num_reviews', 'sum'),\n        )\n        last_ts = items.groupby('product_id')['ts'].max()\n        prod_history['days_since_last_purchase'] = (seed_time - last_ts).dt.days\n    else:\n        prod_history = pd.DataFrame(\n            columns=['total_units_history', 'total_revenue_history',\n                     'avg_review_score_history', 'total_reviews_history',\n                     'days_since_last_purchase'],\n            index=base.index,\n        )\n\n    features = base.copy()\n    for agg in aggs:\n        features = features.join(agg, how='left')\n    features = features.join(prod_history, how='left')\n\n    # Ensure every expected column exists even when a window is empty\n    window_cols = ['units_sold', 'num_orders', 'total_revenue', 'total_freight',\n                   'avg_price', 'avg_freight', 'avg_delivery_delay',\n                   'avg_review_score', 'num_reviews', 'share_positive_reviews']\n    expected = [f'{c}_{w}' for w in ['w1', 'w2', 'w3', 'older'] for c in window_cols]\n    expected += ['total_units_history', 'total_revenue_history',\n                 'avg_review_score_history', 'total_reviews_history',\n                 'days_since_last_purchase']\n    for c in expected:\n        if c not in features.columns:\n            features[c] = np.nan\n\n    features['has_history'] = (~features['total_units_history'].isna()).astype(int)\n    numeric_cols = features.select_dtypes(include=[np.number]).columns.tolist()\n    features[numeric_cols] = features[numeric_cols].fillna(0)\n    features.loc[features['has_history'] == 0, 'days_since_last_purchase'] = 9999\n\n    # Trend and ratio features\n    features['units_growth_w1_w2'] = (\n        features['units_sold_w1'] - features['units_sold_w2']) / (features['units_sold_w2'] + 1e-6)\n    features['revenue_growth_w1_w2'] = (\n        features['total_revenue_w1'] - features['total_revenue_w2']) / (features['total_revenue_w2'] + 1e-6)\n    features['units_growth_w2_w3'] = (\n        features['units_sold_w2'] - features['units_sold_w3']) / (features['units_sold_w3'] + 1e-6)\n    features['aov_w1'] = features['total_revenue_w1'] / (features['num_orders_w1'] + 1e-6)\n    features['aov_w2'] = features['total_revenue_w2'] / (features['num_orders_w2'] + 1e-6)\n    features['aov_w3'] = features['total_revenue_w3'] / (features['num_orders_w3'] + 1e-6)\n    features['freight_ratio_w1'] = features['total_freight_w1'] / (features['total_revenue_w1'] + 1e-6)\n    features['freight_ratio_w2'] = features['total_freight_w2'] / (features['total_revenue_w2'] + 1e-6)\n\n    features = features.reindex(entity_ids)\n    numeric_cols = features.select_dtypes(include=[np.number]).columns.tolist()\n    features[numeric_cols] = features[numeric_cols].fillna(0)\n    return features\n",
+   "timestamp": "2026-09-18T20:22:11+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 54,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 54,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 54,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 54,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 54,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 54,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 47.1
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

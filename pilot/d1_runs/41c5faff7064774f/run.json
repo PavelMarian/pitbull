@@ -1,0 +1,27 @@
+{
+ "program_uid": "41c5faff7064774f",
+ "program": "deepseek-v4-flash-0731#37",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 296.9,
+ "assistant_turns": 18,
+ "tool_calls": 18,
+ "skill_loaded": true,
+ "pit_check_calls": 7,
+ "errors": [],
+ "final_text": "Проверка на шести моментах (включая held-out) чистая.\n\n```\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1,\nwitness_final=[], canary_final=[],\nstate=/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/41c5faff7064774f/pit_state.json\n```\n\n**Вердикт: утечка была, исправлена, подтверждено.**\n\nНайденные утечки (итерация 0, witness — доказательство):\n- Отзывы агрегировались без фильтра по времени написания: в признаки попадали отзывы на заказы, купленные до seed_time, но написанные позже. Это дало расхождение witness в `review_count`, `avg_review_score`, `std_review_score`, `pos_review_count`, `pos_review_ratio`.\n- Canary дополнительно поймал `avg_delivery_days` и `std_delivery_days`: `delivery_days` считалось по `order_delivered_customer_date`, которая заполняется после покупки и может быть позже seed_time.\n\nИсправления в `get_features.py`:\n- Отзывы фильтруются по `review_creation_date <= seed_time` (строка 75).\n- `delivery_days` считается только для заказов, доставленных к seed_time, у остальных NaN (строки 26–32).\n- Платежи добавлены с фильтром по `ts <= seed_time`, плюс свежие отзывы за 90 дней.\n- Граница истории изменена с `<` на `<=`, чтобы совпадать с усечением оракула.\n\nСкор и прочие признаки сохранены, сигнатура прежняя.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 278528,
+   "output_tokens": 9813
+  },
+  "message_count": 36,
+  "session_id": "aa848c8b688d",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

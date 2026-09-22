@@ -1,0 +1,196 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "4322128e8c718a51",
+ "source_sha256": "4322128e8c718a51151c1063367e00ec3a8c8cdbc98a9918d78675bf1a749afd",
+ "source_code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    import pandas as pd\n    import numpy as np\n\n    product_ids = list(entity_ids)\n    # базовый DataFrame с индексом из product_ids\n    base = pd.DataFrame(index=product_ids)\n\n    # отфильтрованные order_items\n    oi = db['order_items']\n    oi = oi[oi['product_id'].isin(product_ids) & (oi['ts'] <= seed_time)].copy()\n\n    # если данных нет, всё равно пройдём по всем шагам (пустые агрегаты)\n    if not oi.empty:\n        # добавим customer_id из orders\n        orders = db['orders'][['order_id', 'customer_id']]\n        oi = oi.merge(orders, on='order_id', how='left')\n\n    # ---- Основные агрегаты по товару ----\n    if not oi.empty:\n        grp = oi.groupby('product_id')\n        total_orders = grp['order_id'].nunique()\n        total_items = grp.size()\n        total_revenue = grp['price'].sum()\n        total_freight = grp['freight_value'].sum()\n        avg_price = grp['price'].mean()\n        std_price = grp['price'].std()\n        min_price = grp['price'].min()\n        max_price = grp['price'].max()\n        avg_freight = grp['freight_value'].mean()\n        std_freight = grp['freight_value'].std()\n        unique_sellers = grp['seller_id'].nunique()\n        unique_customers = grp['customer_id'].nunique()\n\n        ts_min = grp['ts'].min()\n        ts_max = grp['ts'].max()\n        recency_days = (seed_time - ts_max).dt.days\n        days_since_first = (seed_time - ts_min).dt.days\n    else:\n        # пустые серии\n        empty_series = pd.Series(index=pd.Index(product_ids), dtype='float64')\n        total_orders = empty_series.astype('int64')\n        total_items = empty_series.astype('int64')\n        total_revenue = empty_series.copy()\n        total_freight = empty_series.copy()\n        avg_price = empty_series.copy()\n        std_price = empty_series.copy()\n        min_price = empty_series.copy()\n        max_price = empty_series.copy()\n        avg_freight = empty_series.copy()\n        std_freight = empty_series.copy()\n        unique_sellers = empty_series.astype('int64')\n        unique_customers = empty_series.astype('int64')\n        recency_days = empty_series.copy()\n        days_since_first = empty_series.copy()\n\n    # ---- Признаки за последние 30/60/90 дней ----\n    for days in [30, 60, 90]:\n        mask = (oi['ts'] > seed_time - pd.Timedelta(days=days)) & (oi['ts'] <= seed_time)\n        sub = oi[mask]\n        if not sub.empty:\n            orders_cnt = sub.groupby('product_id')['order_id'].nunique()\n            items_cnt = sub.groupby('product_id').size()\n            revenue = sub.groupby('product_id')['price'].sum()\n        else:\n            orders_cnt = pd.Series(index=product_ids, dtype='int64')\n            items_cnt = pd.Series(index=product_ids, dtype='int64')\n            revenue = pd.Series(index=product_ids, dtype='float64')\n        base[f'orders_last_{days}'] = orders_cnt.reindex(product_ids, fill_value=0)\n        base[f'items_last_{days}'] = items_cnt.reindex(product_ids, fill_value=0)\n        base[f'revenue_last_{days}'] = revenue.reindex(product_ids, fill_value=0)\n\n    # ---- Интервалы между заказами ----\n    if not oi.empty:\n        # даты заказов для каждого товара (уникальные order_id)\n        order_dates = oi.groupby(['product_id', 'order_id'])['ts'].min().reset_index()\n        order_dates = order_dates.sort_values(['product_id', 'ts'])\n        order_dates['diff'] = order_dates.groupby('product_id')['ts'].diff().dt.days\n        avg_interval = order_dates.groupby('product_id')['diff'].mean()\n        std_interval = order_dates.groupby('product_id')['diff'].std()\n    else:\n        avg_interval = pd.Series(index=product_ids, dtype='float64')\n        std_interval = pd.Series(index=product_ids, dtype='float64')\n\n    # ---- Отзывы ----\n    reviews = db['reviews'][['order_id', 'review_score']]\n    if not oi.empty:\n        oi_rev = oi[['product_id', 'order_id']].merge(reviews, on='order_id', how='inner')\n    else:\n        oi_rev = pd.DataFrame(columns=['product_id', 'review_score'])\n    if not oi_rev.empty:\n        rev_grp = oi_rev.groupby('product_id')['review_score']\n        rev_mean = rev_grp.mean()\n        rev_count = rev_grp.count()\n        pos_cnt = oi_rev[oi_rev['review_score'] >= 4].groupby('product_id')['review_score'].count()\n        positive_ratio = pos_cnt / rev_count\n    else:\n        rev_mean = pd.Series(index=product_ids, dtype='float64')\n        rev_count = pd.Series(index=product_ids, dtype='int64')\n        positive_ratio = pd.Series(index=product_ids, dtype='float64')\n\n    # ---- Платежи ----\n    payments = db['payments'][['order_id', 'payment_type', 'payment_installments', 'payment_value']]\n    if not oi.empty:\n        oi_pay = oi[['product_id', 'order_id']].merge(payments, on='order_id', how='inner')\n    else:\n        oi_pay = pd.DataFrame(columns=['product_id', 'payment_type', 'payment_installments', 'payment_value'])\n    if not oi_pay.empty:\n        pay_grp = oi_pay.groupby('product_id')\n        avg_payment_value = pay_grp['payment_value'].mean()\n        avg_installments = pay_grp['payment_installments'].mean()\n        total_pay_count = pay_grp['payment_value'].count()\n        credit_cnt = oi_pay[oi_pay['payment_type'] == 'credit_card'].groupby('product_id')['payment_value'].count()\n        credit_ratio = credit_cnt / total_pay_count\n    else:\n        avg_payment_value = pd.Series(index=product_ids, dtype='float64')\n        avg_installments = pd.Series(index=product_ids, dtype='float64')\n        credit_ratio = pd.Series(index=product_ids, dtype='float64')\n\n    # ---- Собираем всё в base ----\n    base['total_orders'] = total_orders.reindex(product_ids).fillna(0)\n    base['total_items'] = total_items.reindex(product_ids).fillna(0)\n    base['total_revenue'] = total_revenue.reindex(product_ids).fillna(0)\n    base['total_freight'] = total_freight.reindex(product_ids).fillna(0)\n    base['avg_price'] = avg_price.reindex(product_ids).fillna(0)\n    base['std_price'] = std_price.reindex(product_ids).fillna(0)\n    base['min_price'] = min_price.reindex(product_ids).fillna(0)\n    base['max_price'] = max_price.reindex(product_ids).fillna(0)\n    base['avg_freight'] = avg_freight.reindex(product_ids).fillna(0)\n    base['std_freight'] = std_freight.reindex(product_ids).fillna(0)\n    base['unique_sellers'] = unique_sellers.reindex(product_ids).fillna(0)\n    base['unique_customers'] = unique_customers.reindex(product_ids).fillna(0)\n\n    # recency: если нет данных, ставим 9999\n    base['recency_days'] = recency_days.reindex(product_ids).fillna(9999)\n    base['days_since_first'] = days_since_first.reindex(product_ids).fillna(0)\n\n    base['avg_interval'] = avg_interval.reindex(product_ids).fillna(0)\n    base['std_interval'] = std_interval.reindex(product_ids).fillna(0)\n\n    base['review_mean'] = rev_mean.reindex(product_ids).fillna(0)\n    base['review_count'] = rev_count.reindex(product_ids).fillna(0)\n    base['positive_ratio'] = positive_ratio.reindex(product_ids).fillna(0)\n\n    base['avg_payment_value'] = avg_payment_value.reindex(product_ids).fillna(0)\n    base['avg_installments'] = avg_installments.reindex(product_ids).fillna(0)\n    base['credit_card_ratio'] = credit_ratio.reindex(product_ids).fillna(0)\n\n    # Дополнительные признаки\n    base['avg_items_per_order'] = base['total_items'] / base['total_orders'].replace(0, np.nan)\n    base['avg_items_per_order'] = base['avg_items_per_order'].fillna(0)\n\n    base['recent_90_ratio'] = base['orders_last_90'] / base['total_orders'].replace(0, np.nan)\n    base['recent_90_ratio'] = base['recent_90_ratio'].fillna(0)\n\n    # Переиндексация в исходном порядке\n    base = base.reindex(product_ids)\n\n    return base",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "4322128e8c718a51151c1063367e00ec3a8c8cdbc98a9918d78675bf1a749afd",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    import pandas as pd\n    import numpy as np\n\n    product_ids = list(entity_ids)\n    # базовый DataFrame с индексом из product_ids\n    base = pd.DataFrame(index=product_ids)\n\n    # отфильтрованные order_items\n    oi = db['order_items']\n    oi = oi[oi['product_id'].isin(product_ids) & (oi['ts'] <= seed_time)].copy()\n\n    # если данных нет, всё равно пройдём по всем шагам (пустые агрегаты)\n    if not oi.empty:\n        # добавим customer_id из orders\n        orders = db['orders'][['order_id', 'customer_id']]\n        oi = oi.merge(orders, on='order_id', how='left')\n\n    # ---- Основные агрегаты по товару ----\n    if not oi.empty:\n        grp = oi.groupby('product_id')\n        total_orders = grp['order_id'].nunique()\n        total_items = grp.size()\n        total_revenue = grp['price'].sum()\n        total_freight = grp['freight_value'].sum()\n        avg_price = grp['price'].mean()\n        std_price = grp['price'].std()\n        min_price = grp['price'].min()\n        max_price = grp['price'].max()\n        avg_freight = grp['freight_value'].mean()\n        std_freight = grp['freight_value'].std()\n        unique_sellers = grp['seller_id'].nunique()\n        unique_customers = grp['customer_id'].nunique()\n\n        ts_min = grp['ts'].min()\n        ts_max = grp['ts'].max()\n        recency_days = (seed_time - ts_max).dt.days\n        days_since_first = (seed_time - ts_min).dt.days\n    else:\n        # пустые серии\n        empty_series = pd.Series(index=pd.Index(product_ids), dtype='float64')\n        total_orders = empty_series.astype('int64')\n        total_items = empty_series.astype('int64')\n        total_revenue = empty_series.copy()\n        total_freight = empty_series.copy()\n        avg_price = empty_series.copy()\n        std_price = empty_series.copy()\n        min_price = empty_series.copy()\n        max_price = empty_series.copy()\n        avg_freight = empty_series.copy()\n        std_freight = empty_series.copy()\n        unique_sellers = empty_series.astype('int64')\n        unique_customers = empty_series.astype('int64')\n        recency_days = empty_series.copy()\n        days_since_first = empty_series.copy()\n\n    # ---- Признаки за последние 30/60/90 дней ----\n    for days in [30, 60, 90]:\n        mask = (oi['ts'] > seed_time - pd.Timedelta(days=days)) & (oi['ts'] <= seed_time)\n        sub = oi[mask]\n        if not sub.empty:\n            orders_cnt = sub.groupby('product_id')['order_id'].nunique()\n            items_cnt = sub.groupby('product_id').size()\n            revenue = sub.groupby('product_id')['price'].sum()\n        else:\n            orders_cnt = pd.Series(index=product_ids, dtype='int64')\n            items_cnt = pd.Series(index=product_ids, dtype='int64')\n            revenue = pd.Series(index=product_ids, dtype='float64')\n        base[f'orders_last_{days}'] = orders_cnt.reindex(product_ids, fill_value=0)\n        base[f'items_last_{days}'] = items_cnt.reindex(product_ids, fill_value=0)\n        base[f'revenue_last_{days}'] = revenue.reindex(product_ids, fill_value=0)\n\n    # ---- Интервалы между заказами ----\n    if not oi.empty:\n        # даты заказов для каждого товара (уникальные order_id)\n        order_dates = oi.groupby(['product_id', 'order_id'])['ts'].min().reset_index()\n        order_dates = order_dates.sort_values(['product_id', 'ts'])\n        order_dates['diff'] = order_dates.groupby('product_id')['ts'].diff().dt.days\n        avg_interval = order_dates.groupby('product_id')['diff'].mean()\n        std_interval = order_dates.groupby('product_id')['diff'].std()\n    else:\n        avg_interval = pd.Series(index=product_ids, dtype='float64')\n        std_interval = pd.Series(index=product_ids, dtype='float64')\n\n    # ---- Отзывы ----\n    reviews = db['reviews'][['order_id', 'review_score']]\n    if not oi.empty:\n        oi_rev = oi[['product_id', 'order_id']].merge(reviews, on='order_id', how='inner')\n    else:\n        oi_rev = pd.DataFrame(columns=['product_id', 'review_score'])\n    if not oi_rev.empty:\n        rev_grp = oi_rev.groupby('product_id')['review_score']\n        rev_mean = rev_grp.mean()\n        rev_count = rev_grp.count()\n        pos_cnt = oi_rev[oi_rev['review_score'] >= 4].groupby('product_id')['review_score'].count()\n        positive_ratio = pos_cnt / rev_count\n    else:\n        rev_mean = pd.Series(index=product_ids, dtype='float64')\n        rev_count = pd.Series(index=product_ids, dtype='int64')\n        positive_ratio = pd.Series(index=product_ids, dtype='float64')\n\n    # ---- Платежи ----\n    payments = db['payments'][['order_id', 'payment_type', 'payment_installments', 'payment_value']]\n    if not oi.empty:\n        oi_pay = oi[['product_id', 'order_id']].merge(payments, on='order_id', how='inner')\n    else:\n        oi_pay = pd.DataFrame(columns=['product_id', 'payment_type', 'payment_installments', 'payment_value'])\n    if not oi_pay.empty:\n        pay_grp = oi_pay.groupby('product_id')\n        avg_payment_value = pay_grp['payment_value'].mean()\n        avg_installments = pay_grp['payment_installments'].mean()\n        total_pay_count = pay_grp['payment_value'].count()\n        credit_cnt = oi_pay[oi_pay['payment_type'] == 'credit_card'].groupby('product_id')['payment_value'].count()\n        credit_ratio = credit_cnt / total_pay_count\n    else:\n        avg_payment_value = pd.Series(index=product_ids, dtype='float64')\n        avg_installments = pd.Series(index=product_ids, dtype='float64')\n        credit_ratio = pd.Series(index=product_ids, dtype='float64')\n\n    # ---- Собираем всё в base ----\n    base['total_orders'] = total_orders.reindex(product_ids).fillna(0)\n    base['total_items'] = total_items.reindex(product_ids).fillna(0)\n    base['total_revenue'] = total_revenue.reindex(product_ids).fillna(0)\n    base['total_freight'] = total_freight.reindex(product_ids).fillna(0)\n    base['avg_price'] = avg_price.reindex(product_ids).fillna(0)\n    base['std_price'] = std_price.reindex(product_ids).fillna(0)\n    base['min_price'] = min_price.reindex(product_ids).fillna(0)\n    base['max_price'] = max_price.reindex(product_ids).fillna(0)\n    base['avg_freight'] = avg_freight.reindex(product_ids).fillna(0)\n    base['std_freight'] = std_freight.reindex(product_ids).fillna(0)\n    base['unique_sellers'] = unique_sellers.reindex(product_ids).fillna(0)\n    base['unique_customers'] = unique_customers.reindex(product_ids).fillna(0)\n\n    # recency: если нет данных, ставим 9999\n    base['recency_days'] = recency_days.reindex(product_ids).fillna(9999)\n    base['days_since_first'] = days_since_first.reindex(product_ids).fillna(0)\n\n    base['avg_interval'] = avg_interval.reindex(product_ids).fillna(0)\n    base['std_interval'] = std_interval.reindex(product_ids).fillna(0)\n\n    base['review_mean'] = rev_mean.reindex(product_ids).fillna(0)\n    base['review_count'] = rev_count.reindex(product_ids).fillna(0)\n    base['positive_ratio'] = positive_ratio.reindex(product_ids).fillna(0)\n\n    base['avg_payment_value'] = avg_payment_value.reindex(product_ids).fillna(0)\n    base['avg_installments'] = avg_installments.reindex(product_ids).fillna(0)\n    base['credit_card_ratio'] = credit_ratio.reindex(product_ids).fillna(0)\n\n    # Дополнительные признаки\n    base['avg_items_per_order'] = base['total_items'] / base['total_orders'].replace(0, np.nan)\n    base['avg_items_per_order'] = base['avg_items_per_order'].fillna(0)\n\n    base['recent_90_ratio'] = base['orders_last_90'] / base['total_orders'].replace(0, np.nan)\n    base['recent_90_ratio'] = base['recent_90_ratio'].fillna(0)\n\n    # Переиндексация в исходном порядке\n    base = base.reindex(product_ids)\n\n    return base",
+   "timestamp": "2026-09-18T20:40:42+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_count",
+      "positive_ratio"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "positive_ratio"
+     ],
+     "n_columns": 33,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_count",
+      "positive_ratio"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "positive_ratio"
+     ],
+     "n_columns": 33,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_count",
+      "positive_ratio"
+     ],
+     "canary_columns": [
+      "review_mean"
+     ],
+     "n_columns": 33,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_count",
+      "positive_ratio"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "positive_ratio"
+     ],
+     "n_columns": 33,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_count",
+      "positive_ratio"
+     ],
+     "canary_columns": [
+      "review_mean"
+     ],
+     "n_columns": 33,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_count",
+      "positive_ratio"
+     ],
+     "canary_columns": [
+      "review_mean",
+      "positive_ratio"
+     ],
+     "n_columns": 33,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 1.9
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "ff40482bc704fb62d6cdc757989c7685eaeed9469f6f257782d5f910eed51cfe",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    import pandas as pd\n    import numpy as np\n\n    product_ids = list(entity_ids)\n    # базовый DataFrame с индексом из product_ids\n    base = pd.DataFrame(index=product_ids)\n\n    # отфильтрованные order_items\n    oi = db['order_items']\n    oi = oi[oi['product_id'].isin(product_ids) & (oi['ts'] <= seed_time)].copy()\n\n    # если данных нет, всё равно пройдём по всем шагам (пустые агрегаты)\n    if not oi.empty:\n        # добавим customer_id из orders\n        orders = db['orders'][['order_id', 'customer_id']]\n        oi = oi.merge(orders, on='order_id', how='left')\n\n    # ---- Основные агрегаты по товару ----\n    if not oi.empty:\n        grp = oi.groupby('product_id')\n        total_orders = grp['order_id'].nunique()\n        total_items = grp.size()\n        total_revenue = grp['price'].sum()\n        total_freight = grp['freight_value'].sum()\n        avg_price = grp['price'].mean()\n        std_price = grp['price'].std()\n        min_price = grp['price'].min()\n        max_price = grp['price'].max()\n        avg_freight = grp['freight_value'].mean()\n        std_freight = grp['freight_value'].std()\n        unique_sellers = grp['seller_id'].nunique()\n        unique_customers = grp['customer_id'].nunique()\n\n        ts_min = grp['ts'].min()\n        ts_max = grp['ts'].max()\n        recency_days = (seed_time - ts_max).dt.days\n        days_since_first = (seed_time - ts_min).dt.days\n    else:\n        # пустые серии\n        empty_series = pd.Series(index=pd.Index(product_ids), dtype='float64')\n        total_orders = empty_series.astype('int64')\n        total_items = empty_series.astype('int64')\n        total_revenue = empty_series.copy()\n        total_freight = empty_series.copy()\n        avg_price = empty_series.copy()\n        std_price = empty_series.copy()\n        min_price = empty_series.copy()\n        max_price = empty_series.copy()\n        avg_freight = empty_series.copy()\n        std_freight = empty_series.copy()\n        unique_sellers = empty_series.astype('int64')\n        unique_customers = empty_series.astype('int64')\n        recency_days = empty_series.copy()\n        days_since_first = empty_series.copy()\n\n    # ---- Признаки за последние 30/60/90 дней ----\n    for days in [30, 60, 90]:\n        mask = (oi['ts'] > seed_time - pd.Timedelta(days=days)) & (oi['ts'] <= seed_time)\n        sub = oi[mask]\n        if not sub.empty:\n            orders_cnt = sub.groupby('product_id')['order_id'].nunique()\n            items_cnt = sub.groupby('product_id').size()\n            revenue = sub.groupby('product_id')['price'].sum()\n        else:\n            orders_cnt = pd.Series(index=product_ids, dtype='int64')\n            items_cnt = pd.Series(index=product_ids, dtype='int64')\n            revenue = pd.Series(index=product_ids, dtype='float64')\n        base[f'orders_last_{days}'] = orders_cnt.reindex(product_ids, fill_value=0)\n        base[f'items_last_{days}'] = items_cnt.reindex(product_ids, fill_value=0)\n        base[f'revenue_last_{days}'] = revenue.reindex(product_ids, fill_value=0)\n\n    # ---- Интервалы между заказами ----\n    if not oi.empty:\n        # даты заказов для каждого товара (уникальные order_id)\n        order_dates = oi.groupby(['product_id', 'order_id'])['ts'].min().reset_index()\n        order_dates = order_dates.sort_values(['product_id', 'ts'])\n        order_dates['diff'] = order_dates.groupby('product_id')['ts'].diff().dt.days\n        avg_interval = order_dates.groupby('product_id')['diff'].mean()\n        std_interval = order_dates.groupby('product_id')['diff'].std()\n    else:\n        avg_interval = pd.Series(index=product_ids, dtype='float64')\n        std_interval = pd.Series(index=product_ids, dtype='float64')\n\n    # ---- Отзывы ----\n    # Отзыв появляется в базе в момент review_creation_date (позже покупки),\n    # поэтому берём только отзывы, уже существующие на seed_time.\n    reviews = db['reviews'][['order_id', 'review_score', 'review_creation_date']]\n    reviews = reviews[reviews['review_creation_date'] <= seed_time][['order_id', 'review_score']]\n    if not oi.empty:\n        oi_rev = oi[['product_id', 'order_id']].merge(reviews, on='order_id', how='inner')\n    else:\n        oi_rev = pd.DataFrame(columns=['product_id', 'review_score'])\n    if not oi_rev.empty:\n        rev_grp = oi_rev.groupby('product_id')['review_score']\n        rev_mean = rev_grp.mean()\n        rev_count = rev_grp.count()\n        pos_cnt = oi_rev[oi_rev['review_score'] >= 4].groupby('product_id')['review_score'].count()\n        positive_ratio = pos_cnt / rev_count\n    else:\n        rev_mean = pd.Series(index=product_ids, dtype='float64')\n        rev_count = pd.Series(index=product_ids, dtype='int64')\n        positive_ratio = pd.Series(index=product_ids, dtype='float64')\n\n    # ---- Платежи ----\n    payments = db['payments'][['order_id', 'payment_type', 'payment_installments', 'payment_value']]\n    if not oi.empty:\n        oi_pay = oi[['product_id', 'order_id']].merge(payments, on='order_id', how='inner')\n    else:\n        oi_pay = pd.DataFrame(columns=['product_id', 'payment_type', 'payment_installments', 'payment_value'])\n    if not oi_pay.empty:\n        pay_grp = oi_pay.groupby('product_id')\n        avg_payment_value = pay_grp['payment_value'].mean()\n        avg_installments = pay_grp['payment_installments'].mean()\n        total_pay_count = pay_grp['payment_value'].count()\n        credit_cnt = oi_pay[oi_pay['payment_type'] == 'credit_card'].groupby('product_id')['payment_value'].count()\n        credit_ratio = credit_cnt / total_pay_count\n    else:\n        avg_payment_value = pd.Series(index=product_ids, dtype='float64')\n        avg_installments = pd.Series(index=product_ids, dtype='float64')\n        credit_ratio = pd.Series(index=product_ids, dtype='float64')\n\n    # ---- Собираем всё в base ----\n    base['total_orders'] = total_orders.reindex(product_ids).fillna(0)\n    base['total_items'] = total_items.reindex(product_ids).fillna(0)\n    base['total_revenue'] = total_revenue.reindex(product_ids).fillna(0)\n    base['total_freight'] = total_freight.reindex(product_ids).fillna(0)\n    base['avg_price'] = avg_price.reindex(product_ids).fillna(0)\n    base['std_price'] = std_price.reindex(product_ids).fillna(0)\n    base['min_price'] = min_price.reindex(product_ids).fillna(0)\n    base['max_price'] = max_price.reindex(product_ids).fillna(0)\n    base['avg_freight'] = avg_freight.reindex(product_ids).fillna(0)\n    base['std_freight'] = std_freight.reindex(product_ids).fillna(0)\n    base['unique_sellers'] = unique_sellers.reindex(product_ids).fillna(0)\n    base['unique_customers'] = unique_customers.reindex(product_ids).fillna(0)\n\n    # recency: если нет данных, ставим 9999\n    base['recency_days'] = recency_days.reindex(product_ids).fillna(9999)\n    base['days_since_first'] = days_since_first.reindex(product_ids).fillna(0)\n\n    base['avg_interval'] = avg_interval.reindex(product_ids).fillna(0)\n    base['std_interval'] = std_interval.reindex(product_ids).fillna(0)\n\n    base['review_mean'] = rev_mean.reindex(product_ids).fillna(0)\n    base['review_count'] = rev_count.reindex(product_ids).fillna(0)\n    base['positive_ratio'] = positive_ratio.reindex(product_ids).fillna(0)\n\n    base['avg_payment_value'] = avg_payment_value.reindex(product_ids).fillna(0)\n    base['avg_installments'] = avg_installments.reindex(product_ids).fillna(0)\n    base['credit_card_ratio'] = credit_ratio.reindex(product_ids).fillna(0)\n\n    # Дополнительные признаки\n    base['avg_items_per_order'] = base['total_items'] / base['total_orders'].replace(0, np.nan)\n    base['avg_items_per_order'] = base['avg_items_per_order'].fillna(0)\n\n    base['recent_90_ratio'] = base['orders_last_90'] / base['total_orders'].replace(0, np.nan)\n    base['recent_90_ratio'] = base['recent_90_ratio'].fillna(0)\n\n    # Переиндексация в исходном порядке\n    base = base.reindex(product_ids)\n\n    return base",
+   "timestamp": "2026-09-18T20:41:05+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 33,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 33,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 33,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 33,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 33,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 33,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 1.9
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "program_uid": "52648fcdc514695b",
+ "program": "deepseek-v4-flash-0731#33",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 65.5,
+ "assistant_turns": 6,
+ "tool_calls": 6,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "Утечка найдена и устранена, повторная проверка чистая.\n\n**Что было:** `avg_review`/`count_review` считались по всем отзывам без ограничения по времени, а `avg_delivery_days` использовал `order_delivered_customer_date` всех заказов. Witness-проверка подтвердила чтение строк из будущего (отзыв появляется через недели после покупки, дата доставки заполняется после неё).\n\n**Что изменено в `get_features.py`:**\n- `get_features.py:22` — отзывы фильтруются по `review_creation_date <= seed_time`;\n- `get_features.py:28` — доставка учитывается только для заказов, фактически доставленных до `seed_time`.\n\n```\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1,\nwitness_final=[], canary_final=[],\nstate=pit_state.json\n```",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 74763,
+   "output_tokens": 1563
+  },
+  "message_count": 12,
+  "session_id": "d5de4bb8890f",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

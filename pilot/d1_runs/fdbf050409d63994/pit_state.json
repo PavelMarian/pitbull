@@ -1,0 +1,186 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "fdbf050409d63994",
+ "source_sha256": "fdbf050409d63994bfcacd70e66a574d7094a8b68763c4ec0ccb37a75ad3a301",
+ "source_code": "def get_features(db, entity_ids, seed_time):\n    import pandas as pd\n    import numpy as np\n\n    if not isinstance(seed_time, pd.Timestamp):\n        seed_time = pd.Timestamp(seed_time)\n\n    features = pd.DataFrame(index=entity_ids)\n\n    # -----------------------------------------------------------------\n    # 1. Filter order_items by purchase time (<= seed_time)\n    oi = db[\"order_items\"].copy()\n    oi = oi[oi[\"ts\"] <= seed_time]\n\n    if len(oi) == 0:\n        # No history for any product → return all zero features\n        return features\n\n    # -----------------------------------------------------------------\n    # 2. Merge reviews (only the score)\n    reviews = db[\"reviews\"][[\"order_id\", \"review_score\"]]\n    oi = oi.merge(reviews, on=\"order_id\", how=\"left\")\n\n    # -----------------------------------------------------------------\n    # 3. Add time windows\n    oi[\"days_diff\"] = (seed_time - oi[\"ts\"]).dt.days\n    oi[\"last_7\"]   = (oi[\"days_diff\"] <= 7)   & (oi[\"days_diff\"] >= 0)\n    oi[\"last_30\"]  = (oi[\"days_diff\"] <= 30)  & (oi[\"days_diff\"] >= 0)\n    oi[\"last_60\"]  = (oi[\"days_diff\"] <= 60)  & (oi[\"days_diff\"] >= 0)\n    oi[\"last_90\"]  = (oi[\"days_diff\"] <= 90)  & (oi[\"days_diff\"] >= 0)\n\n    # -----------------------------------------------------------------\n    # 4. Item-level aggregation (per product)\n    item_agg = oi.groupby(\"product_id\").agg(\n        n_orders        = (\"order_id\", \"nunique\"),\n        n_items         = (\"price\", \"count\"),\n        total_price     = (\"price\", \"sum\"),\n        avg_price       = (\"price\", \"mean\"),\n        median_price    = (\"price\", \"median\"),\n        std_price       = (\"price\", \"std\"),\n        total_freight   = (\"freight_value\", \"sum\"),\n        avg_freight     = (\"freight_value\", \"mean\"),\n        std_freight     = (\"freight_value\", \"std\"),\n        n_sellers       = (\"seller_id\", \"nunique\"),\n        avg_review      = (\"review_score\", \"mean\"),\n        n_reviews       = (\"review_score\", \"count\"),\n        cnt_last_7      = (\"last_7\", \"sum\"),\n        cnt_last_30     = (\"last_30\", \"sum\"),\n        cnt_last_60     = (\"last_60\", \"sum\"),\n        cnt_last_90     = (\"last_90\", \"sum\"),\n        last_order_ts   = (\"ts\", \"max\"),\n        first_order_ts  = (\"ts\", \"min\"),\n    ).reset_index()\n\n    # Recency features\n    item_agg[\"days_since_last\"] = (seed_time - item_agg[\"last_order_ts\"]).dt.days\n    item_agg[\"days_since_first\"] = (seed_time - item_agg[\"first_order_ts\"]).dt.days\n    item_agg.drop(columns=[\"last_order_ts\", \"first_order_ts\"], inplace=True)\n\n    # Average items per order (only where n_orders > 0) – replace inf with 0\n    item_agg[\"avg_items_per_order\"] = item_agg[\"n_items\"] / item_agg[\"n_orders\"].replace(0, np.nan)\n    item_agg[\"avg_items_per_order\"] = item_agg[\"avg_items_per_order\"].fillna(0)\n\n    # -----------------------------------------------------------------\n    # 5. Order-level payment features\n    # Unique (order, product) pairs for correct payment aggregation\n    order_prod = oi[[\"order_id\", \"product_id\"]].drop_duplicates()\n    payments = db[\"payments\"]\n    pay_by_order = payments.groupby(\"order_id\")[\"payment_value\"].sum().reset_index().rename(\n        columns={\"payment_value\": \"order_total_payment\"}\n    )\n    order_prod = order_prod.merge(pay_by_order, on=\"order_id\", how=\"left\")\n\n    pay_agg = order_prod.groupby(\"product_id\").agg(\n        n_orders_with_payment = (\"order_total_payment\", \"count\"),\n        sum_order_payment     = (\"order_total_payment\", \"sum\"),\n        avg_payment_per_order = (\"order_total_payment\", \"mean\"),\n    ).reset_index()\n\n    # -----------------------------------------------------------------\n    # 6. Merge & reindex\n    features = item_agg.merge(pay_agg, on=\"product_id\", how=\"left\")\n    features.set_index(\"product_id\", inplace=True)\n\n    # Reindex to entity_ids and fill missing/NaN\n    features = features.reindex(entity_ids, fill_value=0)\n    features = features.fillna(0)\n\n    return features",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "fdbf050409d63994bfcacd70e66a574d7094a8b68763c4ec0ccb37a75ad3a301",
+   "code": "def get_features(db, entity_ids, seed_time):\n    import pandas as pd\n    import numpy as np\n\n    if not isinstance(seed_time, pd.Timestamp):\n        seed_time = pd.Timestamp(seed_time)\n\n    features = pd.DataFrame(index=entity_ids)\n\n    # -----------------------------------------------------------------\n    # 1. Filter order_items by purchase time (<= seed_time)\n    oi = db[\"order_items\"].copy()\n    oi = oi[oi[\"ts\"] <= seed_time]\n\n    if len(oi) == 0:\n        # No history for any product → return all zero features\n        return features\n\n    # -----------------------------------------------------------------\n    # 2. Merge reviews (only the score)\n    reviews = db[\"reviews\"][[\"order_id\", \"review_score\"]]\n    oi = oi.merge(reviews, on=\"order_id\", how=\"left\")\n\n    # -----------------------------------------------------------------\n    # 3. Add time windows\n    oi[\"days_diff\"] = (seed_time - oi[\"ts\"]).dt.days\n    oi[\"last_7\"]   = (oi[\"days_diff\"] <= 7)   & (oi[\"days_diff\"] >= 0)\n    oi[\"last_30\"]  = (oi[\"days_diff\"] <= 30)  & (oi[\"days_diff\"] >= 0)\n    oi[\"last_60\"]  = (oi[\"days_diff\"] <= 60)  & (oi[\"days_diff\"] >= 0)\n    oi[\"last_90\"]  = (oi[\"days_diff\"] <= 90)  & (oi[\"days_diff\"] >= 0)\n\n    # -----------------------------------------------------------------\n    # 4. Item-level aggregation (per product)\n    item_agg = oi.groupby(\"product_id\").agg(\n        n_orders        = (\"order_id\", \"nunique\"),\n        n_items         = (\"price\", \"count\"),\n        total_price     = (\"price\", \"sum\"),\n        avg_price       = (\"price\", \"mean\"),\n        median_price    = (\"price\", \"median\"),\n        std_price       = (\"price\", \"std\"),\n        total_freight   = (\"freight_value\", \"sum\"),\n        avg_freight     = (\"freight_value\", \"mean\"),\n        std_freight     = (\"freight_value\", \"std\"),\n        n_sellers       = (\"seller_id\", \"nunique\"),\n        avg_review      = (\"review_score\", \"mean\"),\n        n_reviews       = (\"review_score\", \"count\"),\n        cnt_last_7      = (\"last_7\", \"sum\"),\n        cnt_last_30     = (\"last_30\", \"sum\"),\n        cnt_last_60     = (\"last_60\", \"sum\"),\n        cnt_last_90     = (\"last_90\", \"sum\"),\n        last_order_ts   = (\"ts\", \"max\"),\n        first_order_ts  = (\"ts\", \"min\"),\n    ).reset_index()\n\n    # Recency features\n    item_agg[\"days_since_last\"] = (seed_time - item_agg[\"last_order_ts\"]).dt.days\n    item_agg[\"days_since_first\"] = (seed_time - item_agg[\"first_order_ts\"]).dt.days\n    item_agg.drop(columns=[\"last_order_ts\", \"first_order_ts\"], inplace=True)\n\n    # Average items per order (only where n_orders > 0) – replace inf with 0\n    item_agg[\"avg_items_per_order\"] = item_agg[\"n_items\"] / item_agg[\"n_orders\"].replace(0, np.nan)\n    item_agg[\"avg_items_per_order\"] = item_agg[\"avg_items_per_order\"].fillna(0)\n\n    # -----------------------------------------------------------------\n    # 5. Order-level payment features\n    # Unique (order, product) pairs for correct payment aggregation\n    order_prod = oi[[\"order_id\", \"product_id\"]].drop_duplicates()\n    payments = db[\"payments\"]\n    pay_by_order = payments.groupby(\"order_id\")[\"payment_value\"].sum().reset_index().rename(\n        columns={\"payment_value\": \"order_total_payment\"}\n    )\n    order_prod = order_prod.merge(pay_by_order, on=\"order_id\", how=\"left\")\n\n    pay_agg = order_prod.groupby(\"product_id\").agg(\n        n_orders_with_payment = (\"order_total_payment\", \"count\"),\n        sum_order_payment     = (\"order_total_payment\", \"sum\"),\n        avg_payment_per_order = (\"order_total_payment\", \"mean\"),\n    ).reset_index()\n\n    # -----------------------------------------------------------------\n    # 6. Merge & reindex\n    features = item_agg.merge(pay_agg, on=\"product_id\", how=\"left\")\n    features.set_index(\"product_id\", inplace=True)\n\n    # Reindex to entity_ids and fill missing/NaN\n    features = features.reindex(entity_ids, fill_value=0)\n    features = features.fillna(0)\n\n    return features",
+   "timestamp": "2026-09-18T20:14:08+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "n_reviews"
+     ],
+     "canary_columns": [
+      "avg_review"
+     ],
+     "n_columns": 22,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "n_reviews"
+     ],
+     "canary_columns": [
+      "avg_review"
+     ],
+     "n_columns": 22,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "n_reviews"
+     ],
+     "canary_columns": [
+      "avg_review"
+     ],
+     "n_columns": 22,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "n_reviews"
+     ],
+     "canary_columns": [
+      "avg_review"
+     ],
+     "n_columns": 22,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "n_reviews"
+     ],
+     "canary_columns": [
+      "avg_review"
+     ],
+     "n_columns": 22,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review",
+      "n_reviews"
+     ],
+     "canary_columns": [
+      "avg_review"
+     ],
+     "n_columns": 22,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 4.4
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "b88c143f9d4c8f3088d9ec0bdcf43f0da2bb99b03303d2b83b9e0ba4bdae2fbc",
+   "code": "def get_features(db, entity_ids, seed_time):\n    import pandas as pd\n    import numpy as np\n\n    if not isinstance(seed_time, pd.Timestamp):\n        seed_time = pd.Timestamp(seed_time)\n\n    features = pd.DataFrame(index=entity_ids)\n\n    # -----------------------------------------------------------------\n    # 1. Filter order_items by purchase time (<= seed_time)\n    oi = db[\"order_items\"].copy()\n    oi = oi[oi[\"ts\"] <= seed_time]\n\n    if len(oi) == 0:\n        # No history for any product → return all zero features\n        return features\n\n    # -----------------------------------------------------------------\n    # 2. Merge reviews: only reviews already created by seed_time\n    reviews = db[\"reviews\"][[\"order_id\", \"review_score\", \"review_creation_date\"]]\n    reviews = reviews[reviews[\"review_creation_date\"] <= seed_time]\n    reviews = reviews[[\"order_id\", \"review_score\"]]\n    oi = oi.merge(reviews, on=\"order_id\", how=\"left\")\n\n    # -----------------------------------------------------------------\n    # 3. Add time windows\n    oi[\"days_diff\"] = (seed_time - oi[\"ts\"]).dt.days\n    oi[\"last_7\"]   = (oi[\"days_diff\"] <= 7)   & (oi[\"days_diff\"] >= 0)\n    oi[\"last_30\"]  = (oi[\"days_diff\"] <= 30)  & (oi[\"days_diff\"] >= 0)\n    oi[\"last_60\"]  = (oi[\"days_diff\"] <= 60)  & (oi[\"days_diff\"] >= 0)\n    oi[\"last_90\"]  = (oi[\"days_diff\"] <= 90)  & (oi[\"days_diff\"] >= 0)\n\n    # -----------------------------------------------------------------\n    # 4. Item-level aggregation (per product)\n    item_agg = oi.groupby(\"product_id\").agg(\n        n_orders        = (\"order_id\", \"nunique\"),\n        n_items         = (\"price\", \"count\"),\n        total_price     = (\"price\", \"sum\"),\n        avg_price       = (\"price\", \"mean\"),\n        median_price    = (\"price\", \"median\"),\n        std_price       = (\"price\", \"std\"),\n        total_freight   = (\"freight_value\", \"sum\"),\n        avg_freight     = (\"freight_value\", \"mean\"),\n        std_freight     = (\"freight_value\", \"std\"),\n        n_sellers       = (\"seller_id\", \"nunique\"),\n        avg_review      = (\"review_score\", \"mean\"),\n        n_reviews       = (\"review_score\", \"count\"),\n        cnt_last_7      = (\"last_7\", \"sum\"),\n        cnt_last_30     = (\"last_30\", \"sum\"),\n        cnt_last_60     = (\"last_60\", \"sum\"),\n        cnt_last_90     = (\"last_90\", \"sum\"),\n        last_order_ts   = (\"ts\", \"max\"),\n        first_order_ts  = (\"ts\", \"min\"),\n    ).reset_index()\n\n    # Recency features\n    item_agg[\"days_since_last\"] = (seed_time - item_agg[\"last_order_ts\"]).dt.days\n    item_agg[\"days_since_first\"] = (seed_time - item_agg[\"first_order_ts\"]).dt.days\n    item_agg.drop(columns=[\"last_order_ts\", \"first_order_ts\"], inplace=True)\n\n    # Average items per order (only where n_orders > 0) – replace inf with 0\n    item_agg[\"avg_items_per_order\"] = item_agg[\"n_items\"] / item_agg[\"n_orders\"].replace(0, np.nan)\n    item_agg[\"avg_items_per_order\"] = item_agg[\"avg_items_per_order\"].fillna(0)\n\n    # -----------------------------------------------------------------\n    # 5. Order-level payment features\n    # A payment exists for the model only if the order was approved by\n    # seed_time; where approval is missing fall back to the payment row's\n    # own purchase timestamp.\n    order_prod = oi[[\"order_id\", \"product_id\"]].drop_duplicates()\n\n    orders = db[\"orders\"][[\"order_id\", \"order_approved_at\"]]\n    payments = db[\"payments\"][[\"order_id\", \"payment_value\", \"ts\"]]\n    payments = payments.merge(orders, on=\"order_id\", how=\"left\")\n    avail = payments[\"order_approved_at\"].fillna(payments[\"ts\"])\n    payments = payments[avail <= seed_time]\n    payments = payments[[\"order_id\", \"payment_value\"]]\n\n    pay_by_order = payments.groupby(\"order_id\")[\"payment_value\"].sum().reset_index().rename(\n        columns={\"payment_value\": \"order_total_payment\"}\n    )\n    order_prod = order_prod.merge(pay_by_order, on=\"order_id\", how=\"left\")\n\n    pay_agg = order_prod.groupby(\"product_id\").agg(\n        n_orders_with_payment = (\"order_total_payment\", \"count\"),\n        sum_order_payment     = (\"order_total_payment\", \"sum\"),\n        avg_payment_per_order = (\"order_total_payment\", \"mean\"),\n    ).reset_index()\n\n    # -----------------------------------------------------------------\n    # 6. Merge & reindex\n    features = item_agg.merge(pay_agg, on=\"product_id\", how=\"left\")\n    features.set_index(\"product_id\", inplace=True)\n\n    # Reindex to entity_ids and fill missing/NaN\n    features = features.reindex(entity_ids, fill_value=0)\n    features = features.fillna(0)\n\n    return features\n",
+   "timestamp": "2026-09-18T20:14:53+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 22,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 22,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 22,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 22,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 22,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 22,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 4.5
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

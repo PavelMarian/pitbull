@@ -1,0 +1,197 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "488618eb19979bda",
+ "source_sha256": "488618eb19979bdac789f4bf79706ec224cfa735ac69035e1f9141559c84074f",
+ "source_code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Define time windows\n    lookback_30d = seed_time - pd.Timedelta(days=30)\n    lookback_90d = seed_time - pd.Timedelta(days=90)\n    lookback_180d = seed_time - pd.Timedelta(days=180)\n\n    # Rename timestamp column for clarity\n    order_items = db[\"order_items\"].rename(columns={\"ts\": \"order_purchase_ts\"})\n    # Filter items to relevant products and valid timestamps\n    filtered_items = order_items[\n        order_items[\"product_id\"].isin(entity_ids) &\n        (order_items[\"order_purchase_ts\"] < seed_time)\n    ].copy()\n\n    # Aggregate lifetime product sales metrics\n    product_base = filtered_items.groupby(\"product_id\").agg(\n        total_sales_ever=(\"order_item_id\", \"count\"),\n        total_revenue_ever=(\"price\", \"sum\"),\n        avg_price_ever=(\"price\", \"mean\"),\n        avg_freight_ever=(\"freight_value\", \"mean\"),\n        last_sale_days=(\"order_purchase_ts\", lambda x: (seed_time - x.max()).days if x.notna().any() else np.inf)\n    ).reset_index()\n\n    # 30-day window features\n    win30 = filtered_items[filtered_items[\"order_purchase_ts\"] >= lookback_30d]\n    win30_agg = win30.groupby(\"product_id\").agg(\n        sales_30d=(\"order_item_id\", \"count\"),\n        revenue_30d=(\"price\", \"sum\"),\n        avg_price_30d=(\"price\", \"mean\"),\n        uniq_orders_30d=(\"order_id\", \"nunique\")\n    ).reset_index()\n\n    # 90-day window features\n    win90 = filtered_items[filtered_items[\"order_purchase_ts\"] >= lookback_90d]\n    win90_agg = win90.groupby(\"product_id\").agg(\n        sales_90d=(\"order_item_id\", \"count\"),\n        revenue_90d=(\"price\", \"sum\"),\n        avg_price_90d=(\"price\", \"mean\"),\n        uniq_orders_90d=(\"order_id\", \"nunique\")\n    ).reset_index()\n\n    # 180-day window features\n    win180 = filtered_items[filtered_items[\"order_purchase_ts\"] >= lookback_180d]\n    win180_agg = win180.groupby(\"product_id\").agg(\n        sales_180d=(\"order_item_id\", \"count\"),\n        revenue_180d=(\"price\", \"sum\"),\n        avg_price_180d=(\"price\", \"mean\"),\n        uniq_orders_180d=(\"order_id\", \"nunique\")\n    ).reset_index()\n\n    # Seller concentration features\n    seller_agg = filtered_items.groupby([\"product_id\", \"seller_id\"]).agg(\n        seller_sales=(\"order_item_id\", \"count\")\n    ).reset_index()\n    seller_conc = seller_agg.groupby(\"product_id\").agg(\n        total_sellers=(\"seller_id\", \"nunique\"),\n        top_seller_share=(\"seller_sales\", lambda x: x.max() / x.sum() if x.sum() > 0 else 0)\n    ).reset_index()\n\n    # Review features\n    items_with_reviews = filtered_items.merge(\n        db[\"reviews\"][[\"order_id\", \"review_score\", \"review_comment_message\"]],\n        on=\"order_id\",\n        how=\"left\"\n    )\n    items_with_reviews[\"has_comment\"] = items_with_reviews[\"review_comment_message\"].notna().astype(int)\n    review_feats = items_with_reviews.groupby(\"product_id\").agg(\n        avg_review_score=(\"review_score\", \"mean\"),\n        total_reviews=(\"review_score\", \"count\"),\n        share_commented_reviews=(\"has_comment\", \"mean\")\n    ).reset_index()\n\n    # Payment features\n    payments_order = db[\"payments\"].groupby(\"order_id\").agg(\n        total_payment=(\"payment_value\", \"sum\"),\n        avg_installments=(\"payment_installments\", \"mean\"),\n        has_card=(\"payment_type\", lambda x: int((\"credit_card\" in x.values) or (\"boleto\" in x.values)))\n    ).reset_index()\n    items_with_pay = filtered_items.merge(payments_order, on=\"order_id\", how=\"left\")\n    pay_feats = items_with_pay.groupby(\"product_id\").agg(\n        avg_order_value=(\"total_payment\", \"mean\"),\n        avg_installments=(\"avg_installments\", \"mean\"),\n        share_card_payments=(\"has_card\", \"mean\")\n    ).reset_index()\n\n    # Build base DataFrame with all required product IDs\n    base = pd.DataFrame({\"product_id\": entity_ids})\n\n    # Merge all feature sets\n    features = (\n        base\n        .merge(product_base, on=\"product_id\", how=\"left\")\n        .merge(win30_agg, on=\"product_id\", how=\"left\")\n        .merge(win90_agg, on=\"product_id\", how=\"left\")\n        .merge(win180_agg, on=\"product_id\", how=\"left\")\n        .merge(seller_conc, on=\"product_id\", how=\"left\")\n        .merge(review_feats, on=\"product_id\", how=\"left\")\n        .merge(pay_feats, on=\"product_id\", how=\"left\")\n    )\n\n    # Fill missing values with safe defaults\n    fill_map = {\n        \"total_sales_ever\": 0,\n        \"total_revenue_ever\": 0,\n        \"avg_price_ever\": 0,\n        \"avg_freight_ever\": 0,\n        \"last_sale_days\": 9999,\n        \"sales_30d\": 0,\n        \"revenue_30d\": 0,\n        \"avg_price_30d\": 0,\n        \"uniq_orders_30d\": 0,\n        \"sales_90d\": 0,\n        \"revenue_90d\": 0,\n        \"avg_price_90d\": 0,\n        \"uniq_orders_90d\": 0,\n        \"sales_180d\": 0,\n        \"revenue_180d\": 0,\n        \"avg_price_180d\": 0,\n        \"uniq_orders_180d\": 0,\n        \"total_sellers\": 0,\n        \"top_seller_share\": 0,\n        \"avg_review_score\": 3,\n        \"total_reviews\": 0,\n        \"share_commented_reviews\": 0,\n        \"avg_order_value\": 0,\n        \"avg_installments\": 0,\n        \"share_card_payments\": 0\n    }\n    features = features.fillna(value=fill_map)\n\n    # Reindex to input entity IDs, set as index\n    features = features.set_index(\"product_id\").reindex(entity_ids)\n    # Ensure all columns are numeric\n    features = features.astype(np.float64)\n\n    return features",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "488618eb19979bdac789f4bf79706ec224cfa735ac69035e1f9141559c84074f",
+   "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Define time windows\n    lookback_30d = seed_time - pd.Timedelta(days=30)\n    lookback_90d = seed_time - pd.Timedelta(days=90)\n    lookback_180d = seed_time - pd.Timedelta(days=180)\n\n    # Rename timestamp column for clarity\n    order_items = db[\"order_items\"].rename(columns={\"ts\": \"order_purchase_ts\"})\n    # Filter items to relevant products and valid timestamps\n    filtered_items = order_items[\n        order_items[\"product_id\"].isin(entity_ids) &\n        (order_items[\"order_purchase_ts\"] < seed_time)\n    ].copy()\n\n    # Aggregate lifetime product sales metrics\n    product_base = filtered_items.groupby(\"product_id\").agg(\n        total_sales_ever=(\"order_item_id\", \"count\"),\n        total_revenue_ever=(\"price\", \"sum\"),\n        avg_price_ever=(\"price\", \"mean\"),\n        avg_freight_ever=(\"freight_value\", \"mean\"),\n        last_sale_days=(\"order_purchase_ts\", lambda x: (seed_time - x.max()).days if x.notna().any() else np.inf)\n    ).reset_index()\n\n    # 30-day window features\n    win30 = filtered_items[filtered_items[\"order_purchase_ts\"] >= lookback_30d]\n    win30_agg = win30.groupby(\"product_id\").agg(\n        sales_30d=(\"order_item_id\", \"count\"),\n        revenue_30d=(\"price\", \"sum\"),\n        avg_price_30d=(\"price\", \"mean\"),\n        uniq_orders_30d=(\"order_id\", \"nunique\")\n    ).reset_index()\n\n    # 90-day window features\n    win90 = filtered_items[filtered_items[\"order_purchase_ts\"] >= lookback_90d]\n    win90_agg = win90.groupby(\"product_id\").agg(\n        sales_90d=(\"order_item_id\", \"count\"),\n        revenue_90d=(\"price\", \"sum\"),\n        avg_price_90d=(\"price\", \"mean\"),\n        uniq_orders_90d=(\"order_id\", \"nunique\")\n    ).reset_index()\n\n    # 180-day window features\n    win180 = filtered_items[filtered_items[\"order_purchase_ts\"] >= lookback_180d]\n    win180_agg = win180.groupby(\"product_id\").agg(\n        sales_180d=(\"order_item_id\", \"count\"),\n        revenue_180d=(\"price\", \"sum\"),\n        avg_price_180d=(\"price\", \"mean\"),\n        uniq_orders_180d=(\"order_id\", \"nunique\")\n    ).reset_index()\n\n    # Seller concentration features\n    seller_agg = filtered_items.groupby([\"product_id\", \"seller_id\"]).agg(\n        seller_sales=(\"order_item_id\", \"count\")\n    ).reset_index()\n    seller_conc = seller_agg.groupby(\"product_id\").agg(\n        total_sellers=(\"seller_id\", \"nunique\"),\n        top_seller_share=(\"seller_sales\", lambda x: x.max() / x.sum() if x.sum() > 0 else 0)\n    ).reset_index()\n\n    # Review features\n    items_with_reviews = filtered_items.merge(\n        db[\"reviews\"][[\"order_id\", \"review_score\", \"review_comment_message\"]],\n        on=\"order_id\",\n        how=\"left\"\n    )\n    items_with_reviews[\"has_comment\"] = items_with_reviews[\"review_comment_message\"].notna().astype(int)\n    review_feats = items_with_reviews.groupby(\"product_id\").agg(\n        avg_review_score=(\"review_score\", \"mean\"),\n        total_reviews=(\"review_score\", \"count\"),\n        share_commented_reviews=(\"has_comment\", \"mean\")\n    ).reset_index()\n\n    # Payment features\n    payments_order = db[\"payments\"].groupby(\"order_id\").agg(\n        total_payment=(\"payment_value\", \"sum\"),\n        avg_installments=(\"payment_installments\", \"mean\"),\n        has_card=(\"payment_type\", lambda x: int((\"credit_card\" in x.values) or (\"boleto\" in x.values)))\n    ).reset_index()\n    items_with_pay = filtered_items.merge(payments_order, on=\"order_id\", how=\"left\")\n    pay_feats = items_with_pay.groupby(\"product_id\").agg(\n        avg_order_value=(\"total_payment\", \"mean\"),\n        avg_installments=(\"avg_installments\", \"mean\"),\n        share_card_payments=(\"has_card\", \"mean\")\n    ).reset_index()\n\n    # Build base DataFrame with all required product IDs\n    base = pd.DataFrame({\"product_id\": entity_ids})\n\n    # Merge all feature sets\n    features = (\n        base\n        .merge(product_base, on=\"product_id\", how=\"left\")\n        .merge(win30_agg, on=\"product_id\", how=\"left\")\n        .merge(win90_agg, on=\"product_id\", how=\"left\")\n        .merge(win180_agg, on=\"product_id\", how=\"left\")\n        .merge(seller_conc, on=\"product_id\", how=\"left\")\n        .merge(review_feats, on=\"product_id\", how=\"left\")\n        .merge(pay_feats, on=\"product_id\", how=\"left\")\n    )\n\n    # Fill missing values with safe defaults\n    fill_map = {\n        \"total_sales_ever\": 0,\n        \"total_revenue_ever\": 0,\n        \"avg_price_ever\": 0,\n        \"avg_freight_ever\": 0,\n        \"last_sale_days\": 9999,\n        \"sales_30d\": 0,\n        \"revenue_30d\": 0,\n        \"avg_price_30d\": 0,\n        \"uniq_orders_30d\": 0,\n        \"sales_90d\": 0,\n        \"revenue_90d\": 0,\n        \"avg_price_90d\": 0,\n        \"uniq_orders_90d\": 0,\n        \"sales_180d\": 0,\n        \"revenue_180d\": 0,\n        \"avg_price_180d\": 0,\n        \"uniq_orders_180d\": 0,\n        \"total_sellers\": 0,\n        \"top_seller_share\": 0,\n        \"avg_review_score\": 3,\n        \"total_reviews\": 0,\n        \"share_commented_reviews\": 0,\n        \"avg_order_value\": 0,\n        \"avg_installments\": 0,\n        \"share_card_payments\": 0\n    }\n    features = features.fillna(value=fill_map)\n\n    # Reindex to input entity IDs, set as index\n    features = features.set_index(\"product_id\").reindex(entity_ids)\n    # Ensure all columns are numeric\n    features = features.astype(np.float64)\n\n    return features",
+   "timestamp": "2026-09-18T20:17:44+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "total_reviews",
+      "share_commented_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "share_commented_reviews"
+     ],
+     "n_columns": 25,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "total_reviews",
+      "share_commented_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "share_commented_reviews"
+     ],
+     "n_columns": 25,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "total_reviews",
+      "share_commented_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "share_commented_reviews"
+     ],
+     "n_columns": 25,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "total_reviews",
+      "share_commented_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "share_commented_reviews"
+     ],
+     "n_columns": 25,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "total_reviews",
+      "share_commented_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "share_commented_reviews"
+     ],
+     "n_columns": 25,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "total_reviews",
+      "share_commented_reviews"
+     ],
+     "canary_columns": [
+      "avg_review_score"
+     ],
+     "n_columns": 25,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 19.3
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "4ecf8e1c43925100676eb9be8a2db2a5cf443294c36e0fa96b77c2c30173cb74",
+   "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Define time windows\n    lookback_30d = seed_time - pd.Timedelta(days=30)\n    lookback_90d = seed_time - pd.Timedelta(days=90)\n    lookback_180d = seed_time - pd.Timedelta(days=180)\n\n    # Rename timestamp column for clarity\n    order_items = db[\"order_items\"].rename(columns={\"ts\": \"order_purchase_ts\"})\n    # Filter items to relevant products and valid timestamps\n    filtered_items = order_items[\n        order_items[\"product_id\"].isin(entity_ids) &\n        (order_items[\"order_purchase_ts\"] < seed_time)\n    ].copy()\n\n    # Aggregate lifetime product sales metrics\n    product_base = filtered_items.groupby(\"product_id\").agg(\n        total_sales_ever=(\"order_item_id\", \"count\"),\n        total_revenue_ever=(\"price\", \"sum\"),\n        avg_price_ever=(\"price\", \"mean\"),\n        avg_freight_ever=(\"freight_value\", \"mean\"),\n        last_sale_days=(\"order_purchase_ts\", lambda x: (seed_time - x.max()).days if x.notna().any() else np.inf)\n    ).reset_index()\n\n    # 30-day window features\n    win30 = filtered_items[filtered_items[\"order_purchase_ts\"] >= lookback_30d]\n    win30_agg = win30.groupby(\"product_id\").agg(\n        sales_30d=(\"order_item_id\", \"count\"),\n        revenue_30d=(\"price\", \"sum\"),\n        avg_price_30d=(\"price\", \"mean\"),\n        uniq_orders_30d=(\"order_id\", \"nunique\")\n    ).reset_index()\n\n    # 90-day window features\n    win90 = filtered_items[filtered_items[\"order_purchase_ts\"] >= lookback_90d]\n    win90_agg = win90.groupby(\"product_id\").agg(\n        sales_90d=(\"order_item_id\", \"count\"),\n        revenue_90d=(\"price\", \"sum\"),\n        avg_price_90d=(\"price\", \"mean\"),\n        uniq_orders_90d=(\"order_id\", \"nunique\")\n    ).reset_index()\n\n    # 180-day window features\n    win180 = filtered_items[filtered_items[\"order_purchase_ts\"] >= lookback_180d]\n    win180_agg = win180.groupby(\"product_id\").agg(\n        sales_180d=(\"order_item_id\", \"count\"),\n        revenue_180d=(\"price\", \"sum\"),\n        avg_price_180d=(\"price\", \"mean\"),\n        uniq_orders_180d=(\"order_id\", \"nunique\")\n    ).reset_index()\n\n    # Seller concentration features\n    seller_agg = filtered_items.groupby([\"product_id\", \"seller_id\"]).agg(\n        seller_sales=(\"order_item_id\", \"count\")\n    ).reset_index()\n    seller_conc = seller_agg.groupby(\"product_id\").agg(\n        total_sellers=(\"seller_id\", \"nunique\"),\n        top_seller_share=(\"seller_sales\", lambda x: x.max() / x.sum() if x.sum() > 0 else 0)\n    ).reset_index()\n\n    # Review features: only reviews that already exist at seed_time\n    reviews = db[\"reviews\"]\n    reviews_past = reviews[reviews[\"review_creation_date\"] < seed_time]\n    items_with_reviews = filtered_items.merge(\n        reviews_past[[\"order_id\", \"review_score\", \"review_comment_message\"]],\n        on=\"order_id\",\n        how=\"left\"\n    )\n    items_with_reviews[\"has_comment\"] = items_with_reviews[\"review_comment_message\"].notna().astype(int)\n    review_feats = items_with_reviews.groupby(\"product_id\").agg(\n        avg_review_score=(\"review_score\", \"mean\"),\n        total_reviews=(\"review_score\", \"count\"),\n        share_commented_reviews=(\"has_comment\", \"mean\")\n    ).reset_index()\n\n    # Payment features\n    payments_order = db[\"payments\"].groupby(\"order_id\").agg(\n        total_payment=(\"payment_value\", \"sum\"),\n        avg_installments=(\"payment_installments\", \"mean\"),\n        has_card=(\"payment_type\", lambda x: int((\"credit_card\" in x.values) or (\"boleto\" in x.values)))\n    ).reset_index()\n    items_with_pay = filtered_items.merge(payments_order, on=\"order_id\", how=\"left\")\n    pay_feats = items_with_pay.groupby(\"product_id\").agg(\n        avg_order_value=(\"total_payment\", \"mean\"),\n        avg_installments=(\"avg_installments\", \"mean\"),\n        share_card_payments=(\"has_card\", \"mean\")\n    ).reset_index()\n\n    # Build base DataFrame with all required product IDs\n    base = pd.DataFrame({\"product_id\": entity_ids})\n\n    # Merge all feature sets\n    features = (\n        base\n        .merge(product_base, on=\"product_id\", how=\"left\")\n        .merge(win30_agg, on=\"product_id\", how=\"left\")\n        .merge(win90_agg, on=\"product_id\", how=\"left\")\n        .merge(win180_agg, on=\"product_id\", how=\"left\")\n        .merge(seller_conc, on=\"product_id\", how=\"left\")\n        .merge(review_feats, on=\"product_id\", how=\"left\")\n        .merge(pay_feats, on=\"product_id\", how=\"left\")\n    )\n\n    # Fill missing values with safe defaults\n    fill_map = {\n        \"total_sales_ever\": 0,\n        \"total_revenue_ever\": 0,\n        \"avg_price_ever\": 0,\n        \"avg_freight_ever\": 0,\n        \"last_sale_days\": 9999,\n        \"sales_30d\": 0,\n        \"revenue_30d\": 0,\n        \"avg_price_30d\": 0,\n        \"uniq_orders_30d\": 0,\n        \"sales_90d\": 0,\n        \"revenue_90d\": 0,\n        \"avg_price_90d\": 0,\n        \"uniq_orders_90d\": 0,\n        \"sales_180d\": 0,\n        \"revenue_180d\": 0,\n        \"avg_price_180d\": 0,\n        \"uniq_orders_180d\": 0,\n        \"total_sellers\": 0,\n        \"top_seller_share\": 0,\n        \"avg_review_score\": 3,\n        \"total_reviews\": 0,\n        \"share_commented_reviews\": 0,\n        \"avg_order_value\": 0,\n        \"avg_installments\": 0,\n        \"share_card_payments\": 0\n    }\n    features = features.fillna(value=fill_map)\n\n    # Reindex to input entity IDs, set as index\n    features = features.set_index(\"product_id\").reindex(entity_ids)\n    # Ensure all columns are numeric\n    features = features.astype(np.float64)\n\n    return features",
+   "timestamp": "2026-09-18T20:18:30+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 25,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 25,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 25,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 25,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 25,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 25,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 19.0
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

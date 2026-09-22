@@ -1,0 +1,27 @@
+{
+ "program_uid": "ec8a75db4ce0aae8",
+ "program": "deepseek-v4-flash-0731#44",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 214.7,
+ "assistant_turns": 6,
+ "tool_calls": 6,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "pit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/ec8a75db4ce0aae8/pit_state.json\n\n**Итоговый вердикт: утечка была, починена, подтверждено на всех 6 моментах (включая held-out).**\n\nЧто произошло:\n- Детекция (итерация 0): witness-столбцы `avg_review_score` и `count_reviews` менялись при усечении базы по `seed_time` — функция читала отзывы, написанные после момента предсказания. Canary подтвердил на `avg_review_score`.\n- Починка: добавлен фильтр `reviews['review_creation_date'] <= seed_time` перед агрегацией отзывов (get_features.py:44). Остальная логика уже была точной по времени: покупки фильтруются по `order_purchase_timestamp < seed_time`, платежи и размер корзины привязаны к моменту покупки.\n- Повторная проверка (итерация 1): CLEAN на dev-моментах (2018-01/04/07) и held-out (2017-10-01, 2018-02-01, 2018-06-01), witness и canary молчат.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 75954,
+   "output_tokens": 2409
+  },
+  "message_count": 12,
+  "session_id": "066bc5ecc1ff",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

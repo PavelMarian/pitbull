@@ -1,0 +1,27 @@
+{
+ "program_uid": "88a6082cf5850778",
+ "program": "deepseek-v4-flash-0731#41",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 413.6,
+ "assistant_turns": 7,
+ "tool_calls": 7,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "```\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=/home/stas/Documents/GitHub/pilot/d1_runs/88a6082cf5850778/pit_state.json\n```\n\nУтечка была, чекер её подтвердил на всех шести моментах, починка прошла с первой итерации. Что менялось в `get_features.py`:\n\n1. **`avg_review_score`** (поймано witness и canary): отзывы брались по всем заказам товара независимо от даты. Отзыв на заказ пишется после покупки, часто сильно позже seed_time. Теперь фильтр `reviews['review_creation_date'] <= seed_time` перед агрегацией.\n2. **`avg_delivery_days`** (поймано canary): фактическая дата доставки заполняется после покупки, поэтому `order_delivered_customer_date` использовалась для заказов, которые на момент seed_time ещё в пути. Теперь признак считается только по заказам с `order_delivered_customer_date <= seed_time`. Оценку срока доставки (`avg_estimated_delivery_days`) оставил по всем дошедшим до seed_time заказам: она известна в момент покупки, canary это подтверждает.\n\nОстальная логика (агрегаты по `order_purchase_timestamp < seed_time`, платежи, реиндексация) корректна по времени и сохранена.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 91413,
+   "output_tokens": 3083
+  },
+  "message_count": 14,
+  "session_id": "15a746df968b",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

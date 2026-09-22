@@ -1,0 +1,288 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "bf5c9bb63fa7cd53",
+ "source_sha256": "bf5c9bb63fa7cd535b12739d771c2cedc54653ed2649e1ed4ef84d86a070bad3",
+ "source_code": "def get_features(db, entity_ids, seed_time):\n    orders = db['orders']\n    order_items = db['order_items']\n    reviews = db['reviews']\n    payments = db['payments']\n    \n    seed_time = pd.Timestamp(seed_time)\n    \n    # Заказы, совершённые до seed_time\n    orders_before = orders[orders['order_purchase_timestamp'] < seed_time].copy()\n    \n    # Соединяем с составом заказов\n    df = order_items.merge(\n        orders_before[['order_id', 'customer_id', 'order_status', \n                       'order_purchase_timestamp', 'order_delivered_customer_date']],\n        on='order_id', how='inner'\n    )\n    \n    # Разные метрики на уровне заказа\n    df['delivery_days'] = (df['order_delivered_customer_date'] - df['order_purchase_timestamp']).dt.days\n    df['is_delivered'] = (df['order_status'] == 'delivered').astype(int)\n    \n    # Отзывы\n    rev_agg = reviews.groupby('order_id')['review_score'].agg(['mean', 'count']).reset_index()\n    rev_agg.columns = ['order_id', 'avg_score', 'n_reviews']\n    df = df.merge(rev_agg, on='order_id', how='left')\n    \n    # Платежи\n    pay_agg = payments.groupby('order_id')['payment_value'].agg(['sum', 'mean', 'count']).reset_index()\n    pay_agg.columns = ['order_id', 'total_payment', 'avg_payment', 'n_payments']\n    install_agg = payments.groupby('order_id')['payment_installments'].mean().reset_index(name='avg_installments')\n    pay_agg = pay_agg.merge(install_agg, on='order_id', how='left')\n    df = df.merge(pay_agg, on='order_id', how='left')\n    \n    def aggregate(df_part):\n        if df_part.empty:\n            return pd.DataFrame()\n        g = df_part.groupby('product_id')\n        return g.agg(\n            n_items=('order_item_id', 'size'),\n            n_orders=('order_id', 'nunique'),\n            n_customers=('customer_id', 'nunique'),\n            n_sellers=('seller_id', 'nunique'),\n            sum_price=('price', 'sum'),\n            avg_price=('price', 'mean'),\n            sum_freight=('freight_value', 'sum'),\n            avg_freight=('freight_value', 'mean'),\n            avg_rating=('avg_score', 'mean'),\n            n_reviews=('n_reviews', 'sum'),\n            avg_total_payment=('total_payment', 'mean'),\n            avg_avg_payment=('avg_payment', 'mean'),\n            avg_n_payments=('n_payments', 'mean'),\n            avg_installments=('avg_installments', 'mean'),\n            avg_delivery_days=('delivery_days', 'mean'),\n            frac_delivered=('is_delivered', 'mean')\n        )\n    \n    # Признаки на всей истории\n    feats = aggregate(df)\n    \n    # Временные признаки на основе последнего заказа\n    if not df.empty:\n        last_order = df.groupby('product_id')['order_purchase_timestamp'].max()\n        first_order = df.groupby('product_id')['order_purchase_timestamp'].min()\n        feats['days_since_last_order'] = (seed_time - last_order).dt.days\n        feats['order_span_days'] = (last_order - first_order).dt.days\n    \n    # Признаки для последних временных окон\n    for wd in [30, 60, 90, 180]:\n        start = seed_time - pd.Timedelta(days=wd)\n        sub = df[df['order_purchase_timestamp'] >= start]\n        if not sub.empty:\n            f = aggregate(sub)\n            f.columns = [f'{c}_{wd}d' for c in f.columns]\n            feats = feats.join(f, how='left')\n    \n    # Нарезка и заполнение пропусков\n    feats = feats.reindex(entity_ids).fillna(0)\n    \n    # Гарантируем числовой тип\n    for col in feats.columns:\n        feats[col] = pd.to_numeric(feats[col], errors='coerce').fillna(0)\n    \n    return feats",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "bf5c9bb63fa7cd535b12739d771c2cedc54653ed2649e1ed4ef84d86a070bad3",
+   "code": "def get_features(db, entity_ids, seed_time):\n    orders = db['orders']\n    order_items = db['order_items']\n    reviews = db['reviews']\n    payments = db['payments']\n    \n    seed_time = pd.Timestamp(seed_time)\n    \n    # Заказы, совершённые до seed_time\n    orders_before = orders[orders['order_purchase_timestamp'] < seed_time].copy()\n    \n    # Соединяем с составом заказов\n    df = order_items.merge(\n        orders_before[['order_id', 'customer_id', 'order_status', \n                       'order_purchase_timestamp', 'order_delivered_customer_date']],\n        on='order_id', how='inner'\n    )\n    \n    # Разные метрики на уровне заказа\n    df['delivery_days'] = (df['order_delivered_customer_date'] - df['order_purchase_timestamp']).dt.days\n    df['is_delivered'] = (df['order_status'] == 'delivered').astype(int)\n    \n    # Отзывы\n    rev_agg = reviews.groupby('order_id')['review_score'].agg(['mean', 'count']).reset_index()\n    rev_agg.columns = ['order_id', 'avg_score', 'n_reviews']\n    df = df.merge(rev_agg, on='order_id', how='left')\n    \n    # Платежи\n    pay_agg = payments.groupby('order_id')['payment_value'].agg(['sum', 'mean', 'count']).reset_index()\n    pay_agg.columns = ['order_id', 'total_payment', 'avg_payment', 'n_payments']\n    install_agg = payments.groupby('order_id')['payment_installments'].mean().reset_index(name='avg_installments')\n    pay_agg = pay_agg.merge(install_agg, on='order_id', how='left')\n    df = df.merge(pay_agg, on='order_id', how='left')\n    \n    def aggregate(df_part):\n        if df_part.empty:\n            return pd.DataFrame()\n        g = df_part.groupby('product_id')\n        return g.agg(\n            n_items=('order_item_id', 'size'),\n            n_orders=('order_id', 'nunique'),\n            n_customers=('customer_id', 'nunique'),\n            n_sellers=('seller_id', 'nunique'),\n            sum_price=('price', 'sum'),\n            avg_price=('price', 'mean'),\n            sum_freight=('freight_value', 'sum'),\n            avg_freight=('freight_value', 'mean'),\n            avg_rating=('avg_score', 'mean'),\n            n_reviews=('n_reviews', 'sum'),\n            avg_total_payment=('total_payment', 'mean'),\n            avg_avg_payment=('avg_payment', 'mean'),\n            avg_n_payments=('n_payments', 'mean'),\n            avg_installments=('avg_installments', 'mean'),\n            avg_delivery_days=('delivery_days', 'mean'),\n            frac_delivered=('is_delivered', 'mean')\n        )\n    \n    # Признаки на всей истории\n    feats = aggregate(df)\n    \n    # Временные признаки на основе последнего заказа\n    if not df.empty:\n        last_order = df.groupby('product_id')['order_purchase_timestamp'].max()\n        first_order = df.groupby('product_id')['order_purchase_timestamp'].min()\n        feats['days_since_last_order'] = (seed_time - last_order).dt.days\n        feats['order_span_days'] = (last_order - first_order).dt.days\n    \n    # Признаки для последних временных окон\n    for wd in [30, 60, 90, 180]:\n        start = seed_time - pd.Timedelta(days=wd)\n        sub = df[df['order_purchase_timestamp'] >= start]\n        if not sub.empty:\n            f = aggregate(sub)\n            f.columns = [f'{c}_{wd}d' for c in f.columns]\n            feats = feats.join(f, how='left')\n    \n    # Нарезка и заполнение пропусков\n    feats = feats.reindex(entity_ids).fillna(0)\n    \n    # Гарантируем числовой тип\n    for col in feats.columns:\n        feats[col] = pd.to_numeric(feats[col], errors='coerce').fillna(0)\n    \n    return feats",
+   "timestamp": "2026-09-18T20:50:59+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_rating",
+      "n_reviews",
+      "avg_rating_30d",
+      "n_reviews_30d",
+      "avg_rating_60d",
+      "n_reviews_60d",
+      "avg_rating_90d",
+      "n_reviews_90d",
+      "avg_rating_180d",
+      "n_reviews_180d"
+     ],
+     "canary_columns": [
+      "avg_rating",
+      "avg_delivery_days",
+      "avg_rating_30d",
+      "avg_delivery_days_30d",
+      "avg_rating_60d",
+      "avg_delivery_days_60d",
+      "avg_rating_90d",
+      "avg_delivery_days_90d",
+      "avg_rating_180d",
+      "avg_delivery_days_180d"
+     ],
+     "n_columns": 82,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_rating",
+      "n_reviews",
+      "avg_rating_30d",
+      "n_reviews_30d",
+      "avg_rating_60d",
+      "n_reviews_60d",
+      "avg_rating_90d",
+      "n_reviews_90d",
+      "avg_rating_180d",
+      "n_reviews_180d"
+     ],
+     "canary_columns": [
+      "avg_rating",
+      "avg_delivery_days",
+      "avg_rating_30d",
+      "avg_delivery_days_30d",
+      "avg_rating_60d",
+      "avg_delivery_days_60d",
+      "avg_rating_90d",
+      "avg_delivery_days_90d",
+      "avg_rating_180d",
+      "avg_delivery_days_180d"
+     ],
+     "n_columns": 82,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_rating",
+      "n_reviews",
+      "avg_rating_30d",
+      "n_reviews_30d",
+      "avg_rating_60d",
+      "n_reviews_60d",
+      "avg_rating_90d",
+      "n_reviews_90d",
+      "avg_rating_180d",
+      "n_reviews_180d"
+     ],
+     "canary_columns": [
+      "avg_rating",
+      "avg_delivery_days",
+      "avg_rating_30d",
+      "avg_delivery_days_30d",
+      "avg_rating_60d",
+      "avg_delivery_days_60d",
+      "avg_rating_90d",
+      "avg_delivery_days_90d",
+      "avg_rating_180d",
+      "avg_delivery_days_180d"
+     ],
+     "n_columns": 82,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_rating",
+      "n_reviews",
+      "avg_rating_30d",
+      "n_reviews_30d",
+      "avg_rating_60d",
+      "n_reviews_60d",
+      "avg_rating_90d",
+      "n_reviews_90d",
+      "avg_rating_180d",
+      "n_reviews_180d"
+     ],
+     "canary_columns": [
+      "avg_rating",
+      "avg_delivery_days",
+      "avg_rating_30d",
+      "avg_delivery_days_30d",
+      "avg_rating_60d",
+      "avg_delivery_days_60d",
+      "avg_rating_90d",
+      "avg_delivery_days_90d",
+      "avg_rating_180d",
+      "avg_delivery_days_180d"
+     ],
+     "n_columns": 82,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_rating",
+      "n_reviews",
+      "avg_rating_30d",
+      "n_reviews_30d",
+      "avg_rating_60d",
+      "n_reviews_60d",
+      "avg_rating_90d",
+      "n_reviews_90d",
+      "avg_rating_180d",
+      "n_reviews_180d"
+     ],
+     "canary_columns": [
+      "avg_rating",
+      "avg_delivery_days",
+      "avg_rating_30d",
+      "avg_delivery_days_30d",
+      "avg_rating_60d",
+      "avg_delivery_days_60d",
+      "avg_rating_90d",
+      "avg_delivery_days_90d",
+      "avg_rating_180d",
+      "avg_delivery_days_180d"
+     ],
+     "n_columns": 82,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_rating",
+      "n_reviews",
+      "avg_rating_30d",
+      "n_reviews_30d",
+      "avg_rating_60d",
+      "n_reviews_60d",
+      "avg_rating_90d",
+      "n_reviews_90d",
+      "avg_rating_180d",
+      "n_reviews_180d"
+     ],
+     "canary_columns": [
+      "avg_rating",
+      "avg_delivery_days",
+      "avg_rating_30d",
+      "avg_delivery_days_30d",
+      "avg_rating_60d",
+      "avg_delivery_days_60d",
+      "avg_rating_90d",
+      "avg_delivery_days_90d",
+      "avg_rating_180d",
+      "avg_delivery_days_180d"
+     ],
+     "n_columns": 82,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 13.1
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "f31081dacc142023cd6f2f899c9dc8a884d1ee40a4586ba94ee598137eb6f33f",
+   "code": "def get_features(db, entity_ids, seed_time):\n    orders = db['orders']\n    order_items = db['order_items']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    seed_time = pd.Timestamp(seed_time)\n\n    # Заказы, совершённые строго до seed_time\n    orders_before = orders[orders['order_purchase_timestamp'] < seed_time].copy()\n\n    # Состав заказов по товарам\n    df = order_items.merge(\n        orders_before[['order_id', 'customer_id', 'order_purchase_timestamp']],\n        on='order_id', how='inner'\n    )\n\n    # Отзывы: доступны только те, что уже созданы к seed_time\n    rev = reviews[reviews['review_creation_date'] <= seed_time]\n    rev_agg = rev.groupby('order_id')['review_score'].agg(['mean', 'count']).reset_index()\n    rev_agg.columns = ['order_id', 'avg_score', 'n_reviews']\n    df = df.merge(rev_agg, on='order_id', how='left')\n\n    # Платежи: только те, что относятся к покупкам до seed_time\n    pay = payments[payments['ts'] <= seed_time]\n    pay_agg = pay.groupby('order_id')['payment_value'].agg(['sum', 'mean', 'count']).reset_index()\n    pay_agg.columns = ['order_id', 'total_payment', 'avg_payment', 'n_payments']\n    install_agg = pay.groupby('order_id')['payment_installments'].mean().reset_index(name='avg_installments')\n    pay_agg = pay_agg.merge(install_agg, on='order_id', how='left')\n    df = df.merge(pay_agg, on='order_id', how='left')\n\n    def aggregate(df_part):\n        if df_part.empty:\n            return pd.DataFrame(index=pd.Index([], name='product_id'))\n        g = df_part.groupby('product_id')\n        return g.agg(\n            n_items=('order_item_id', 'size'),\n            n_orders=('order_id', 'nunique'),\n            n_customers=('customer_id', 'nunique'),\n            n_sellers=('seller_id', 'nunique'),\n            sum_price=('price', 'sum'),\n            avg_price=('price', 'mean'),\n            sum_freight=('freight_value', 'sum'),\n            avg_freight=('freight_value', 'mean'),\n            avg_rating=('avg_score', 'mean'),\n            n_reviews=('n_reviews', 'sum'),\n            avg_total_payment=('total_payment', 'mean'),\n            avg_avg_payment=('avg_payment', 'mean'),\n            avg_n_payments=('n_payments', 'mean'),\n            avg_installments=('avg_installments', 'mean')\n        )\n\n    # Признаки на всей доступной истории\n    feats = aggregate(df)\n\n    # Recency и длина истории\n    if not df.empty:\n        last_order = df.groupby('product_id')['order_purchase_timestamp'].max()\n        first_order = df.groupby('product_id')['order_purchase_timestamp'].min()\n        feats['days_since_last_order'] = (seed_time - last_order).dt.days\n        feats['order_span_days'] = (last_order - first_order).dt.days\n\n    # Признаки по временным окнам до seed_time\n    for wd in [30, 60, 90, 180]:\n        start = seed_time - pd.Timedelta(days=wd)\n        sub = df[df['order_purchase_timestamp'] >= start]\n        if not sub.empty:\n            f = aggregate(sub)\n            f.columns = [f'{c}_{wd}d' for c in f.columns]\n            feats = feats.join(f, how='left')\n\n    # Реиндекс под список сущностей и заполнение пропусков\n    feats = feats.reindex(entity_ids).fillna(0)\n\n    for col in feats.columns:\n        feats[col] = pd.to_numeric(feats[col], errors='coerce').fillna(0)\n\n    return feats\n",
+   "timestamp": "2026-09-18T20:51:53+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 72,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 72,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 72,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 72,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 72,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 72,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 10.0
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

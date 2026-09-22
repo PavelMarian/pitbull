@@ -1,0 +1,224 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "9f966e7fee72ee57",
+ "source_sha256": "9f966e7fee72ee5773146ef10dd796cb8df29652bc84513989a991de7016170b",
+ "source_code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Extract tables from the database\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n    \n    # Filter order items to only those before seed_time (historical data)\n    oi_hist = order_items[order_items[\"ts\"] < seed_time].copy()\n    \n    # Merge order items with orders to get customer and order status info\n    oi_orders = pd.merge(\n        oi_hist,\n        orders[[\"order_id\", \"customer_id\", \"order_status\"]],\n        on=\"order_id\",\n        how=\"left\"\n    ).dropna(subset=[\"order_id\", \"customer_id\"])  # Drop invalid rows (should be none)\n    \n    # Define time windows relative to seed_time\n    win_30 = seed_time - pd.Timedelta(days=30)\n    win_90 = seed_time - pd.Timedelta(days=90)\n    win_180 = seed_time - pd.Timedelta(days=180)\n    \n    # ------------------------------\n    # ALL-TIME HISTORICAL FEATURES\n    # ------------------------------\n    prod_all = oi_orders.groupby(\"product_id\").agg(\n        # Count metrics\n        total_units=(\"order_id\", \"count\"),\n        total_orders=(\"order_id\", \"nunique\"),\n        total_customers=(\"customer_id\", \"nunique\"),\n        # Price metrics\n        avg_price=(\"price\", \"mean\"),\n        median_price=(\"price\", \"median\"),\n        max_price=(\"price\", \"max\"),\n        min_price=(\"price\", \"min\"),\n        std_price=(\"price\", \"std\"),\n        total_revenue=(\"price\", \"sum\"),\n        # Freight metrics\n        avg_freight=(\"freight_value\", \"mean\"),\n        total_freight=(\"freight_value\", \"sum\"),\n        # Time metrics\n        last_purchase_ts=(\"ts\", \"max\"),\n        first_purchase_ts=(\"ts\", \"min\"),\n    ).reset_index()\n    \n    # Compute time-since features\n    prod_all[\"days_since_last_purchase\"] = (seed_time - prod_all[\"last_purchase_ts\"]).dt.total_seconds() / (24 * 3600)\n    prod_all[\"days_since_first_purchase\"] = (seed_time - prod_all[\"first_purchase_ts\"]).dt.total_seconds() / (24 * 3600)\n    prod_all[\"avg_units_per_order\"] = prod_all[\"total_units\"] / prod_all[\"total_orders\"].replace(0, np.nan)\n    \n    # ------------------------------\n    # WINDOWED HISTORICAL FEATURES\n    # ------------------------------\n    # Last 30 days\n    oi_30 = oi_orders[oi_orders[\"ts\"] >= win_30].copy()\n    prod_30 = oi_30.groupby(\"product_id\").agg(\n        total_units_30d=(\"order_id\", \"count\"),\n        total_orders_30d=(\"order_id\", \"nunique\"),\n        total_revenue_30d=(\"price\", \"sum\"),\n    ).reset_index()\n    \n    # Last 90 days\n    oi_90 = oi_orders[oi_orders[\"ts\"] >= win_90].copy()\n    prod_90 = oi_90.groupby(\"product_id\").agg(\n        total_units_90d=(\"order_id\", \"count\"),\n        total_orders_90d=(\"order_id\", \"nunique\"),\n        total_customers_90d=(\"customer_id\", \"nunique\"),\n        total_revenue_90d=(\"price\", \"sum\"),\n        avg_price_90d=(\"price\", \"mean\"),\n        last_purchase_90d=(\"ts\", \"max\"),\n    ).reset_index()\n    prod_90[\"days_since_last_purchase_90d\"] = (seed_time - prod_90[\"last_purchase_90d\"]).dt.total_seconds() / (24 * 3600)\n    \n    # Last 180 days\n    oi_180 = oi_orders[oi_orders[\"ts\"] >= win_180].copy()\n    prod_180 = oi_180.groupby(\"product_id\").agg(\n        total_units_180d=(\"order_id\", \"count\"),\n        total_orders_180d=(\"order_id\", \"nunique\"),\n        total_revenue_180d=(\"price\", \"sum\"),\n    ).reset_index()\n    \n    # ------------------------------\n    # ORDER STATUS FEATURES\n    # ------------------------------\n    order_status = oi_orders.groupby([\"product_id\", \"order_status\"]).agg(\n        status_count=(\"order_id\", \"nunique\")\n    ).reset_index()\n    order_status_pivot = order_status.pivot(\n        index=\"product_id\",\n        columns=\"order_status\",\n        values=\"status_count\"\n    ).fillna(0).reset_index()\n    order_status_pivot.columns = [\n        f\"order_status_{col.lower().replace(' ', '_')}\" if col != \"product_id\" else col\n        for col in order_status_pivot.columns\n    ]\n    \n    # ------------------------------\n    # REVIEW FEATURES\n    # ------------------------------\n    oi_reviews = pd.merge(\n        oi_orders[[\"product_id\", \"order_id\"]],\n        reviews[[\"order_id\", \"review_score\", \"review_comment_title\", \"review_comment_message\"]],\n        on=\"order_id\",\n        how=\"left\"\n    )\n    oi_reviews[\"has_comment\"] = (\n        oi_reviews[\"review_comment_title\"].notna() | oi_reviews[\"review_comment_message\"].notna()\n    ).astype(int)\n    review_features = oi_reviews.groupby(\"product_id\").agg(\n        total_reviews=(\"review_score\", \"count\"),\n        avg_review_score=(\"review_score\", \"mean\"),\n        min_review_score=(\"review_score\", \"min\"),\n        max_review_score=(\"review_score\", \"max\"),\n        std_review_score=(\"review_score\", \"std\"),\n        frac_reviews_with_comment=(\"has_comment\", \"mean\"),\n    ).reset_index()\n    \n    # ------------------------------\n    # PAYMENT FEATURES\n    # ------------------------------\n    oi_payments = pd.merge(\n        oi_orders[[\"product_id\", \"order_id\"]],\n        payments[[\"order_id\", \"payment_type\", \"payment_installments\", \"payment_value\"]],\n        on=\"order_id\",\n        how=\"left\"\n    )\n    # Aggregated payment features\n    payment_features = oi_payments.groupby(\"product_id\").agg(\n        total_payment_value=(\"payment_value\", \"sum\"),\n        avg_payment_value_per_item=(\"payment_value\", \"mean\"),\n        avg_installments=(\"payment_installments\", \"mean\"),\n        max_installments=(\"payment_installments\", \"max\"),\n        num_unique_payment_types=(\"payment_type\", \"nunique\"),\n    ).reset_index()\n    # Payment type dummy features\n    oi_payments = pd.concat([\n        oi_payments,\n        pd.get_dummies(oi_payments[\"payment_type\"], prefix=\"pay_type\")\n    ], axis=1)\n    payment_type_features = oi_payments.groupby(\"product_id\").agg(\n        **{f\"pay_{col}_count\": (col, \"sum\") for col in oi_payments.columns if col.startswith(\"pay_type_\")},\n        **{f\"pay_{col}_frac\": (col, \"mean\") for col in oi_payments.columns if col.startswith(\"pay_type_\")},\n    ).reset_index()\n    \n    # ------------------------------\n    # MERGE ALL FEATURES\n    # ------------------------------\n    all_features = prod_all.copy()\n    all_features = pd.merge(all_features, prod_30, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, prod_90, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, prod_180, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, order_status_pivot, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, review_features, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, payment_features, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, payment_type_features, on=\"product_id\", how=\"outer\")\n    \n    # ------------------------------\n    # CREATE ADDITIONAL DERIVED FEATURES\n    # ------------------------------\n    # Binary flag for any sales history\n    all_features[\"has_any_sales\"] = (~all_features[\"total_units\"].isna()).astype(int)\n    \n    # Growth ratio features\n    all_features[\"ratio_30d_to_90d_units\"] = all_features[\"total_units_30d\"] / all_features[\"total_units_90d\"].replace(0, np.nan)\n    all_features[\"ratio_90d_to_180d_units\"] = all_features[\"total_units_90d\"] / all_features[\"total_units_180d\"].replace(0, np.nan)\n    all_features[\"ratio_30d_to_all_units\"] = all_features[\"total_units_30d\"] / all_features[\"total_units\"].replace(0, np.nan)\n    all_features[\"ratio_90d_to_all_units\"] = all_features[\"total_units_90d\"] / all_features[\"total_units\"].replace(0, np.nan)\n    \n    # Average order interval\n    all_features[\"avg_days_between_orders\"] = np.where(\n        all_features[\"total_orders\"] > 1,\n        (all_features[\"days_since_first_purchase\"] - all_features[\"days_since_last_purchase\"]) / (all_features[\"total_orders\"] - 1),\n        0\n    )\n    \n    # ------------------------------\n    # CLEAN AND REINDEX TO INPUT ENTITIES\n    # ------------------------------\n    # Drop non-numeric datetime columns\n    datetime_cols = [\"last_purchase_ts\", \"first_purchase_ts\", \"last_purchase_90d\"]\n    all_features = all_features.drop(columns=[col for col in datetime_cols if col in all_features.columns], errors=\"ignore\")\n    \n    # Set product_id as index and reindex to input entity_ids\n    all_features = all_features.set_index(\"product_id\")\n    final_features = all_features.reindex(entity_ids)\n    \n    # Identify feature groups for consistent NaN filling\n    count_cols = [col for col in final_features.columns if (\n        col.startswith(\"total_\") or col.startswith(\"num_\") or \n        (col.startswith(\"pay_\") and col.endswith(\"_count\")) or\n        col.startswith(\"order_status_\")\n    )]\n    avg_cols = [col for col in final_features.columns if (\n        col.startswith(\"avg_\") or col.startswith(\"median_\") or\n        col.startswith(\"max_\") or col.startswith(\"min_\") or\n        col.startswith(\"std_\") or col.endswith(\"_frac\")\n    )]\n    time_cols = [\n        \"days_since_last_purchase\", \"days_since_first_purchase\",\n        \"days_since_last_purchase_90d\"\n    ]\n    ratio_cols = [col for col in final_features.columns if col.startswith(\"ratio_\")]\n    \n    # Fill NaNs for all feature groups\n    final_features[\"has_any_sales\"] = final_features[\"has_any_sales\"].fillna(0)\n    final_features[count_cols] = final_features[count_cols].fillna(0)\n    final_features[avg_cols] = final_features[avg_cols].fillna(0)\n    final_features[time_cols] = final_features[time_cols].fillna(10000)  # Arbitrary large value for \"never purchased\"\n    final_features[ratio_cols] = final_features[ratio_cols].fillna(0)\n    final_features[\"avg_units_per_order\"] = final_features[\"avg_units_per_order\"].fillna(0)\n    final_features[\"avg_days_between_orders\"] = final_features[\"avg_days_between_orders\"].fillna(0)\n    \n    # Final cleanup of any remaining invalid values\n    final_features = final_features.fillna(0)\n    final_features = final_features.replace([np.inf, -np.inf], 0)\n    \n    return final_features",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "9f966e7fee72ee5773146ef10dd796cb8df29652bc84513989a991de7016170b",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Extract tables from the database\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n    \n    # Filter order items to only those before seed_time (historical data)\n    oi_hist = order_items[order_items[\"ts\"] < seed_time].copy()\n    \n    # Merge order items with orders to get customer and order status info\n    oi_orders = pd.merge(\n        oi_hist,\n        orders[[\"order_id\", \"customer_id\", \"order_status\"]],\n        on=\"order_id\",\n        how=\"left\"\n    ).dropna(subset=[\"order_id\", \"customer_id\"])  # Drop invalid rows (should be none)\n    \n    # Define time windows relative to seed_time\n    win_30 = seed_time - pd.Timedelta(days=30)\n    win_90 = seed_time - pd.Timedelta(days=90)\n    win_180 = seed_time - pd.Timedelta(days=180)\n    \n    # ------------------------------\n    # ALL-TIME HISTORICAL FEATURES\n    # ------------------------------\n    prod_all = oi_orders.groupby(\"product_id\").agg(\n        # Count metrics\n        total_units=(\"order_id\", \"count\"),\n        total_orders=(\"order_id\", \"nunique\"),\n        total_customers=(\"customer_id\", \"nunique\"),\n        # Price metrics\n        avg_price=(\"price\", \"mean\"),\n        median_price=(\"price\", \"median\"),\n        max_price=(\"price\", \"max\"),\n        min_price=(\"price\", \"min\"),\n        std_price=(\"price\", \"std\"),\n        total_revenue=(\"price\", \"sum\"),\n        # Freight metrics\n        avg_freight=(\"freight_value\", \"mean\"),\n        total_freight=(\"freight_value\", \"sum\"),\n        # Time metrics\n        last_purchase_ts=(\"ts\", \"max\"),\n        first_purchase_ts=(\"ts\", \"min\"),\n    ).reset_index()\n    \n    # Compute time-since features\n    prod_all[\"days_since_last_purchase\"] = (seed_time - prod_all[\"last_purchase_ts\"]).dt.total_seconds() / (24 * 3600)\n    prod_all[\"days_since_first_purchase\"] = (seed_time - prod_all[\"first_purchase_ts\"]).dt.total_seconds() / (24 * 3600)\n    prod_all[\"avg_units_per_order\"] = prod_all[\"total_units\"] / prod_all[\"total_orders\"].replace(0, np.nan)\n    \n    # ------------------------------\n    # WINDOWED HISTORICAL FEATURES\n    # ------------------------------\n    # Last 30 days\n    oi_30 = oi_orders[oi_orders[\"ts\"] >= win_30].copy()\n    prod_30 = oi_30.groupby(\"product_id\").agg(\n        total_units_30d=(\"order_id\", \"count\"),\n        total_orders_30d=(\"order_id\", \"nunique\"),\n        total_revenue_30d=(\"price\", \"sum\"),\n    ).reset_index()\n    \n    # Last 90 days\n    oi_90 = oi_orders[oi_orders[\"ts\"] >= win_90].copy()\n    prod_90 = oi_90.groupby(\"product_id\").agg(\n        total_units_90d=(\"order_id\", \"count\"),\n        total_orders_90d=(\"order_id\", \"nunique\"),\n        total_customers_90d=(\"customer_id\", \"nunique\"),\n        total_revenue_90d=(\"price\", \"sum\"),\n        avg_price_90d=(\"price\", \"mean\"),\n        last_purchase_90d=(\"ts\", \"max\"),\n    ).reset_index()\n    prod_90[\"days_since_last_purchase_90d\"] = (seed_time - prod_90[\"last_purchase_90d\"]).dt.total_seconds() / (24 * 3600)\n    \n    # Last 180 days\n    oi_180 = oi_orders[oi_orders[\"ts\"] >= win_180].copy()\n    prod_180 = oi_180.groupby(\"product_id\").agg(\n        total_units_180d=(\"order_id\", \"count\"),\n        total_orders_180d=(\"order_id\", \"nunique\"),\n        total_revenue_180d=(\"price\", \"sum\"),\n    ).reset_index()\n    \n    # ------------------------------\n    # ORDER STATUS FEATURES\n    # ------------------------------\n    order_status = oi_orders.groupby([\"product_id\", \"order_status\"]).agg(\n        status_count=(\"order_id\", \"nunique\")\n    ).reset_index()\n    order_status_pivot = order_status.pivot(\n        index=\"product_id\",\n        columns=\"order_status\",\n        values=\"status_count\"\n    ).fillna(0).reset_index()\n    order_status_pivot.columns = [\n        f\"order_status_{col.lower().replace(' ', '_')}\" if col != \"product_id\" else col\n        for col in order_status_pivot.columns\n    ]\n    \n    # ------------------------------\n    # REVIEW FEATURES\n    # ------------------------------\n    oi_reviews = pd.merge(\n        oi_orders[[\"product_id\", \"order_id\"]],\n        reviews[[\"order_id\", \"review_score\", \"review_comment_title\", \"review_comment_message\"]],\n        on=\"order_id\",\n        how=\"left\"\n    )\n    oi_reviews[\"has_comment\"] = (\n        oi_reviews[\"review_comment_title\"].notna() | oi_reviews[\"review_comment_message\"].notna()\n    ).astype(int)\n    review_features = oi_reviews.groupby(\"product_id\").agg(\n        total_reviews=(\"review_score\", \"count\"),\n        avg_review_score=(\"review_score\", \"mean\"),\n        min_review_score=(\"review_score\", \"min\"),\n        max_review_score=(\"review_score\", \"max\"),\n        std_review_score=(\"review_score\", \"std\"),\n        frac_reviews_with_comment=(\"has_comment\", \"mean\"),\n    ).reset_index()\n    \n    # ------------------------------\n    # PAYMENT FEATURES\n    # ------------------------------\n    oi_payments = pd.merge(\n        oi_orders[[\"product_id\", \"order_id\"]],\n        payments[[\"order_id\", \"payment_type\", \"payment_installments\", \"payment_value\"]],\n        on=\"order_id\",\n        how=\"left\"\n    )\n    # Aggregated payment features\n    payment_features = oi_payments.groupby(\"product_id\").agg(\n        total_payment_value=(\"payment_value\", \"sum\"),\n        avg_payment_value_per_item=(\"payment_value\", \"mean\"),\n        avg_installments=(\"payment_installments\", \"mean\"),\n        max_installments=(\"payment_installments\", \"max\"),\n        num_unique_payment_types=(\"payment_type\", \"nunique\"),\n    ).reset_index()\n    # Payment type dummy features\n    oi_payments = pd.concat([\n        oi_payments,\n        pd.get_dummies(oi_payments[\"payment_type\"], prefix=\"pay_type\")\n    ], axis=1)\n    payment_type_features = oi_payments.groupby(\"product_id\").agg(\n        **{f\"pay_{col}_count\": (col, \"sum\") for col in oi_payments.columns if col.startswith(\"pay_type_\")},\n        **{f\"pay_{col}_frac\": (col, \"mean\") for col in oi_payments.columns if col.startswith(\"pay_type_\")},\n    ).reset_index()\n    \n    # ------------------------------\n    # MERGE ALL FEATURES\n    # ------------------------------\n    all_features = prod_all.copy()\n    all_features = pd.merge(all_features, prod_30, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, prod_90, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, prod_180, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, order_status_pivot, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, review_features, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, payment_features, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, payment_type_features, on=\"product_id\", how=\"outer\")\n    \n    # ------------------------------\n    # CREATE ADDITIONAL DERIVED FEATURES\n    # ------------------------------\n    # Binary flag for any sales history\n    all_features[\"has_any_sales\"] = (~all_features[\"total_units\"].isna()).astype(int)\n    \n    # Growth ratio features\n    all_features[\"ratio_30d_to_90d_units\"] = all_features[\"total_units_30d\"] / all_features[\"total_units_90d\"].replace(0, np.nan)\n    all_features[\"ratio_90d_to_180d_units\"] = all_features[\"total_units_90d\"] / all_features[\"total_units_180d\"].replace(0, np.nan)\n    all_features[\"ratio_30d_to_all_units\"] = all_features[\"total_units_30d\"] / all_features[\"total_units\"].replace(0, np.nan)\n    all_features[\"ratio_90d_to_all_units\"] = all_features[\"total_units_90d\"] / all_features[\"total_units\"].replace(0, np.nan)\n    \n    # Average order interval\n    all_features[\"avg_days_between_orders\"] = np.where(\n        all_features[\"total_orders\"] > 1,\n        (all_features[\"days_since_first_purchase\"] - all_features[\"days_since_last_purchase\"]) / (all_features[\"total_orders\"] - 1),\n        0\n    )\n    \n    # ------------------------------\n    # CLEAN AND REINDEX TO INPUT ENTITIES\n    # ------------------------------\n    # Drop non-numeric datetime columns\n    datetime_cols = [\"last_purchase_ts\", \"first_purchase_ts\", \"last_purchase_90d\"]\n    all_features = all_features.drop(columns=[col for col in datetime_cols if col in all_features.columns], errors=\"ignore\")\n    \n    # Set product_id as index and reindex to input entity_ids\n    all_features = all_features.set_index(\"product_id\")\n    final_features = all_features.reindex(entity_ids)\n    \n    # Identify feature groups for consistent NaN filling\n    count_cols = [col for col in final_features.columns if (\n        col.startswith(\"total_\") or col.startswith(\"num_\") or \n        (col.startswith(\"pay_\") and col.endswith(\"_count\")) or\n        col.startswith(\"order_status_\")\n    )]\n    avg_cols = [col for col in final_features.columns if (\n        col.startswith(\"avg_\") or col.startswith(\"median_\") or\n        col.startswith(\"max_\") or col.startswith(\"min_\") or\n        col.startswith(\"std_\") or col.endswith(\"_frac\")\n    )]\n    time_cols = [\n        \"days_since_last_purchase\", \"days_since_first_purchase\",\n        \"days_since_last_purchase_90d\"\n    ]\n    ratio_cols = [col for col in final_features.columns if col.startswith(\"ratio_\")]\n    \n    # Fill NaNs for all feature groups\n    final_features[\"has_any_sales\"] = final_features[\"has_any_sales\"].fillna(0)\n    final_features[count_cols] = final_features[count_cols].fillna(0)\n    final_features[avg_cols] = final_features[avg_cols].fillna(0)\n    final_features[time_cols] = final_features[time_cols].fillna(10000)  # Arbitrary large value for \"never purchased\"\n    final_features[ratio_cols] = final_features[ratio_cols].fillna(0)\n    final_features[\"avg_units_per_order\"] = final_features[\"avg_units_per_order\"].fillna(0)\n    final_features[\"avg_days_between_orders\"] = final_features[\"avg_days_between_orders\"].fillna(0)\n    \n    # Final cleanup of any remaining invalid values\n    final_features = final_features.fillna(0)\n    final_features = final_features.replace([np.inf, -np.inf], 0)\n    \n    return final_features",
+   "timestamp": "2026-09-18T21:00:30+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score",
+      "min_review_score",
+      "max_review_score",
+      "std_review_score",
+      "frac_reviews_with_comment"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "min_review_score",
+      "max_review_score",
+      "std_review_score",
+      "frac_reviews_with_comment"
+     ],
+     "n_columns": 58,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score",
+      "min_review_score",
+      "std_review_score",
+      "frac_reviews_with_comment"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "min_review_score",
+      "max_review_score",
+      "std_review_score",
+      "frac_reviews_with_comment"
+     ],
+     "n_columns": 58,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score",
+      "max_review_score",
+      "std_review_score",
+      "frac_reviews_with_comment"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "max_review_score",
+      "std_review_score",
+      "frac_reviews_with_comment"
+     ],
+     "n_columns": 58,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score",
+      "min_review_score",
+      "std_review_score",
+      "frac_reviews_with_comment"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "min_review_score",
+      "max_review_score",
+      "std_review_score",
+      "frac_reviews_with_comment"
+     ],
+     "n_columns": 58,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score",
+      "std_review_score",
+      "frac_reviews_with_comment"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "max_review_score",
+      "std_review_score",
+      "frac_reviews_with_comment"
+     ],
+     "n_columns": 58,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "total_reviews",
+      "avg_review_score",
+      "max_review_score",
+      "std_review_score",
+      "frac_reviews_with_comment"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "max_review_score",
+      "std_review_score"
+     ],
+     "n_columns": 58,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 13.3
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "c6f83cdf92c671098775c8dea97a569714a3b3675cea2177c66c5ba0ebe053dd",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Extract tables from the database\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n    \n    # Filter order items to only those before seed_time (historical data)\n    oi_hist = order_items[order_items[\"ts\"] < seed_time].copy()\n    \n    # Merge order items with orders to get customer and order status info\n    oi_orders = pd.merge(\n        oi_hist,\n        orders[[\"order_id\", \"customer_id\", \"order_status\"]],\n        on=\"order_id\",\n        how=\"left\"\n    ).dropna(subset=[\"order_id\", \"customer_id\"])  # Drop invalid rows (should be none)\n    \n    # Define time windows relative to seed_time\n    win_30 = seed_time - pd.Timedelta(days=30)\n    win_90 = seed_time - pd.Timedelta(days=90)\n    win_180 = seed_time - pd.Timedelta(days=180)\n    \n    # ------------------------------\n    # ALL-TIME HISTORICAL FEATURES\n    # ------------------------------\n    prod_all = oi_orders.groupby(\"product_id\").agg(\n        # Count metrics\n        total_units=(\"order_id\", \"count\"),\n        total_orders=(\"order_id\", \"nunique\"),\n        total_customers=(\"customer_id\", \"nunique\"),\n        # Price metrics\n        avg_price=(\"price\", \"mean\"),\n        median_price=(\"price\", \"median\"),\n        max_price=(\"price\", \"max\"),\n        min_price=(\"price\", \"min\"),\n        std_price=(\"price\", \"std\"),\n        total_revenue=(\"price\", \"sum\"),\n        # Freight metrics\n        avg_freight=(\"freight_value\", \"mean\"),\n        total_freight=(\"freight_value\", \"sum\"),\n        # Time metrics\n        last_purchase_ts=(\"ts\", \"max\"),\n        first_purchase_ts=(\"ts\", \"min\"),\n    ).reset_index()\n    \n    # Compute time-since features\n    prod_all[\"days_since_last_purchase\"] = (seed_time - prod_all[\"last_purchase_ts\"]).dt.total_seconds() / (24 * 3600)\n    prod_all[\"days_since_first_purchase\"] = (seed_time - prod_all[\"first_purchase_ts\"]).dt.total_seconds() / (24 * 3600)\n    prod_all[\"avg_units_per_order\"] = prod_all[\"total_units\"] / prod_all[\"total_orders\"].replace(0, np.nan)\n    \n    # ------------------------------\n    # WINDOWED HISTORICAL FEATURES\n    # ------------------------------\n    # Last 30 days\n    oi_30 = oi_orders[oi_orders[\"ts\"] >= win_30].copy()\n    prod_30 = oi_30.groupby(\"product_id\").agg(\n        total_units_30d=(\"order_id\", \"count\"),\n        total_orders_30d=(\"order_id\", \"nunique\"),\n        total_revenue_30d=(\"price\", \"sum\"),\n    ).reset_index()\n    \n    # Last 90 days\n    oi_90 = oi_orders[oi_orders[\"ts\"] >= win_90].copy()\n    prod_90 = oi_90.groupby(\"product_id\").agg(\n        total_units_90d=(\"order_id\", \"count\"),\n        total_orders_90d=(\"order_id\", \"nunique\"),\n        total_customers_90d=(\"customer_id\", \"nunique\"),\n        total_revenue_90d=(\"price\", \"sum\"),\n        avg_price_90d=(\"price\", \"mean\"),\n        last_purchase_90d=(\"ts\", \"max\"),\n    ).reset_index()\n    prod_90[\"days_since_last_purchase_90d\"] = (seed_time - prod_90[\"last_purchase_90d\"]).dt.total_seconds() / (24 * 3600)\n    \n    # Last 180 days\n    oi_180 = oi_orders[oi_orders[\"ts\"] >= win_180].copy()\n    prod_180 = oi_180.groupby(\"product_id\").agg(\n        total_units_180d=(\"order_id\", \"count\"),\n        total_orders_180d=(\"order_id\", \"nunique\"),\n        total_revenue_180d=(\"price\", \"sum\"),\n    ).reset_index()\n    \n    # ------------------------------\n    # ORDER STATUS FEATURES\n    # ------------------------------\n    order_status = oi_orders.groupby([\"product_id\", \"order_status\"]).agg(\n        status_count=(\"order_id\", \"nunique\")\n    ).reset_index()\n    order_status_pivot = order_status.pivot(\n        index=\"product_id\",\n        columns=\"order_status\",\n        values=\"status_count\"\n    ).fillna(0).reset_index()\n    order_status_pivot.columns = [\n        f\"order_status_{col.lower().replace(' ', '_')}\" if col != \"product_id\" else col\n        for col in order_status_pivot.columns\n    ]\n    \n    # ------------------------------\n    # REVIEW FEATURES\n    # ------------------------------\n    # Only reviews that already exist at seed_time: a review is written\n    # after the purchase, so without this filter review scores leak the future.\n    reviews_avail = reviews[reviews[\"review_creation_date\"] <= seed_time]\n    oi_reviews = pd.merge(\n        oi_orders[[\"product_id\", \"order_id\"]],\n        reviews_avail[[\"order_id\", \"review_score\", \"review_comment_title\", \"review_comment_message\"]],\n        on=\"order_id\",\n        how=\"left\"\n    )\n    oi_reviews[\"has_comment\"] = (\n        oi_reviews[\"review_comment_title\"].notna() | oi_reviews[\"review_comment_message\"].notna()\n    ).astype(int)\n    review_features = oi_reviews.groupby(\"product_id\").agg(\n        total_reviews=(\"review_score\", \"count\"),\n        avg_review_score=(\"review_score\", \"mean\"),\n        min_review_score=(\"review_score\", \"min\"),\n        max_review_score=(\"review_score\", \"max\"),\n        std_review_score=(\"review_score\", \"std\"),\n        frac_reviews_with_comment=(\"has_comment\", \"mean\"),\n    ).reset_index()\n    \n    # ------------------------------\n    # PAYMENT FEATURES\n    # ------------------------------\n    oi_payments = pd.merge(\n        oi_orders[[\"product_id\", \"order_id\"]],\n        payments[[\"order_id\", \"payment_type\", \"payment_installments\", \"payment_value\"]],\n        on=\"order_id\",\n        how=\"left\"\n    )\n    # Aggregated payment features\n    payment_features = oi_payments.groupby(\"product_id\").agg(\n        total_payment_value=(\"payment_value\", \"sum\"),\n        avg_payment_value_per_item=(\"payment_value\", \"mean\"),\n        avg_installments=(\"payment_installments\", \"mean\"),\n        max_installments=(\"payment_installments\", \"max\"),\n        num_unique_payment_types=(\"payment_type\", \"nunique\"),\n    ).reset_index()\n    # Payment type dummy features\n    oi_payments = pd.concat([\n        oi_payments,\n        pd.get_dummies(oi_payments[\"payment_type\"], prefix=\"pay_type\")\n    ], axis=1)\n    payment_type_features = oi_payments.groupby(\"product_id\").agg(\n        **{f\"pay_{col}_count\": (col, \"sum\") for col in oi_payments.columns if col.startswith(\"pay_type_\")},\n        **{f\"pay_{col}_frac\": (col, \"mean\") for col in oi_payments.columns if col.startswith(\"pay_type_\")},\n    ).reset_index()\n    \n    # ------------------------------\n    # MERGE ALL FEATURES\n    # ------------------------------\n    all_features = prod_all.copy()\n    all_features = pd.merge(all_features, prod_30, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, prod_90, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, prod_180, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, order_status_pivot, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, review_features, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, payment_features, on=\"product_id\", how=\"outer\")\n    all_features = pd.merge(all_features, payment_type_features, on=\"product_id\", how=\"outer\")\n    \n    # ------------------------------\n    # CREATE ADDITIONAL DERIVED FEATURES\n    # ------------------------------\n    # Binary flag for any sales history\n    all_features[\"has_any_sales\"] = (~all_features[\"total_units\"].isna()).astype(int)\n    \n    # Growth ratio features\n    all_features[\"ratio_30d_to_90d_units\"] = all_features[\"total_units_30d\"] / all_features[\"total_units_90d\"].replace(0, np.nan)\n    all_features[\"ratio_90d_to_180d_units\"] = all_features[\"total_units_90d\"] / all_features[\"total_units_180d\"].replace(0, np.nan)\n    all_features[\"ratio_30d_to_all_units\"] = all_features[\"total_units_30d\"] / all_features[\"total_units\"].replace(0, np.nan)\n    all_features[\"ratio_90d_to_all_units\"] = all_features[\"total_units_90d\"] / all_features[\"total_units\"].replace(0, np.nan)\n    \n    # Average order interval\n    all_features[\"avg_days_between_orders\"] = np.where(\n        all_features[\"total_orders\"] > 1,\n        (all_features[\"days_since_first_purchase\"] - all_features[\"days_since_last_purchase\"]) / (all_features[\"total_orders\"] - 1),\n        0\n    )\n    \n    # ------------------------------\n    # CLEAN AND REINDEX TO INPUT ENTITIES\n    # ------------------------------\n    # Drop non-numeric datetime columns\n    datetime_cols = [\"last_purchase_ts\", \"first_purchase_ts\", \"last_purchase_90d\"]\n    all_features = all_features.drop(columns=[col for col in datetime_cols if col in all_features.columns], errors=\"ignore\")\n    \n    # Set product_id as index and reindex to input entity_ids\n    all_features = all_features.set_index(\"product_id\")\n    final_features = all_features.reindex(entity_ids)\n    \n    # Identify feature groups for consistent NaN filling\n    count_cols = [col for col in final_features.columns if (\n        col.startswith(\"total_\") or col.startswith(\"num_\") or \n        (col.startswith(\"pay_\") and col.endswith(\"_count\")) or\n        col.startswith(\"order_status_\")\n    )]\n    avg_cols = [col for col in final_features.columns if (\n        col.startswith(\"avg_\") or col.startswith(\"median_\") or\n        col.startswith(\"max_\") or col.startswith(\"min_\") or\n        col.startswith(\"std_\") or col.endswith(\"_frac\")\n    )]\n    time_cols = [\n        \"days_since_last_purchase\", \"days_since_first_purchase\",\n        \"days_since_last_purchase_90d\"\n    ]\n    ratio_cols = [col for col in final_features.columns if col.startswith(\"ratio_\")]\n    \n    # Fill NaNs for all feature groups\n    final_features[\"has_any_sales\"] = final_features[\"has_any_sales\"].fillna(0)\n    final_features[count_cols] = final_features[count_cols].fillna(0)\n    final_features[avg_cols] = final_features[avg_cols].fillna(0)\n    final_features[time_cols] = final_features[time_cols].fillna(10000)  # Arbitrary large value for \"never purchased\"\n    final_features[ratio_cols] = final_features[ratio_cols].fillna(0)\n    final_features[\"avg_units_per_order\"] = final_features[\"avg_units_per_order\"].fillna(0)\n    final_features[\"avg_days_between_orders\"] = final_features[\"avg_days_between_orders\"].fillna(0)\n    \n    # Final cleanup of any remaining invalid values\n    final_features = final_features.fillna(0)\n    final_features = final_features.replace([np.inf, -np.inf], 0)\n    \n    return final_features",
+   "timestamp": "2026-09-18T21:01:26+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 58,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 58,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 58,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 58,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 58,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 58,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 13.4
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

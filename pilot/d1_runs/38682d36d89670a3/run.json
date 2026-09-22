@@ -1,0 +1,27 @@
+{
+ "program_uid": "38682d36d89670a3",
+ "program": "seed-2.0-code#28",
+ "mechanism": "SELF_AVAILABILITY_CANARY",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 63.8,
+ "assistant_turns": 6,
+ "tool_calls": 6,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "pit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=pit_state.json\n\nИтог: в исходном коде была утечка из будущего. Признак `avg_delivery_diff_days` сравнивал фактическую дату доставки с обещанной для всех заказов, купленных до seed_time, включая ещё не доставленные: на момент предсказания эти даты неизвестны. Канареечная проверка это подтвердила на всех шести моментах. Исправление в get_features.py:52-64: разница дат доставки теперь считается только по заказам с `order_delivered_customer_date < seed_time`, аналогично отфильтрован признак `delivered_share`. Повторная проверка чистая, в том числе на held-out моментах.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 76137,
+   "output_tokens": 2049
+  },
+  "message_count": 12,
+  "session_id": "caa44d94611b",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "program_uid": "61d8db07ff0d961e",
+ "program": "deepseek-v4-flash-0731#72",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 126.3,
+ "assistant_turns": 6,
+ "tool_calls": 6,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "## Итог\n\n`pit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=pit_state.json`\n\nДетекция (итерация 0) нашла утечку: witness-столбцы `review_mean`, `review_count`, canary-столбец `review_mean` на всех шести моментах, включая held-out. Механизм: агрегаты по отзывам строились по всем отзывам заказа, а отзыв создаётся после покупки, поэтому в момент `seed_time` читались ещё не существующие данные.\n\nПочинка (итерация 1): фильтр `reviews[reviews['review_creation_date'] < seed_time]` перед объединением с заказами в get_features.py:39. Повторная проверка на всех шести моментах (dev: 2018-01-01, 2018-04-01, 2018-07-01; held-out: 2017-10-01, 2018-02-01, 2018-06-01) дала `witness=0 canary=0`, вердикт CLEAN.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 76056,
+   "output_tokens": 1610
+  },
+  "message_count": 12,
+  "session_id": "5a256719a241",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

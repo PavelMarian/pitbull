@@ -1,0 +1,27 @@
+{
+ "program_uid": "79151754b090fd88",
+ "program": "seed-2.0-code#33",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 256.4,
+ "assistant_turns": 10,
+ "tool_calls": 10,
+ "skill_loaded": true,
+ "pit_check_calls": 4,
+ "errors": [],
+ "final_text": "## Итоговый вердикт\n\n```\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=pit_state.json\n```\n\nУтечка была, код починен, проверка на всех шести моментах (включая held-out) молчит.\n\n**Детекция (итерация 0, LEAK).** Witness поймал чтение отзывов из будущего: `avg_review_*` и `num_reviews_*` во всех окнах. Функция джойнила `reviews` целиком, а у отзыва есть `review_creation_date`, который наступает после покупки; карта чекера считает эту колонку временем жизни строки в `reviews`. Canary добавил `avg_delivery_early_*`: `order_delivered_customer_date` заполняется после покупки, и код считал `(estimated - delivered)` по ещё не доставленным заказам, а также ставил `is_delivered=1` по статусу, который меняется позже.\n\n**Починка (два правки в `get_features.py`).**\n- Отзывы фильтруются по `review_creation_date <= seed_time` перед джойном (get_features.py:63).\n- `order_delivered_customer_date` используется только при условии `notna() и <= seed_time`: `delivery_early_days` получает NaN там, где доставка ещё не случилась, `is_delivered=1` только для фактически доставленных к моменту (get_features.py:84).\n\n**Повторная проверка (итерация 1, CLEAN).** Witness и canary молчат на всех моментах: 2018-01-01, 2018-04-01, 2018-07-01 (dev) и 2017-10-01, 2018-02-01, 2018-06-01 (held-out). Остальная логика (окна 7/30/90/180/всё, агрегаты по позициям и заказам, платежи по `ts`, исторические фильтры) прошла проверку без изменений.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 150695,
+   "output_tokens": 4322
+  },
+  "message_count": 20,
+  "session_id": "a97769300275",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

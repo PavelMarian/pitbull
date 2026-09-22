@@ -1,0 +1,27 @@
+{
+ "program_uid": "3db44025b2bf8c80",
+ "program": "deepseek-v4-flash-0731#5",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 55.5,
+ "assistant_turns": 6,
+ "tool_calls": 6,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "pit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/3db44025b2bf8c80/pit_state.json\n\nВердикт: утечка была и устранена. Функция использовала все отзывы заказа без учёта даты их появления: отзыв пишется позже покупки, поэтому на момент `seed_time` видны только отзывы с `review_creation_date <= seed_time`. В `get_features.py:95` добавлен фильтр `reviews_before = reviews[reviews[\"review_creation_date\"] <= seed_time]`. Остальные признаки строились по `order_purchase_timestamp <= seed_time`, а платежи имеют `ts` покупки, поэтому чисты. Повторная проверка на 6 моментах (3 dev + 3 held-out) молчит по witness и canary.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 76415,
+   "output_tokens": 1065
+  },
+  "message_count": 12,
+  "session_id": "515c812d8c94",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

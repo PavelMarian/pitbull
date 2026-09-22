@@ -1,0 +1,202 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "b1d4448578a845b6",
+ "source_sha256": "b1d4448578a845b60c7d47af23def8008c43a5d576c0d4cb2b5cfed1d1eed9d4",
+ "source_code": "def get_features(db, entity_ids, seed_time):\n    entity_ids = list(entity_ids)\n    items = db['order_items']\n    orders = db['orders']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    # Filter history (purchases strictly before seed_time)\n    hist_mask = items['product_id'].isin(entity_ids) & (items['ts'] < seed_time)\n    hist_items = items[hist_mask].copy()\n\n    feature_columns = [\n        'num_orders', 'num_items', 'sum_price', 'sum_sales', 'mean_price',\n        'std_price', 'min_price', 'max_price', 'sum_freight', 'mean_freight',\n        'mean_delivery_days', 'avg_review_score', 'count_reviews',\n        'positive_review_ratio', 'avg_installments', 'avg_payment_value',\n        'credit_card_ratio', 'recency', 'sales_30', 'sales_90'\n    ]\n\n    # No history -> all NaNs for every product\n    if hist_items.empty:\n        return pd.DataFrame(columns=feature_columns, index=entity_ids, dtype=float)\n\n    # Get order ids that appear in the filtered items\n    order_ids = hist_items['order_id'].unique()\n\n    # --- Orders ---\n    orders_sub = orders[orders['order_id'].isin(order_ids)].copy()\n    orders_sub['delivery_time_days'] = (\n        orders_sub['order_delivered_customer_date'] - orders_sub['order_purchase_timestamp']\n    ).dt.total_seconds() / 86400.0\n\n    # --- Reviews ---\n    reviews_sub = reviews[reviews['order_id'].isin(order_ids)]\n    if not reviews_sub.empty:\n        review_agg = reviews_sub.groupby('order_id').agg(\n            review_count=('review_score', 'count'),\n            avg_review_score=('review_score', 'mean'),\n            positive_review_ratio=('review_score', lambda x: (x >= 4).mean())\n        ).reset_index()\n    else:\n        review_agg = pd.DataFrame({\n            'order_id': order_ids,\n            'review_count': 0,\n            'avg_review_score': np.nan,\n            'positive_review_ratio': np.nan\n        })\n\n    # --- Payments ---\n    payments_sub = payments[payments['order_id'].isin(order_ids)]\n    if not payments_sub.empty:\n        payment_agg = payments_sub.groupby('order_id').agg(\n            sum_payment=('payment_value', 'sum'),\n            mean_payment=('payment_value', 'mean'),\n            avg_inst=('payment_installments', 'mean'),\n            credit_ratio=('payment_type', lambda x: (x == 'credit_card').mean())\n        ).reset_index()\n    else:\n        payment_agg = pd.DataFrame({\n            'order_id': order_ids,\n            'sum_payment': 0,\n            'mean_payment': 0,\n            'avg_inst': 0,\n            'credit_ratio': 0\n        })\n\n    # Merge order-level aggregates\n    orders_agg = orders_sub.merge(review_agg, on='order_id', how='left')\n    orders_agg = orders_agg.merge(payment_agg, on='order_id', how='left')\n\n    # Attach order aggregates to items\n    hist_items = hist_items.merge(orders_agg, on='order_id', how='left')\n\n    # Total sales per item line, age in days since purchase\n    hist_items['total'] = hist_items['price'] + hist_items['freight_value']\n    hist_items['age'] = (seed_time - hist_items['ts']).dt.days\n\n    # --- Group by product_id ---\n    grouped = hist_items.groupby('product_id').agg(\n        num_orders=('order_id', 'nunique'),\n        num_items=('product_id', 'count'),\n        sum_price=('price', 'sum'),\n        sum_sales=('total', 'sum'),\n        mean_price=('price', 'mean'),\n        std_price=('price', 'std'),\n        min_price=('price', 'min'),\n        max_price=('price', 'max'),\n        sum_freight=('freight_value', 'sum'),\n        mean_freight=('freight_value', 'mean'),\n        mean_delivery_days=('delivery_time_days', 'mean'),\n        avg_review_score=('avg_review_score', 'mean'),\n        count_reviews=('review_count', 'sum'),\n        positive_review_ratio=('positive_review_ratio', 'mean'),\n        avg_installments=('avg_inst', 'mean'),\n        avg_payment_value=('mean_payment', 'mean'),\n        credit_card_ratio=('credit_ratio', 'mean'),\n        last_purchase=('ts', 'max'),\n        sales_30=('age', lambda x: (x <= 30).sum()),\n        sales_90=('age', lambda x: (x <= 90).sum())\n    ).reset_index()\n\n    # Recency\n    grouped['recency'] = (seed_time - grouped['last_purchase']).dt.days\n    grouped.drop(columns=['last_purchase'], inplace=True)\n\n    # Reindex to exactly the requested entity_ids\n    grouped = grouped.set_index('product_id').reindex(entity_ids)\n\n    # Ensure all expected columns are present (in case some being missing)\n    for c in feature_columns:\n        if c not in grouped.columns:\n            grouped[c] = np.nan\n\n    return grouped[feature_columns]",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "b1d4448578a845b60c7d47af23def8008c43a5d576c0d4cb2b5cfed1d1eed9d4",
+   "code": "def get_features(db, entity_ids, seed_time):\n    entity_ids = list(entity_ids)\n    items = db['order_items']\n    orders = db['orders']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    # Filter history (purchases strictly before seed_time)\n    hist_mask = items['product_id'].isin(entity_ids) & (items['ts'] < seed_time)\n    hist_items = items[hist_mask].copy()\n\n    feature_columns = [\n        'num_orders', 'num_items', 'sum_price', 'sum_sales', 'mean_price',\n        'std_price', 'min_price', 'max_price', 'sum_freight', 'mean_freight',\n        'mean_delivery_days', 'avg_review_score', 'count_reviews',\n        'positive_review_ratio', 'avg_installments', 'avg_payment_value',\n        'credit_card_ratio', 'recency', 'sales_30', 'sales_90'\n    ]\n\n    # No history -> all NaNs for every product\n    if hist_items.empty:\n        return pd.DataFrame(columns=feature_columns, index=entity_ids, dtype=float)\n\n    # Get order ids that appear in the filtered items\n    order_ids = hist_items['order_id'].unique()\n\n    # --- Orders ---\n    orders_sub = orders[orders['order_id'].isin(order_ids)].copy()\n    orders_sub['delivery_time_days'] = (\n        orders_sub['order_delivered_customer_date'] - orders_sub['order_purchase_timestamp']\n    ).dt.total_seconds() / 86400.0\n\n    # --- Reviews ---\n    reviews_sub = reviews[reviews['order_id'].isin(order_ids)]\n    if not reviews_sub.empty:\n        review_agg = reviews_sub.groupby('order_id').agg(\n            review_count=('review_score', 'count'),\n            avg_review_score=('review_score', 'mean'),\n            positive_review_ratio=('review_score', lambda x: (x >= 4).mean())\n        ).reset_index()\n    else:\n        review_agg = pd.DataFrame({\n            'order_id': order_ids,\n            'review_count': 0,\n            'avg_review_score': np.nan,\n            'positive_review_ratio': np.nan\n        })\n\n    # --- Payments ---\n    payments_sub = payments[payments['order_id'].isin(order_ids)]\n    if not payments_sub.empty:\n        payment_agg = payments_sub.groupby('order_id').agg(\n            sum_payment=('payment_value', 'sum'),\n            mean_payment=('payment_value', 'mean'),\n            avg_inst=('payment_installments', 'mean'),\n            credit_ratio=('payment_type', lambda x: (x == 'credit_card').mean())\n        ).reset_index()\n    else:\n        payment_agg = pd.DataFrame({\n            'order_id': order_ids,\n            'sum_payment': 0,\n            'mean_payment': 0,\n            'avg_inst': 0,\n            'credit_ratio': 0\n        })\n\n    # Merge order-level aggregates\n    orders_agg = orders_sub.merge(review_agg, on='order_id', how='left')\n    orders_agg = orders_agg.merge(payment_agg, on='order_id', how='left')\n\n    # Attach order aggregates to items\n    hist_items = hist_items.merge(orders_agg, on='order_id', how='left')\n\n    # Total sales per item line, age in days since purchase\n    hist_items['total'] = hist_items['price'] + hist_items['freight_value']\n    hist_items['age'] = (seed_time - hist_items['ts']).dt.days\n\n    # --- Group by product_id ---\n    grouped = hist_items.groupby('product_id').agg(\n        num_orders=('order_id', 'nunique'),\n        num_items=('product_id', 'count'),\n        sum_price=('price', 'sum'),\n        sum_sales=('total', 'sum'),\n        mean_price=('price', 'mean'),\n        std_price=('price', 'std'),\n        min_price=('price', 'min'),\n        max_price=('price', 'max'),\n        sum_freight=('freight_value', 'sum'),\n        mean_freight=('freight_value', 'mean'),\n        mean_delivery_days=('delivery_time_days', 'mean'),\n        avg_review_score=('avg_review_score', 'mean'),\n        count_reviews=('review_count', 'sum'),\n        positive_review_ratio=('positive_review_ratio', 'mean'),\n        avg_installments=('avg_inst', 'mean'),\n        avg_payment_value=('mean_payment', 'mean'),\n        credit_card_ratio=('credit_ratio', 'mean'),\n        last_purchase=('ts', 'max'),\n        sales_30=('age', lambda x: (x <= 30).sum()),\n        sales_90=('age', lambda x: (x <= 90).sum())\n    ).reset_index()\n\n    # Recency\n    grouped['recency'] = (seed_time - grouped['last_purchase']).dt.days\n    grouped.drop(columns=['last_purchase'], inplace=True)\n\n    # Reindex to exactly the requested entity_ids\n    grouped = grouped.set_index('product_id').reindex(entity_ids)\n\n    # Ensure all expected columns are present (in case some being missing)\n    for c in feature_columns:\n        if c not in grouped.columns:\n            grouped[c] = np.nan\n\n    return grouped[feature_columns]",
+   "timestamp": "2026-09-18T20:47:14+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews",
+      "positive_review_ratio"
+     ],
+     "canary_columns": [
+      "mean_delivery_days",
+      "avg_review_score",
+      "positive_review_ratio"
+     ],
+     "n_columns": 20,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews",
+      "positive_review_ratio"
+     ],
+     "canary_columns": [
+      "mean_delivery_days",
+      "avg_review_score",
+      "positive_review_ratio"
+     ],
+     "n_columns": 20,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews",
+      "positive_review_ratio"
+     ],
+     "canary_columns": [
+      "mean_delivery_days",
+      "avg_review_score"
+     ],
+     "n_columns": 20,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews",
+      "positive_review_ratio"
+     ],
+     "canary_columns": [
+      "mean_delivery_days",
+      "avg_review_score",
+      "positive_review_ratio"
+     ],
+     "n_columns": 20,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews",
+      "positive_review_ratio"
+     ],
+     "canary_columns": [
+      "mean_delivery_days",
+      "avg_review_score"
+     ],
+     "n_columns": 20,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews",
+      "positive_review_ratio"
+     ],
+     "canary_columns": [
+      "mean_delivery_days",
+      "avg_review_score",
+      "positive_review_ratio"
+     ],
+     "n_columns": 20,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 1.7
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "a3615095ec0474be7a598671ad5386b55d1e59a9ea6cdee358af9c11d30779a1",
+   "code": "def get_features(db, entity_ids, seed_time):\n    entity_ids = list(entity_ids)\n    items = db['order_items']\n    orders = db['orders']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    feature_columns = [\n        'num_orders', 'num_items', 'sum_price', 'sum_sales', 'mean_price',\n        'std_price', 'min_price', 'max_price', 'sum_freight', 'mean_freight',\n        'mean_delivery_days', 'avg_review_score', 'count_reviews',\n        'positive_review_ratio', 'avg_installments', 'avg_payment_value',\n        'credit_card_ratio', 'recency', 'sales_30', 'sales_90'\n    ]\n\n    # History of the requested products: purchases strictly before seed_time\n    hist_mask = items['product_id'].isin(entity_ids) & (items['ts'] < seed_time)\n    hist_items = items.loc[hist_mask].copy()\n\n    # No history -> all NaNs for every product\n    if hist_items.empty:\n        return pd.DataFrame(columns=feature_columns, index=pd.Index(entity_ids, name='product_id'), dtype=float)\n\n    # Orders of the historical items, purchased strictly before seed_time\n    order_ids = hist_items['order_id'].unique()\n    hist_orders = orders.loc[orders['order_id'].isin(order_ids) & (orders['order_purchase_timestamp'] < seed_time)].copy()\n    hist_items = hist_items.loc[hist_items['order_id'].isin(hist_orders['order_id'])]\n\n    # Delivery speed: only from orders already delivered before seed_time;\n    # fallback: typical ratio of estimated delivery window, from pre-seed orders\n    delivered = hist_orders.loc[\n        hist_orders['order_delivered_customer_date'].notna()\n        & (hist_orders['order_delivered_customer_date'] < seed_time)\n    ]\n    delivery_days = (delivered['order_delivered_customer_date'] - delivered['order_purchase_timestamp']).dt.total_seconds() / 86400.0\n    delivery_days = delivery_days.loc[delivery_days > 0]\n    est_window = (delivered['order_estimated_delivery_date'] - delivered['order_purchase_timestamp']).dt.total_seconds() / 86400.0\n    est_window = est_window.loc[est_window > 0]\n    typical_window = (hist_orders['order_estimated_delivery_date'] - hist_orders['order_purchase_timestamp']).dt.total_seconds() / 86400.0\n    typical_window = typical_window.loc[typical_window > 0]\n    if not delivery_days.empty:\n        ratio = est_window.mean() / typical_window.mean() if not typical_window.empty else 1.0\n        delivery_estimate = float(delivery_days.mean()) / ratio if ratio > 0 else float(delivery_days.mean())\n        if not np.isfinite(delivery_estimate):\n            delivery_estimate = np.nan\n    else:\n        delivery_estimate = np.nan\n    hist_items['delivery_time_days'] = delivery_estimate\n\n    # Reviews: only those already created before seed_time\n    valid_order_ids = hist_orders['order_id']\n    reviews_sub = reviews.loc[reviews['order_id'].isin(valid_order_ids) & (reviews['review_creation_date'] < seed_time)]\n    if not reviews_sub.empty:\n        review_agg = reviews_sub.groupby('order_id').agg(\n            review_count=('review_score', 'count'),\n            avg_review_score=('review_score', 'mean'),\n            positive_review_ratio=('review_score', lambda x: (x >= 4).mean())\n        ).reset_index()\n    else:\n        review_agg = pd.DataFrame({\n            'order_id': valid_order_ids.iloc[:0],\n            'review_count': np.nan,\n            'avg_review_score': np.nan,\n            'positive_review_ratio': np.nan\n        })\n\n    # Payments: only records already existing before seed_time\n    payments_sub = payments.loc[payments['order_id'].isin(valid_order_ids) & (payments['ts'] < seed_time)]\n    if not payments_sub.empty:\n        payment_agg = payments_sub.groupby('order_id').agg(\n            mean_payment=('payment_value', 'mean'),\n            avg_inst=('payment_installments', 'mean'),\n            credit_ratio=('payment_type', lambda x: (x == 'credit_card').mean())\n        ).reset_index()\n    else:\n        payment_agg = pd.DataFrame({\n            'order_id': valid_order_ids.iloc[:0],\n            'mean_payment': np.nan,\n            'avg_inst': np.nan,\n            'credit_ratio': np.nan\n        })\n\n    hist_items = hist_items.merge(review_agg, on='order_id', how='left')\n    hist_items = hist_items.merge(payment_agg, on='order_id', how='left')\n\n    # Per-line totals and age in days (age is computed from ts, known at seed_time)\n    hist_items['total'] = hist_items['price'] + hist_items['freight_value']\n    hist_items['age'] = (seed_time - hist_items['ts']).dt.days\n\n    grouped = hist_items.groupby('product_id').agg(\n        num_orders=('order_id', 'nunique'),\n        num_items=('product_id', 'count'),\n        sum_price=('price', 'sum'),\n        sum_sales=('total', 'sum'),\n        mean_price=('price', 'mean'),\n        std_price=('price', 'std'),\n        min_price=('price', 'min'),\n        max_price=('price', 'max'),\n        sum_freight=('freight_value', 'sum'),\n        mean_freight=('freight_value', 'mean'),\n        mean_delivery_days=('delivery_time_days', 'mean'),\n        avg_review_score=('avg_review_score', 'mean'),\n        count_reviews=('review_count', 'sum'),\n        positive_review_ratio=('positive_review_ratio', 'mean'),\n        avg_installments=('avg_inst', 'mean'),\n        avg_payment_value=('mean_payment', 'mean'),\n        credit_card_ratio=('credit_ratio', 'mean'),\n        last_purchase=('ts', 'max'),\n        sales_30=('age', lambda x: (x <= 30).sum()),\n        sales_90=('age', lambda x: (x <= 90).sum())\n    ).reset_index()\n\n    grouped['recency'] = (seed_time - grouped['last_purchase']).dt.days\n    grouped.drop(columns=['last_purchase'], inplace=True)\n\n    grouped = grouped.set_index('product_id').reindex(entity_ids)\n\n    for c in feature_columns:\n        if c not in grouped.columns:\n            grouped[c] = np.nan\n\n    return grouped[feature_columns]\n",
+   "timestamp": "2026-09-18T20:48:51+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 20,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 20,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 20,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 20,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 20,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 20,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 1.5
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

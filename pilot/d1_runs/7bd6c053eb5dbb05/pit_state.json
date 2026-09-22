@@ -1,0 +1,240 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "7bd6c053eb5dbb05",
+ "source_sha256": "7bd6c053eb5dbb05716700f0326c515933d68b2a3f0cd08de64711f0f2ccd9d8",
+ "source_code": "def get_features(db, entity_ids, seed_time):\n    # Prepare base purchases data with timestamp\n    items = db['order_items'][['order_id', 'product_id', 'seller_id', 'price', 'freight_value']]\n    orders = db['orders'][['order_id', 'order_purchase_timestamp']]\n    reviews = db['reviews'][['order_id', 'review_score']]\n\n    merged = items.merge(orders, on='order_id', how='left')\n    # Keep only purchases before seed_time\n    merged = merged[merged['order_purchase_timestamp'] < seed_time]\n    if merged.empty:\n        # Edge case: no history at all\n        result = pd.DataFrame(index=entity_ids)\n        # still add time‑based features\n        sec = seed_time\n        day_of_year = sec.dayofyear\n        month = sec.month\n        weekday = sec.weekday()\n        result['sin_day'] = np.sin(2 * np.pi * day_of_year / 365.0)\n        result['cos_day'] = np.cos(2 * np.pi * day_of_year / 365.0)\n        result['month'] = month\n        result['weekday'] = weekday\n        return result.reindex(entity_ids)\n\n    # Calculate days before seed\n    merged['days_before'] = (seed_time - merged['order_purchase_timestamp']).dt.days\n\n    # Merge review scores (one or more per order)\n    merged = merged.merge(reviews, on='order_id', how='left')\n\n    # 1. All‑time features (no window restriction)\n    all_time = merged.copy()\n    all_agg = all_time.groupby('product_id').agg(\n        count_orders_all=('order_id', 'nunique'),\n        units_all=('price', 'count'),\n        sum_price_all=('price', 'sum'),\n        sum_freight_all=('freight_value', 'sum'),\n        avg_price_all=('price', 'mean'),\n        avg_freight_all=('freight_value', 'mean'),\n        seller_count_all=('seller_id', 'nunique'),\n        review_count_all=('review_score', 'count'),\n        avg_review_all=('review_score', 'mean'),\n        min_ts=('order_purchase_timestamp', 'min'),\n        max_ts=('order_purchase_timestamp', 'max')\n    ).reset_index()\n    all_agg.set_index('product_id', inplace=True)\n\n    # 2. Recency / frequency features from all‑time\n    all_agg['days_since_first_all'] = (seed_time - all_agg['min_ts']).dt.days\n    all_agg['days_since_last_all'] = (seed_time - all_agg['max_ts']).dt.days\n    # Fill possible NaN (if a product appears only once, last=first)\n    all_agg['days_since_first_all'] = all_agg['days_since_first_all'].fillna(0)\n    all_agg['days_since_last_all'] = all_agg['days_since_last_all'].fillna(0)\n\n    # 3. Window‑based features (30, 60, 90 days)\n    windows = {\n        '_30': 30,\n        '_60': 60,\n        '_90': 90\n    }\n    # We'll collect them into a list of Series/DataFrames\n    win_features = []\n\n    for suffix, days in windows.items():\n        mask = merged['days_before'] <= days\n        win = merged[mask]\n        if len(win) == 0:\n            # no data in this window → all zero defaults\n            win_agg = pd.DataFrame(index=entity_ids)\n            for col in ['count_orders', 'total_units', 'sum_price', 'sum_freight',\n                        'avg_price', 'avg_freight', 'seller_count', 'review_count', 'avg_review']:\n                win_agg[col + suffix] = 0.0\n        else:\n            win_agg = win.groupby('product_id').agg(\n                count_orders=('order_id', 'nunique'),\n                total_units=('price', 'count'),\n                sum_price=('price', 'sum'),\n                sum_freight=('freight_value', 'sum'),\n                avg_price=('price', 'mean'),\n                avg_freight=('freight_value', 'mean'),\n                seller_count=('seller_id', 'nunique'),\n                review_count=('review_score', 'count'),\n                avg_review=('review_score', 'mean')\n            )\n            # rename columns\n            win_agg.columns = [c + suffix for c in win_agg.columns]\n            # if some products have no rows, they won't appear\n        win_features.append(win_agg)\n\n    # Combine all pieces:\n    # Start from entity_ids as index\n    result = pd.DataFrame(index=entity_ids)\n\n    # All‑time features (with reindexing to entity_ids)\n    for col in all_agg.columns:\n        result[col] = all_agg[col].reindex(entity_ids).values\n\n    # Window features: add them, default missing values to NaN (let classifier handle)\n    for win_agg in win_features:\n        # reindex and invert? win_agg might not contain all entity_ids, so reindex\n        win_agg = win_agg.reindex(entity_ids)\n        for col in win_agg.columns:\n            result[col] = win_agg[col].values\n\n    # Replace NaN to 0 for count/sum columns, keep avg as NaN\n    # (optional: we'll just fill all NaN with 0 for sanity)\n    result = result.fillna(0)\n\n    # 4. Time‑based seasonality features\n    # seed_time must be used as the anchor\n    year_day = seed_time.dayofyear\n    month = seed_time.month\n    weekday = seed_time.weekday()  # Monday = 0\n\n    result['sin_day'] = np.sin(2 * np.pi * year_day / 365.0)\n    result['cos_day'] = np.cos(2 * np.pi * year_day / 365.0)\n    result['month'] = month\n    result['weekday'] = weekday\n\n    # Ensure the index and order correspond to entity_ids\n    return result.loc[entity_ids]",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "7bd6c053eb5dbb05716700f0326c515933d68b2a3f0cd08de64711f0f2ccd9d8",
+   "code": "def get_features(db, entity_ids, seed_time):\n    # Prepare base purchases data with timestamp\n    items = db['order_items'][['order_id', 'product_id', 'seller_id', 'price', 'freight_value']]\n    orders = db['orders'][['order_id', 'order_purchase_timestamp']]\n    reviews = db['reviews'][['order_id', 'review_score']]\n\n    merged = items.merge(orders, on='order_id', how='left')\n    # Keep only purchases before seed_time\n    merged = merged[merged['order_purchase_timestamp'] < seed_time]\n    if merged.empty:\n        # Edge case: no history at all\n        result = pd.DataFrame(index=entity_ids)\n        # still add time‑based features\n        sec = seed_time\n        day_of_year = sec.dayofyear\n        month = sec.month\n        weekday = sec.weekday()\n        result['sin_day'] = np.sin(2 * np.pi * day_of_year / 365.0)\n        result['cos_day'] = np.cos(2 * np.pi * day_of_year / 365.0)\n        result['month'] = month\n        result['weekday'] = weekday\n        return result.reindex(entity_ids)\n\n    # Calculate days before seed\n    merged['days_before'] = (seed_time - merged['order_purchase_timestamp']).dt.days\n\n    # Merge review scores (one or more per order)\n    merged = merged.merge(reviews, on='order_id', how='left')\n\n    # 1. All‑time features (no window restriction)\n    all_time = merged.copy()\n    all_agg = all_time.groupby('product_id').agg(\n        count_orders_all=('order_id', 'nunique'),\n        units_all=('price', 'count'),\n        sum_price_all=('price', 'sum'),\n        sum_freight_all=('freight_value', 'sum'),\n        avg_price_all=('price', 'mean'),\n        avg_freight_all=('freight_value', 'mean'),\n        seller_count_all=('seller_id', 'nunique'),\n        review_count_all=('review_score', 'count'),\n        avg_review_all=('review_score', 'mean'),\n        min_ts=('order_purchase_timestamp', 'min'),\n        max_ts=('order_purchase_timestamp', 'max')\n    ).reset_index()\n    all_agg.set_index('product_id', inplace=True)\n\n    # 2. Recency / frequency features from all‑time\n    all_agg['days_since_first_all'] = (seed_time - all_agg['min_ts']).dt.days\n    all_agg['days_since_last_all'] = (seed_time - all_agg['max_ts']).dt.days\n    # Fill possible NaN (if a product appears only once, last=first)\n    all_agg['days_since_first_all'] = all_agg['days_since_first_all'].fillna(0)\n    all_agg['days_since_last_all'] = all_agg['days_since_last_all'].fillna(0)\n\n    # 3. Window‑based features (30, 60, 90 days)\n    windows = {\n        '_30': 30,\n        '_60': 60,\n        '_90': 90\n    }\n    # We'll collect them into a list of Series/DataFrames\n    win_features = []\n\n    for suffix, days in windows.items():\n        mask = merged['days_before'] <= days\n        win = merged[mask]\n        if len(win) == 0:\n            # no data in this window → all zero defaults\n            win_agg = pd.DataFrame(index=entity_ids)\n            for col in ['count_orders', 'total_units', 'sum_price', 'sum_freight',\n                        'avg_price', 'avg_freight', 'seller_count', 'review_count', 'avg_review']:\n                win_agg[col + suffix] = 0.0\n        else:\n            win_agg = win.groupby('product_id').agg(\n                count_orders=('order_id', 'nunique'),\n                total_units=('price', 'count'),\n                sum_price=('price', 'sum'),\n                sum_freight=('freight_value', 'sum'),\n                avg_price=('price', 'mean'),\n                avg_freight=('freight_value', 'mean'),\n                seller_count=('seller_id', 'nunique'),\n                review_count=('review_score', 'count'),\n                avg_review=('review_score', 'mean')\n            )\n            # rename columns\n            win_agg.columns = [c + suffix for c in win_agg.columns]\n            # if some products have no rows, they won't appear\n        win_features.append(win_agg)\n\n    # Combine all pieces:\n    # Start from entity_ids as index\n    result = pd.DataFrame(index=entity_ids)\n\n    # All‑time features (with reindexing to entity_ids)\n    for col in all_agg.columns:\n        result[col] = all_agg[col].reindex(entity_ids).values\n\n    # Window features: add them, default missing values to NaN (let classifier handle)\n    for win_agg in win_features:\n        # reindex and invert? win_agg might not contain all entity_ids, so reindex\n        win_agg = win_agg.reindex(entity_ids)\n        for col in win_agg.columns:\n            result[col] = win_agg[col].values\n\n    # Replace NaN to 0 for count/sum columns, keep avg as NaN\n    # (optional: we'll just fill all NaN with 0 for sanity)\n    result = result.fillna(0)\n\n    # 4. Time‑based seasonality features\n    # seed_time must be used as the anchor\n    year_day = seed_time.dayofyear\n    month = seed_time.month\n    weekday = seed_time.weekday()  # Monday = 0\n\n    result['sin_day'] = np.sin(2 * np.pi * year_day / 365.0)\n    result['cos_day'] = np.cos(2 * np.pi * year_day / 365.0)\n    result['month'] = month\n    result['weekday'] = weekday\n\n    # Ensure the index and order correspond to entity_ids\n    return result.loc[entity_ids]",
+   "timestamp": "2026-09-18T20:38:15+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_count_all",
+      "avg_review_all",
+      "review_count_30",
+      "avg_review_30",
+      "review_count_60",
+      "avg_review_60",
+      "review_count_90",
+      "avg_review_90"
+     ],
+     "canary_columns": [
+      "avg_review_all",
+      "avg_review_30",
+      "avg_review_60",
+      "avg_review_90"
+     ],
+     "n_columns": 44,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_count_all",
+      "avg_review_all",
+      "review_count_30",
+      "avg_review_30",
+      "review_count_60",
+      "avg_review_60",
+      "review_count_90",
+      "avg_review_90"
+     ],
+     "canary_columns": [
+      "avg_review_all",
+      "avg_review_30",
+      "avg_review_60",
+      "avg_review_90"
+     ],
+     "n_columns": 44,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_count_all",
+      "avg_review_all",
+      "review_count_30",
+      "avg_review_30",
+      "review_count_60",
+      "avg_review_60",
+      "review_count_90",
+      "avg_review_90"
+     ],
+     "canary_columns": [
+      "avg_review_all",
+      "avg_review_30",
+      "avg_review_60",
+      "avg_review_90"
+     ],
+     "n_columns": 44,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_count_all",
+      "avg_review_all",
+      "review_count_30",
+      "avg_review_30",
+      "review_count_60",
+      "avg_review_60",
+      "review_count_90",
+      "avg_review_90"
+     ],
+     "canary_columns": [
+      "avg_review_all",
+      "avg_review_30",
+      "avg_review_60",
+      "avg_review_90"
+     ],
+     "n_columns": 44,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_count_all",
+      "avg_review_all",
+      "review_count_30",
+      "avg_review_30",
+      "review_count_60",
+      "avg_review_60",
+      "review_count_90",
+      "avg_review_90"
+     ],
+     "canary_columns": [
+      "avg_review_all",
+      "avg_review_30",
+      "avg_review_60",
+      "avg_review_90"
+     ],
+     "n_columns": 44,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_count_all",
+      "avg_review_all",
+      "review_count_30",
+      "avg_review_30",
+      "review_count_60",
+      "avg_review_60",
+      "review_count_90",
+      "avg_review_90"
+     ],
+     "canary_columns": [
+      "avg_review_all",
+      "avg_review_30",
+      "avg_review_60",
+      "avg_review_90"
+     ],
+     "n_columns": 44,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 3.8
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "9711cf440f2966d5679118b0c966564b290f6715afa5cae8e408ff5eb7e62783",
+   "code": "def get_features(db, entity_ids, seed_time):\n    # Prepare base purchases data with timestamp\n    items = db['order_items'][['order_id', 'product_id', 'seller_id', 'price', 'freight_value']]\n    orders = db['orders'][['order_id', 'order_purchase_timestamp']]\n    reviews = db['reviews'][['order_id', 'review_score', 'review_creation_date']]\n\n    merged = items.merge(orders, on='order_id', how='left')\n    # Keep only purchases before seed_time\n    merged = merged[merged['order_purchase_timestamp'] < seed_time]\n    if merged.empty:\n        # Edge case: no history at all\n        result = pd.DataFrame(index=entity_ids)\n        # still add time‑based features\n        sec = seed_time\n        day_of_year = sec.dayofyear\n        month = sec.month\n        weekday = sec.weekday()\n        result['sin_day'] = np.sin(2 * np.pi * day_of_year / 365.0)\n        result['cos_day'] = np.cos(2 * np.pi * day_of_year / 365.0)\n        result['month'] = month\n        result['weekday'] = weekday\n        return result.reindex(entity_ids)\n\n    # Calculate days before seed\n    merged['days_before'] = (seed_time - merged['order_purchase_timestamp']).dt.days\n\n    # Only reviews that already exist at seed_time are visible:\n    # a review is written after the purchase, often much later than seed_time.\n    reviews_known = reviews[reviews['review_creation_date'] < seed_time]\n    reviews_known = reviews_known[['order_id', 'review_score']]\n\n    # Merge review scores (one or more per order)\n    merged = merged.merge(reviews_known, on='order_id', how='left')\n\n    # 1. All‑time features (no window restriction)\n    all_time = merged.copy()\n    all_agg = all_time.groupby('product_id').agg(\n        count_orders_all=('order_id', 'nunique'),\n        units_all=('price', 'count'),\n        sum_price_all=('price', 'sum'),\n        sum_freight_all=('freight_value', 'sum'),\n        avg_price_all=('price', 'mean'),\n        avg_freight_all=('freight_value', 'mean'),\n        seller_count_all=('seller_id', 'nunique'),\n        review_count_all=('review_score', 'count'),\n        avg_review_all=('review_score', 'mean'),\n        min_ts=('order_purchase_timestamp', 'min'),\n        max_ts=('order_purchase_timestamp', 'max')\n    ).reset_index()\n    all_agg.set_index('product_id', inplace=True)\n\n    # 2. Recency / frequency features from all‑time\n    all_agg['days_since_first_all'] = (seed_time - all_agg['min_ts']).dt.days\n    all_agg['days_since_last_all'] = (seed_time - all_agg['max_ts']).dt.days\n    # Fill possible NaN (if a product appears only once, last=first)\n    all_agg['days_since_first_all'] = all_agg['days_since_first_all'].fillna(0)\n    all_agg['days_since_last_all'] = all_agg['days_since_last_all'].fillna(0)\n\n    # 3. Window‑based features (30, 60, 90 days)\n    windows = {\n        '_30': 30,\n        '_60': 60,\n        '_90': 90\n    }\n    # We'll collect them into a list of Series/DataFrames\n    win_features = []\n\n    for suffix, days in windows.items():\n        mask = merged['days_before'] <= days\n        win = merged[mask]\n        if len(win) == 0:\n            # no data in this window → all zero defaults\n            win_agg = pd.DataFrame(index=entity_ids)\n            for col in ['count_orders', 'total_units', 'sum_price', 'sum_freight',\n                        'avg_price', 'avg_freight', 'seller_count', 'review_count', 'avg_review']:\n                win_agg[col + suffix] = 0.0\n        else:\n            win_agg = win.groupby('product_id').agg(\n                count_orders=('order_id', 'nunique'),\n                total_units=('price', 'count'),\n                sum_price=('price', 'sum'),\n                sum_freight=('freight_value', 'sum'),\n                avg_price=('price', 'mean'),\n                avg_freight=('freight_value', 'mean'),\n                seller_count=('seller_id', 'nunique'),\n                review_count=('review_score', 'count'),\n                avg_review=('review_score', 'mean')\n            )\n            # rename columns\n            win_agg.columns = [c + suffix for c in win_agg.columns]\n            # if some products have no rows, they won't appear\n        win_features.append(win_agg)\n\n    # Combine all pieces:\n    # Start from entity_ids as index\n    result = pd.DataFrame(index=entity_ids)\n\n    # All‑time features (with reindexing to entity_ids)\n    for col in all_agg.columns:\n        result[col] = all_agg[col].reindex(entity_ids).values\n\n    # Window features: add them, default missing values to NaN (let classifier handle)\n    for win_agg in win_features:\n        # reindex and invert? win_agg might not contain all entity_ids, so reindex\n        win_agg = win_agg.reindex(entity_ids)\n        for col in win_agg.columns:\n            result[col] = win_agg[col].values\n\n    # Replace NaN to 0 for count/sum columns, keep avg as NaN\n    # (optional: we'll just fill all NaN with 0 for sanity)\n    result = result.fillna(0)\n\n    # 4. Time‑based seasonality features\n    # seed_time must be used as the anchor\n    year_day = seed_time.dayofyear\n    month = seed_time.month\n    weekday = seed_time.weekday()  # Monday = 0\n\n    result['sin_day'] = np.sin(2 * np.pi * year_day / 365.0)\n    result['cos_day'] = np.cos(2 * np.pi * year_day / 365.0)\n    result['month'] = month\n    result['weekday'] = weekday\n\n    # Ensure the index and order correspond to entity_ids\n    return result.loc[entity_ids]\n",
+   "timestamp": "2026-09-18T20:38:48+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 44,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 44,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 44,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 44,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 44,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 44,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 4.5
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

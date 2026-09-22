@@ -1,0 +1,27 @@
+{
+ "program_uid": "48d7ece1b190d778",
+ "program": "deepseek-v4-flash-0731#4",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 115.0,
+ "assistant_turns": 13,
+ "tool_calls": 13,
+ "skill_loaded": true,
+ "pit_check_calls": 5,
+ "errors": [],
+ "final_text": "```python\n# (изменённый фрагмент get_features.py, строки 78–86)\n    # 7. Features from reviews (only for orders that occurred before seed_time).\n    # A review is written after the purchase, so only reviews that already\n    # exist at seed_time (review_creation_date <= seed_time) may be used.\n    if len(items) > 0:\n        reviews_before = reviews[reviews['review_creation_date'] <= seed_time][['order_id', 'review_score']]\n        rev_merged = items[['order_id', 'product_id']].merge(\n            reviews_before, on='order_id', how='inner'\n        )\n```\n\n**Итоговый вердикт**\n\n```\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1,\nwitness_final=[], canary_final=[], state=pit_state.json\n```\n\nУтечка была одна и затрагивала только блок отзывов (get_features.py:80-82): агрегаты `avg_review_score`, `count_reviews`, `std_review_score`, `min_review_score`, `max_review_score` считались по всем отзывам заказов, купленных до `seed_time`, включая отзывы, написанные позже момента предсказания. Witness-проверка поймала все пять столбцов на всех шести моментах (3 dev + 3 held-out).\n\nПочинка: отзывы фильтруются по `review_creation_date <= seed_time` перед мержем. Повторная проверка на тех же и held-out моментах: witness и canary молчат, verdict CLEAN.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 189803,
+   "output_tokens": 2543
+  },
+  "message_count": 26,
+  "session_id": "25d224db66ff",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

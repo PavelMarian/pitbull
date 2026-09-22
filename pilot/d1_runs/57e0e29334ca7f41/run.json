@@ -1,0 +1,27 @@
+{
+ "program_uid": "57e0e29334ca7f41",
+ "program": "seed-2.0-code#19",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 285.9,
+ "assistant_turns": 6,
+ "tool_calls": 6,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "pit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=pit_state.json\n\nИтог:\n- Исходный код имел утечку из будущего: witness-колонки `avg_review_score_w1`, `num_reviews_w1`, `share_positive_reviews_w1`, `avg_review_score_history`, `total_reviews_history` (отзывы на заказы, написанные после seed_time), canary-колонки `avg_delivery_delay_w1/w2/w3` и те же review-признаки.\n- Починка в get_features.py: отзывы фильтруются по `review_creation_date < seed_time`; дата доставки учитывается только для заказов, доставленных до seed_time; исключены `order_status` (мутабельный) и платежи (по карте чекера платёжные поля становятся доступны позже).\n- Повторная проверка: CLEAN на всех 6 моментах, включая 3 held-out.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 81848,
+   "output_tokens": 5768
+  },
+  "message_count": 12,
+  "session_id": "24b6de5bd113",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

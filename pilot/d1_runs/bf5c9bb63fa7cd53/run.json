@@ -1,0 +1,27 @@
+{
+ "program_uid": "bf5c9bb63fa7cd53",
+ "program": "deepseek-v4-flash-0731#75",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 96.3,
+ "assistant_turns": 7,
+ "tool_calls": 7,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "pit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/bf5c9bb63fa7cd53/pit_state.json\n\nИтог: утечка была и подтверждена дифференциальным исполнением на всех шести моментах (включая held-out).\n\n- Witness (доказательство чтения будущего): `avg_rating*`, `n_reviews*`. Отзывы агрегировались без фильтра по времени, хотя отзыв пишется спустя дни после покупки.\n- Canary (поздно доступные поля): те же отзывные столбцы плюс `avg_delivery_days*`. Использовались `order_delivered_customer_date` и `order_status`, которые заполняются после покупки.\n\nЧто изменено в get_features.py:\n- Отзывы фильтруются по `review_creation_date <= seed_time` (get_features.py:19).\n- Признаки доставки и статуса заказа удалены полностью (get_features.py:23, 54-55 старой версии).\n- Платежи фильтруются по `ts <= seed_time` (get_features.py:27).\n- База заказов и всё остальное строятся только по `order_purchase_timestamp < seed_time`.\n\nПовторная проверка: witness и canary молчат на всех шести моментах, вердикт CLEAN на итерации 1.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 91047,
+   "output_tokens": 2591
+  },
+  "message_count": 14,
+  "session_id": "d8f393908abc",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "program_uid": "c4d668fb8689bf02",
+ "program": "deepseek-v4-flash-0731#45",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 68.8,
+ "assistant_turns": 7,
+ "tool_calls": 7,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "```\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=.../pit_state.json\n```\n\nУтечка была и починена. Детекция (итерация 0, вердикт `LEAK`):\n\n- **witness**: `avg_review_score`, `has_review_sum`, `review_rate` — код присоединял все отзывы из таблицы `reviews` без фильтра по времени, включая отзывы, написанные после `seed_time`.\n- **canary**: `avg_delivery_time`, `delivered_on_time_sum`, `on_time_rate` — признаки доставки считались по `order_delivered_customer_date`, который заполняется уже после `seed_time`.\n\nПочинка в `get_features.py`:\n- отзывы фильтруются по `review_creation_date <= seed_time` (get_features.py:36-41);\n- доставка учитывается только если `order_delivered_customer_date <= seed_time` (get_features.py:54-56).\n\nПовторная проверка: `CLEAN` на всех шести моментах, включая held-out (`2017-10-01`, `2018-02-01`, `2018-06-01`). Функция готова.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 93835,
+   "output_tokens": 1971
+  },
+  "message_count": 14,
+  "session_id": "eb65a336f156",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

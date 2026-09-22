@@ -1,0 +1,27 @@
+{
+ "program_uid": "488618eb19979bda",
+ "program": "seed-2.0-code#13",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 97.1,
+ "assistant_turns": 6,
+ "tool_calls": 6,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "pit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=pit_state.json\n\nИтог: в исходной реализации была утечка из будущего. Признаки отзывов (`avg_review_score`, `total_reviews`, `share_commented_reviews`) считались по всем отзывам заказа, включая написанные после `seed_time` (witness подтвердил чтение будущего на всех шести моментах, включая held-out). Починка: отзывы фильтруются по `review_creation_date < seed_time` перед джойном (get_features.py:64). Повторная проверка чистая на всех шести моментах. Остальные признаки (продажи по окнам, продавцы, платежи) строились по `ts < seed_time` и корректны по времени.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 76932,
+   "output_tokens": 1326
+  },
+  "message_count": 12,
+  "session_id": "d5330c6a666e",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

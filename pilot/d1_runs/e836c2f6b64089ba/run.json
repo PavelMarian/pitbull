@@ -1,0 +1,27 @@
+{
+ "program_uid": "e836c2f6b64089ba",
+ "program": "deepseek-v4-flash-0731#58",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 54.1,
+ "assistant_turns": 6,
+ "tool_calls": 7,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "```pit-repair\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=pit_state.json\n```\n\nВердикт: утечка была, код починен и подтверждён.\n\n- Детекция (итерация 0): `LEAK`. Witness-столбцы `review_score_count`, `review_score_mean` менялись при усечении базы по `seed_time` на всех шести моментах, включая held-out.\n- Механизм: `get_features.py:28` агрегировал `reviews` без фильтра по времени. Отзыв создаётся позже покупки, поэтому в средний балл продукта попадали отзывы, написанные уже после `seed_time`.\n- Починка: добавлен фильтр `reviews['review_creation_date'] < seed_time` перед агрегацией (`get_features.py:28-32`). Остальная логика по времени корректна: покупки фильтруются по `order_purchase_timestamp < seed_time`, поздно доступные поля orders (статус, даты доставки) не используются.\n- Повторная проверка (итерация 1): `CLEAN`, witness и canary молчат на всех шести моментах (dev: 2018-01-01, 2018-04-01, 2018-07-01; held-out: 2017-10-01, 2018-02-01, 2018-06-01).",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 73546,
+   "output_tokens": 1604
+  },
+  "message_count": 12,
+  "session_id": "d89d7ab4ebdf",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

@@ -1,0 +1,199 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "e53ac06a970d17a2",
+ "source_sha256": "e53ac06a970d17a2cc391889f5ee9efb4775368bfb1dbf53ef91bb84ddfd446a",
+ "source_code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db, entity_ids, seed_time):\n    # Приведём entity_ids к списку, чтобы работать с pandas\n    if isinstance(entity_ids, (list, np.ndarray, pd.Series)):\n        product_ids = list(entity_ids)\n    else:\n        product_ids = [entity_ids]\n\n    # --- Таблицы из БД ---\n    orders = db[\"orders\"]\n    items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    # Отбираем позиции по интересующим продуктам\n    items_filtered = items[items[\"product_id\"].isin(product_ids)].copy()\n\n    # Присоединяем заказы (нам нужны колонки с временными метками и статусом)\n    merged = items_filtered.merge(orders[[\"order_id\", \"order_status\", \n                                          \"order_delivered_customer_date\"]],\n                                 on=\"order_id\", how=\"left\")\n\n    # Фильтруем по времени покупки (ts)\n    merged = merged[merged[\"ts\"] < seed_time]\n\n    # ---- Агрегаты для платежей по заказам ----\n    pay_agg = payments.groupby(\"order_id\").agg(\n        total_payment=(\"payment_value\", \"sum\"),\n        count_payments=(\"payment_value\", \"count\"),\n        avg_installments=(\"payment_installments\", \"mean\")\n    ).reset_index()\n\n    # ---- Агрегаты для отзывов по заказам ----\n    rev_temp = reviews.copy()\n    rev_temp[\"positive\"] = (rev_temp[\"review_score\"] >= 4).astype(int)\n    rev_agg = rev_temp.groupby(\"order_id\").agg(\n        avg_review=(\"review_score\", \"mean\"),\n        count_reviews=(\"review_score\", \"count\"),\n        positive_count=(\"positive\", \"sum\")\n    ).reset_index()\n    rev_agg[\"positive_ratio\"] = rev_agg[\"positive_count\"] / rev_agg[\"count_reviews\"]\n\n    # ---- Присоединяем агрегаты к основной таблице ----\n    merged = merged.merge(pay_agg, on=\"order_id\", how=\"left\")\n    merged = merged.merge(rev_agg, on=\"order_id\", how=\"left\")\n\n    # Возможное время доставки в днях (если есть)\n    merged[\"delivery_days\"] = (merged[\"order_delivered_customer_date\"] - merged[\"ts\"]).dt.days\n\n    # ============================================================\n    # Признаки, считаемые по позициям (строкам item)\n    # ============================================================\n    pos_agg = merged.groupby(\"product_id\").agg(\n        total_items=(\"price\", \"count\"),\n        total_price=(\"price\", \"sum\"),\n        total_freight=(\"freight_value\", \"sum\"),\n        avg_price=(\"price\", \"mean\"),\n        std_price=(\"price\", \"std\"),\n        min_price=(\"price\", \"min\"),\n        max_price=(\"price\", \"max\"),\n        avg_freight=(\"freight_value\", \"mean\"),\n        std_freight=(\"freight_value\", \"std\"),\n        avg_delivery_days=(\"delivery_days\", \"mean\")\n    ).reset_index()\n\n    # ============================================================\n    # Признаки по уникальным заказам для каждого продукта\n    # ============================================================\n    # Убираем дубли (один и тот же продукт в одном заказе встречается несколько раз)\n    order_level = merged[[\"product_id\", \"order_id\", \"ts\",\n                          \"total_payment\", \"count_payments\", \"avg_installments\",\n                          \"avg_review\", \"count_reviews\", \"positive_ratio\"]].drop_duplicates(\n                              subset=[\"product_id\", \"order_id\"])\n\n    # Группируем по продукту\n    order_agg = order_level.groupby(\"product_id\").agg(\n        num_orders=(\"order_id\", \"nunique\"),\n        total_payment_all=(\"total_payment\", \"sum\"),\n        avg_payment_per_order=(\"total_payment\", \"mean\"),\n        std_payment_per_order=(\"total_payment\", \"std\"),\n        avg_payments_per_order=(\"count_payments\", \"mean\"),\n        avg_install_mean=(\"avg_installments\", \"mean\"),\n        avg_review_score=(\"avg_review\", \"mean\"),\n        avg_review_count=(\"count_reviews\", \"mean\"),\n        avg_positive_ratio=(\"positive_ratio\", \"mean\")\n    ).reset_index()\n\n    # Временные признаки\n    order_level[\"last_date\"] = order_level.groupby(\"product_id\")[\"ts\"].transform(\"max\")\n    order_level[\"first_date\"] = order_level.groupby(\"product_id\")[\"ts\"].transform(\"min\")\n\n    temp_agg = order_level.groupby(\"product_id\").agg(\n        days_since_last=(\"ts\", lambda x: (seed_time - x.max()).days),\n        days_since_first=(\"ts\", lambda x: (seed_time - x.min()).days),\n        date_span=(\"ts\", lambda x: (x.max() - x.min()).days)  # может быть 0, если одна покупка\n    ).reset_index()\n\n    # В temp_agg могут получиться NaN, если нет заказов — заменим на 0\n    # объединяем все признаки по продуктам\n    features = pos_agg.merge(order_agg, on=\"product_id\", how=\"outer\")\n    features = features.merge(temp_agg, on=\"product_id\", how=\"outer\")\n\n    # Устанавливаем индекс product_id\n    features = features.set_index(\"product_id\")\n\n    # Создаём пустой DataFrame для всех требуемых продуктов\n    result = pd.DataFrame(index=product_ids)\n\n    # Присоединяем вычисленные признаки (не все столбцы)\n    result = result.join(features, how=\"left\")\n\n    # Добавляем признак, есть ли продажи вообще\n    result[\"has_sales\"] = result[\"num_orders\"].notna().astype(int)\n\n    # Заполняем отсутствующие значения нулями (для отсутствия истории)\n    result = result.fillna(0)\n\n    # Убедимся, что только числовые столбцы (не критично, но для безопасности)\n    result = result.astype(float)\n\n    # Возвращаем результат с реиндексацией под entity_ids\n    result = result.loc[product_ids]\n    return result",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "e53ac06a970d17a2cc391889f5ee9efb4775368bfb1dbf53ef91bb84ddfd446a",
+   "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db, entity_ids, seed_time):\n    # Приведём entity_ids к списку, чтобы работать с pandas\n    if isinstance(entity_ids, (list, np.ndarray, pd.Series)):\n        product_ids = list(entity_ids)\n    else:\n        product_ids = [entity_ids]\n\n    # --- Таблицы из БД ---\n    orders = db[\"orders\"]\n    items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    # Отбираем позиции по интересующим продуктам\n    items_filtered = items[items[\"product_id\"].isin(product_ids)].copy()\n\n    # Присоединяем заказы (нам нужны колонки с временными метками и статусом)\n    merged = items_filtered.merge(orders[[\"order_id\", \"order_status\", \n                                          \"order_delivered_customer_date\"]],\n                                 on=\"order_id\", how=\"left\")\n\n    # Фильтруем по времени покупки (ts)\n    merged = merged[merged[\"ts\"] < seed_time]\n\n    # ---- Агрегаты для платежей по заказам ----\n    pay_agg = payments.groupby(\"order_id\").agg(\n        total_payment=(\"payment_value\", \"sum\"),\n        count_payments=(\"payment_value\", \"count\"),\n        avg_installments=(\"payment_installments\", \"mean\")\n    ).reset_index()\n\n    # ---- Агрегаты для отзывов по заказам ----\n    rev_temp = reviews.copy()\n    rev_temp[\"positive\"] = (rev_temp[\"review_score\"] >= 4).astype(int)\n    rev_agg = rev_temp.groupby(\"order_id\").agg(\n        avg_review=(\"review_score\", \"mean\"),\n        count_reviews=(\"review_score\", \"count\"),\n        positive_count=(\"positive\", \"sum\")\n    ).reset_index()\n    rev_agg[\"positive_ratio\"] = rev_agg[\"positive_count\"] / rev_agg[\"count_reviews\"]\n\n    # ---- Присоединяем агрегаты к основной таблице ----\n    merged = merged.merge(pay_agg, on=\"order_id\", how=\"left\")\n    merged = merged.merge(rev_agg, on=\"order_id\", how=\"left\")\n\n    # Возможное время доставки в днях (если есть)\n    merged[\"delivery_days\"] = (merged[\"order_delivered_customer_date\"] - merged[\"ts\"]).dt.days\n\n    # ============================================================\n    # Признаки, считаемые по позициям (строкам item)\n    # ============================================================\n    pos_agg = merged.groupby(\"product_id\").agg(\n        total_items=(\"price\", \"count\"),\n        total_price=(\"price\", \"sum\"),\n        total_freight=(\"freight_value\", \"sum\"),\n        avg_price=(\"price\", \"mean\"),\n        std_price=(\"price\", \"std\"),\n        min_price=(\"price\", \"min\"),\n        max_price=(\"price\", \"max\"),\n        avg_freight=(\"freight_value\", \"mean\"),\n        std_freight=(\"freight_value\", \"std\"),\n        avg_delivery_days=(\"delivery_days\", \"mean\")\n    ).reset_index()\n\n    # ============================================================\n    # Признаки по уникальным заказам для каждого продукта\n    # ============================================================\n    # Убираем дубли (один и тот же продукт в одном заказе встречается несколько раз)\n    order_level = merged[[\"product_id\", \"order_id\", \"ts\",\n                          \"total_payment\", \"count_payments\", \"avg_installments\",\n                          \"avg_review\", \"count_reviews\", \"positive_ratio\"]].drop_duplicates(\n                              subset=[\"product_id\", \"order_id\"])\n\n    # Группируем по продукту\n    order_agg = order_level.groupby(\"product_id\").agg(\n        num_orders=(\"order_id\", \"nunique\"),\n        total_payment_all=(\"total_payment\", \"sum\"),\n        avg_payment_per_order=(\"total_payment\", \"mean\"),\n        std_payment_per_order=(\"total_payment\", \"std\"),\n        avg_payments_per_order=(\"count_payments\", \"mean\"),\n        avg_install_mean=(\"avg_installments\", \"mean\"),\n        avg_review_score=(\"avg_review\", \"mean\"),\n        avg_review_count=(\"count_reviews\", \"mean\"),\n        avg_positive_ratio=(\"positive_ratio\", \"mean\")\n    ).reset_index()\n\n    # Временные признаки\n    order_level[\"last_date\"] = order_level.groupby(\"product_id\")[\"ts\"].transform(\"max\")\n    order_level[\"first_date\"] = order_level.groupby(\"product_id\")[\"ts\"].transform(\"min\")\n\n    temp_agg = order_level.groupby(\"product_id\").agg(\n        days_since_last=(\"ts\", lambda x: (seed_time - x.max()).days),\n        days_since_first=(\"ts\", lambda x: (seed_time - x.min()).days),\n        date_span=(\"ts\", lambda x: (x.max() - x.min()).days)  # может быть 0, если одна покупка\n    ).reset_index()\n\n    # В temp_agg могут получиться NaN, если нет заказов — заменим на 0\n    # объединяем все признаки по продуктам\n    features = pos_agg.merge(order_agg, on=\"product_id\", how=\"outer\")\n    features = features.merge(temp_agg, on=\"product_id\", how=\"outer\")\n\n    # Устанавливаем индекс product_id\n    features = features.set_index(\"product_id\")\n\n    # Создаём пустой DataFrame для всех требуемых продуктов\n    result = pd.DataFrame(index=product_ids)\n\n    # Присоединяем вычисленные признаки (не все столбцы)\n    result = result.join(features, how=\"left\")\n\n    # Добавляем признак, есть ли продажи вообще\n    result[\"has_sales\"] = result[\"num_orders\"].notna().astype(int)\n\n    # Заполняем отсутствующие значения нулями (для отсутствия истории)\n    result = result.fillna(0)\n\n    # Убедимся, что только числовые столбцы (не критично, но для безопасности)\n    result = result.astype(float)\n\n    # Возвращаем результат с реиндексацией под entity_ids\n    result = result.loc[product_ids]\n    return result",
+   "timestamp": "2026-09-18T20:44:14+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "avg_review_count",
+      "avg_positive_ratio"
+     ],
+     "canary_columns": [
+      "avg_delivery_days",
+      "avg_review_score",
+      "avg_positive_ratio"
+     ],
+     "n_columns": 23,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "avg_review_count",
+      "avg_positive_ratio"
+     ],
+     "canary_columns": [
+      "avg_delivery_days",
+      "avg_review_score",
+      "avg_positive_ratio"
+     ],
+     "n_columns": 23,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "avg_positive_ratio"
+     ],
+     "canary_columns": [
+      "avg_delivery_days",
+      "avg_review_score"
+     ],
+     "n_columns": 23,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "avg_review_count",
+      "avg_positive_ratio"
+     ],
+     "canary_columns": [
+      "avg_delivery_days",
+      "avg_review_score",
+      "avg_positive_ratio"
+     ],
+     "n_columns": 23,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "avg_positive_ratio"
+     ],
+     "canary_columns": [
+      "avg_delivery_days",
+      "avg_review_score"
+     ],
+     "n_columns": 23,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "avg_positive_ratio"
+     ],
+     "canary_columns": [
+      "avg_delivery_days",
+      "avg_review_score",
+      "avg_positive_ratio"
+     ],
+     "n_columns": 23,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 5.0
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "61bf401bbc312b044a4152eb526df37d9e0344be1a85a065a929d30b6adaab69",
+   "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db, entity_ids, seed_time):\n    # Приведём entity_ids к списку, чтобы работать с pandas\n    if isinstance(entity_ids, (list, np.ndarray, pd.Series)):\n        product_ids = list(entity_ids)\n    else:\n        product_ids = [entity_ids]\n\n    seed_time = pd.Timestamp(seed_time)\n\n    # --- Таблицы из БД ---\n    orders = db[\"orders\"]\n    items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n\n    # --- PIT-фильтры: в каждой таблице берём только строки, уже существующие\n    # на момент seed_time. У каждой таблицы своя временная колонка:\n    # order_items / payments — ts (момент покупки), reviews — review_creation_date\n    # (отзыв появляется позже покупки), orders — order_purchase_timestamp.\n    items_f = items[items[\"ts\"] <= seed_time]\n    items_f = items_f[items_f[\"product_id\"].isin(product_ids)].copy()\n\n    pay_f = payments[payments[\"ts\"] <= seed_time]\n    rev_f = reviews[reviews[\"review_creation_date\"] <= seed_time]\n\n    # Присоединяем заказы. Поскольку items_f уже ограничен покупками <= seed_time,\n    # в merge попадают только заказы, купленные до seed_time.\n    merged = items_f.merge(\n        orders[[\"order_id\", \"order_delivered_customer_date\"]],\n        on=\"order_id\", how=\"left\",\n    )\n\n    # Дата доставки известна только если доставка уже состоялась к seed_time.\n    # Заказы, купленные раньше, но ещё не доставленные, считаем недоставленными.\n    deliv = merged[\"order_delivered_customer_date\"]\n    deliv_known = deliv.notna() & (deliv <= seed_time)\n    merged[\"delivery_days\"] = np.where(\n        deliv_known, (deliv - merged[\"ts\"]).dt.days, np.nan\n    )\n    merged[\"delivered\"] = deliv_known.astype(float)\n\n    # ---- Агрегаты для платежей по заказам (только платежи, сделанные к seed_time) ----\n    pay_agg = pay_f.groupby(\"order_id\").agg(\n        total_payment=(\"payment_value\", \"sum\"),\n        count_payments=(\"payment_value\", \"count\"),\n        avg_installments=(\"payment_installments\", \"mean\")\n    ).reset_index()\n\n    # ---- Агрегаты для отзывов по заказам (только отзывы, созданные к seed_time) ----\n    rev_temp = rev_f.copy()\n    rev_temp[\"positive\"] = (rev_temp[\"review_score\"] >= 4).astype(int)\n    rev_agg = rev_temp.groupby(\"order_id\").agg(\n        avg_review=(\"review_score\", \"mean\"),\n        count_reviews=(\"review_score\", \"count\"),\n        positive_count=(\"positive\", \"sum\")\n    ).reset_index()\n    rev_agg[\"positive_ratio\"] = rev_agg[\"positive_count\"] / rev_agg[\"count_reviews\"]\n\n    # ---- Присоединяем агрегаты к основной таблице ----\n    merged = merged.merge(pay_agg, on=\"order_id\", how=\"left\")\n    merged = merged.merge(rev_agg, on=\"order_id\", how=\"left\")\n\n    # ============================================================\n    # Признаки, считаемые по позициям (строкам item)\n    # ============================================================\n    pos_agg = merged.groupby(\"product_id\").agg(\n        total_items=(\"price\", \"count\"),\n        total_price=(\"price\", \"sum\"),\n        total_freight=(\"freight_value\", \"sum\"),\n        avg_price=(\"price\", \"mean\"),\n        std_price=(\"price\", \"std\"),\n        min_price=(\"price\", \"min\"),\n        max_price=(\"price\", \"max\"),\n        avg_freight=(\"freight_value\", \"mean\"),\n        std_freight=(\"freight_value\", \"std\"),\n        avg_delivery_days=(\"delivery_days\", \"mean\"),\n        delivered_share=(\"delivered\", \"mean\")\n    ).reset_index()\n\n    # ============================================================\n    # Признаки по уникальным заказам для каждого продукта\n    # ============================================================\n    order_level = merged[[\"product_id\", \"order_id\", \"ts\",\n                          \"total_payment\", \"count_payments\", \"avg_installments\",\n                          \"avg_review\", \"count_reviews\", \"positive_ratio\",\n                          \"delivered\"]].drop_duplicates(\n                              subset=[\"product_id\", \"order_id\"])\n\n    order_agg = order_level.groupby(\"product_id\").agg(\n        num_orders=(\"order_id\", \"nunique\"),\n        total_payment_all=(\"total_payment\", \"sum\"),\n        avg_payment_per_order=(\"total_payment\", \"mean\"),\n        std_payment_per_order=(\"total_payment\", \"std\"),\n        avg_payments_per_order=(\"count_payments\", \"mean\"),\n        avg_install_mean=(\"avg_installments\", \"mean\"),\n        avg_review_score=(\"avg_review\", \"mean\"),\n        avg_review_count=(\"count_reviews\", \"mean\"),\n        avg_positive_ratio=(\"positive_ratio\", \"mean\"),\n        delivered_order_share=(\"delivered\", \"mean\")\n    ).reset_index()\n\n    # Временные признаки\n    temp_agg = order_level.groupby(\"product_id\").agg(\n        days_since_last=(\"ts\", lambda x: (seed_time - x.max()).days),\n        days_since_first=(\"ts\", lambda x: (seed_time - x.min()).days),\n        date_span=(\"ts\", lambda x: (x.max() - x.min()).days)\n    ).reset_index()\n\n    # объединяем все признаки по продуктам\n    features = pos_agg.merge(order_agg, on=\"product_id\", how=\"outer\")\n    features = features.merge(temp_agg, on=\"product_id\", how=\"outer\")\n\n    # Устанавливаем индекс product_id\n    features = features.set_index(\"product_id\")\n\n    # Создаём пустой DataFrame для всех требуемых продуктов\n    result = pd.DataFrame(index=pd.Index(product_ids, name=\"product_id\"))\n\n    # Присоединяем вычисленные признаки\n    result = result.join(features, how=\"left\")\n\n    # Добавляем признак, есть ли продажи вообще\n    result[\"has_sales\"] = result[\"num_orders\"].notna().astype(float)\n\n    # Заполняем отсутствующие значения нулями (для отсутствия истории)\n    result = result.fillna(0)\n\n    # Только числовые столбцы\n    result = result.astype(float)\n\n    # Возвращаем результат с реиндексацией под entity_ids\n    result = result.loc[product_ids]\n    return result",
+   "timestamp": "2026-09-18T20:47:14+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 25,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 25,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 25,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 25,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 25,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 25,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 4.1
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

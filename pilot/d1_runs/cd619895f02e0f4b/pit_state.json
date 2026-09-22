@@ -1,0 +1,174 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "cd619895f02e0f4b",
+ "source_sha256": "cd619895f02e0f4bab211a4739c8a001f3393f279d2f014fa62c063f590b9470",
+ "source_code": "import pandas as pd\nimport numpy as np\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Create base dataframe with input entity IDs as index\n    base = pd.DataFrame(index=entity_ids)\n    base.index.name = \"product_id\"\n    # Define time windows for historical aggregation\n    win_30 = seed_time - pd.Timedelta(days=30)\n    win_90 = seed_time - pd.Timedelta(days=90)\n    win_180 = seed_time - pd.Timedelta(days=180)\n    # --------------------------\n    # 1. Order Items Aggregations\n    # --------------------------\n    hist_items = db[\"order_items\"][db[\"order_items\"][\"ts\"] < seed_time].copy()\n    order_agg = pd.DataFrame()\n    if not hist_items.empty:\n        # Precompute window flags\n        hist_items = hist_items.assign(\n            in_30d=(hist_items[\"ts\"] >= win_30).astype(int),\n            in_90d=(hist_items[\"ts\"] >= win_90).astype(int),\n            in_180d=(hist_items[\"ts\"] >= win_180).astype(int)\n        )\n        # Group by product_id\n        order_agg = hist_items.groupby(\"product_id\").agg(\n            total_units_alltime=(\"order_item_id\", \"count\"),\n            total_units_180d=(\"in_180d\", \"sum\"),\n            total_units_90d=(\"in_90d\", \"sum\"),\n            total_units_30d=(\"in_30d\", \"sum\"),\n            total_revenue_alltime=(\"price\", \"sum\"),\n            total_revenue_90d=(\"price\", lambda x: (x * hist_items.loc[x.index, \"in_90d\"]).sum()),\n            avg_price_alltime=(\"price\", \"mean\"),\n            avg_freight_90d=(\"freight_value\", lambda x: x[hist_items.loc[x.index, \"in_90d\"] == 1].mean()),\n            unique_sellers_alltime=(\"seller_id\", \"nunique\"),\n            last_sale_ts=(\"ts\", \"max\")\n        ).reset_index()\n        # Derive days since last sale\n        order_agg[\"days_since_last_sale\"] = (seed_time - order_agg[\"last_sale_ts\"]).dt.days\n        order_agg = order_agg.drop(columns=[\"last_sale_ts\"])\n        order_agg = order_agg.set_index(\"product_id\")\n    # --------------------------\n    # 2. Product-Order Links (shared for downstream aggregations)\n    # --------------------------\n    product_order_links = pd.DataFrame()\n    if not hist_items.empty:\n        product_order_links = hist_items[[\"product_id\", \"order_id\"]].drop_duplicates()\n    # --------------------------\n    # 3. Review Aggregations\n    # --------------------------\n    review_agg = pd.DataFrame()\n    if not product_order_links.empty:\n        hist_reviews = db[\"reviews\"][db[\"reviews\"][\"review_creation_date\"] < seed_time].copy()\n        if not hist_reviews.empty:\n            review_product = hist_reviews.merge(product_order_links, on=\"order_id\", how=\"inner\")\n            if not review_product.empty:\n                review_agg = review_product.groupby(\"product_id\").agg(\n                    avg_review_score=(\"review_score\", \"mean\"),\n                    total_reviews=(\"review_id\", \"count\"),\n                    last_review_ts=(\"review_creation_date\", \"max\")\n                ).reset_index()\n                review_agg[\"days_since_last_review\"] = (seed_time - review_agg[\"last_review_ts\"]).dt.days\n                review_agg = review_agg.drop(columns=[\"last_review_ts\"])\n                review_agg = review_agg.set_index(\"product_id\")\n    # --------------------------\n    # 4. Order Status (Cancellation) Aggregations\n    # --------------------------\n    order_status_agg = pd.DataFrame()\n    if not product_order_links.empty:\n        order_status = db[\"orders\"][[\"order_id\", \"order_status\"]].copy()\n        product_order_status = product_order_links.merge(order_status, on=\"order_id\", how=\"left\")\n        order_status_agg = product_order_status.groupby(\"product_id\").agg(\n            total_orders_alltime=(\"order_id\", \"nunique\"),\n            canceled_orders=(\"order_status\", lambda x: (x == \"canceled\").sum())\n        ).reset_index()\n        order_status_agg[\"canceled_rate\"] = order_status_agg[\"canceled_orders\"] / order_status_agg[\"total_orders_alltime\"].replace(0, np.nan)\n        order_status_agg = order_status_agg.drop(columns=[\"canceled_orders\"])\n        order_status_agg = order_status_agg.set_index(\"product_id\")\n    # --------------------------\n    # 5. Delivery Performance Aggregations\n    # --------------------------\n    delivery_agg = pd.DataFrame()\n    if not product_order_links.empty:\n        delivery_data = db[\"orders\"][[\"order_id\", \"order_delivered_customer_date\", \"order_estimated_delivery_date\"]].copy()\n        product_delivery = product_order_links.merge(delivery_data, on=\"order_id\", how=\"left\")\n        # Calculate delivery delay (days late/early)\n        def calc_delay(row):\n            if pd.notna(row[\"order_delivered_customer_date\"]) and pd.notna(row[\"order_estimated_delivery_date\"]):\n                return (row[\"order_delivered_customer_date\"] - row[\"order_estimated_delivery_date\"]).days\n            return np.nan\n        product_delivery[\"delivery_delay_days\"] = product_delivery.apply(calc_delay, axis=1)\n        delivery_agg = product_delivery.groupby(\"product_id\").agg(\n            avg_delivery_delay=(\"delivery_delay_days\", \"mean\"),\n            total_delivered_orders=(\"delivery_delay_days\", \"count\")\n        ).reset_index()\n        delivery_agg = delivery_agg.set_index(\"product_id\")\n    # --------------------------\n    # 6. Payment Aggregations\n    # --------------------------\n    pay_agg = pd.DataFrame()\n    if not product_order_links.empty:\n        hist_payments = db[\"payments\"][db[\"payments\"][\"ts\"] < seed_time].copy()\n        if not hist_payments.empty:\n            # Aggregate per order first\n            order_pay_agg = hist_payments.groupby(\"order_id\").agg(\n                total_order_payment=(\"payment_value\", \"sum\"),\n                avg_installments=(\"payment_installments\", \"mean\")\n            ).reset_index()\n            # Link to products\n            product_pay = product_order_links.merge(order_pay_agg, on=\"order_id\", how=\"left\")\n            pay_agg = product_pay.groupby(\"product_id\").agg(\n                avg_total_order_payment=(\"total_order_payment\", \"mean\"),\n                avg_payment_installments=(\"avg_installments\", \"mean\"),\n                total_orders_with_payment=(\"total_order_payment\", \"count\")\n            ).reset_index()\n            pay_agg = pay_agg.set_index(\"product_id\")\n    # --------------------------\n    # 7. Sales Activity Aggregations\n    # --------------------------\n    activity_agg = pd.DataFrame()\n    if not hist_items.empty:\n        sale_dates = hist_items.groupby(\"product_id\")[\"ts\"].agg([\"min\", \"max\"]).reset_index()\n        sale_dates.columns = [\"product_id\", \"first_sale_ts\", \"last_sale_ts\"]\n        sale_dates[\"days_active\"] = (sale_dates[\"last_sale_ts\"] - sale_dates[\"first_sale_ts\"]).dt.days\n        total_units = hist_items.groupby(\"product_id\").size().reset_index(name=\"total_units\")\n        activity_agg = sale_dates.merge(total_units, on=\"product_id\", how=\"inner\")\n        activity_agg[\"sales_per_week\"] = activity_agg.apply(\n            lambda r: r[\"total_units\"] / (r[\"days_active\"] / 7) if r[\"days_active\"] > 0 else 0,\n            axis=1\n        )\n        activity_agg = activity_agg.drop(columns=[\"first_sale_ts\", \"last_sale_ts\", \"total_units\"])\n        activity_agg = activity_agg.set_index(\"product_id\")\n    # --------------------------\n    # Merge all features into base dataframe\n    # --------------------------\n    result = base.copy()\n    for agg_df in [order_agg, review_agg, order_status_agg, delivery_agg, pay_agg, activity_agg]:\n        if not agg_df.empty:\n            result = result.join(agg_df, how=\"left\")\n    # --------------------------\n    # Fill missing values with consistent defaults\n    # --------------------------\n    fill_values = {\n        # Count columns (fill 0 for no data)\n        \"total_units_alltime\": 0,\n        \"total_units_180d\": 0,\n        \"total_units_90d\": 0,\n        \"total_units_30d\": 0,\n        \"total_revenue_alltime\": 0.0,\n        \"total_revenue_90d\": 0.0,\n        \"unique_sellers_alltime\": 0,\n        \"total_reviews\": 0,\n        \"total_orders_alltime\": 0,\n        \"total_delivered_orders\": 0,\n        \"total_orders_with_payment\": 0,\n        \"days_active\": 0,\n        # Average/rate columns (fill 0 for no data, acting as \"no signal\" value)\n        \"avg_price_alltime\": 0.0,\n        \"avg_freight_90d\": 0.0,\n        \"canceled_rate\": 0.0,\n        \"avg_delivery_delay\": 0.0,\n        \"avg_total_order_payment\": 0.0,\n        \"avg_payment_installments\": 0.0,\n        \"sales_per_week\": 0.0,\n        \"avg_review_score\": 0.0,\n        # Days since last activity (fill large value to indicate no prior activity)\n        \"days_since_last_sale\": 1000,\n        \"days_since_last_review\": 1000\n    }\n    # Apply fill values, then final safety fill for any remaining NaNs\n    result = result.fillna(value=fill_values)\n    result = result.fillna(0)\n    # --------------------------\n    # Enforce consistent column types\n    # --------------------------\n    int_cols = [\n        \"total_units_alltime\", \"total_units_180d\", \"total_units_90d\",\n        \"total_units_30d\", \"unique_sellers_alltime\", \"total_reviews\",\n        \"total_orders_alltime\", \"total_delivered_orders\", \"total_orders_with_payment\",\n        \"days_active\", \"days_since_last_sale\", \"days_since_last_review\"\n    ]\n    for col in int_cols:\n        if col in result.columns:\n            result[col] = result[col].astype(np.int64)\n    # Cast all other columns to float64\n    for col in result.columns:\n        if col not in int_cols:\n            result[col] = result[col].astype(np.float64)\n    # Ensure final index matches input entity IDs exactly (handles duplicates, ordering)\n    result = result.reindex(entity_ids)\n    return result",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "cd619895f02e0f4bab211a4739c8a001f3393f279d2f014fa62c063f590b9470",
+   "code": "import pandas as pd\nimport numpy as np\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Create base dataframe with input entity IDs as index\n    base = pd.DataFrame(index=entity_ids)\n    base.index.name = \"product_id\"\n    # Define time windows for historical aggregation\n    win_30 = seed_time - pd.Timedelta(days=30)\n    win_90 = seed_time - pd.Timedelta(days=90)\n    win_180 = seed_time - pd.Timedelta(days=180)\n    # --------------------------\n    # 1. Order Items Aggregations\n    # --------------------------\n    hist_items = db[\"order_items\"][db[\"order_items\"][\"ts\"] < seed_time].copy()\n    order_agg = pd.DataFrame()\n    if not hist_items.empty:\n        # Precompute window flags\n        hist_items = hist_items.assign(\n            in_30d=(hist_items[\"ts\"] >= win_30).astype(int),\n            in_90d=(hist_items[\"ts\"] >= win_90).astype(int),\n            in_180d=(hist_items[\"ts\"] >= win_180).astype(int)\n        )\n        # Group by product_id\n        order_agg = hist_items.groupby(\"product_id\").agg(\n            total_units_alltime=(\"order_item_id\", \"count\"),\n            total_units_180d=(\"in_180d\", \"sum\"),\n            total_units_90d=(\"in_90d\", \"sum\"),\n            total_units_30d=(\"in_30d\", \"sum\"),\n            total_revenue_alltime=(\"price\", \"sum\"),\n            total_revenue_90d=(\"price\", lambda x: (x * hist_items.loc[x.index, \"in_90d\"]).sum()),\n            avg_price_alltime=(\"price\", \"mean\"),\n            avg_freight_90d=(\"freight_value\", lambda x: x[hist_items.loc[x.index, \"in_90d\"] == 1].mean()),\n            unique_sellers_alltime=(\"seller_id\", \"nunique\"),\n            last_sale_ts=(\"ts\", \"max\")\n        ).reset_index()\n        # Derive days since last sale\n        order_agg[\"days_since_last_sale\"] = (seed_time - order_agg[\"last_sale_ts\"]).dt.days\n        order_agg = order_agg.drop(columns=[\"last_sale_ts\"])\n        order_agg = order_agg.set_index(\"product_id\")\n    # --------------------------\n    # 2. Product-Order Links (shared for downstream aggregations)\n    # --------------------------\n    product_order_links = pd.DataFrame()\n    if not hist_items.empty:\n        product_order_links = hist_items[[\"product_id\", \"order_id\"]].drop_duplicates()\n    # --------------------------\n    # 3. Review Aggregations\n    # --------------------------\n    review_agg = pd.DataFrame()\n    if not product_order_links.empty:\n        hist_reviews = db[\"reviews\"][db[\"reviews\"][\"review_creation_date\"] < seed_time].copy()\n        if not hist_reviews.empty:\n            review_product = hist_reviews.merge(product_order_links, on=\"order_id\", how=\"inner\")\n            if not review_product.empty:\n                review_agg = review_product.groupby(\"product_id\").agg(\n                    avg_review_score=(\"review_score\", \"mean\"),\n                    total_reviews=(\"review_id\", \"count\"),\n                    last_review_ts=(\"review_creation_date\", \"max\")\n                ).reset_index()\n                review_agg[\"days_since_last_review\"] = (seed_time - review_agg[\"last_review_ts\"]).dt.days\n                review_agg = review_agg.drop(columns=[\"last_review_ts\"])\n                review_agg = review_agg.set_index(\"product_id\")\n    # --------------------------\n    # 4. Order Status (Cancellation) Aggregations\n    # --------------------------\n    order_status_agg = pd.DataFrame()\n    if not product_order_links.empty:\n        order_status = db[\"orders\"][[\"order_id\", \"order_status\"]].copy()\n        product_order_status = product_order_links.merge(order_status, on=\"order_id\", how=\"left\")\n        order_status_agg = product_order_status.groupby(\"product_id\").agg(\n            total_orders_alltime=(\"order_id\", \"nunique\"),\n            canceled_orders=(\"order_status\", lambda x: (x == \"canceled\").sum())\n        ).reset_index()\n        order_status_agg[\"canceled_rate\"] = order_status_agg[\"canceled_orders\"] / order_status_agg[\"total_orders_alltime\"].replace(0, np.nan)\n        order_status_agg = order_status_agg.drop(columns=[\"canceled_orders\"])\n        order_status_agg = order_status_agg.set_index(\"product_id\")\n    # --------------------------\n    # 5. Delivery Performance Aggregations\n    # --------------------------\n    delivery_agg = pd.DataFrame()\n    if not product_order_links.empty:\n        delivery_data = db[\"orders\"][[\"order_id\", \"order_delivered_customer_date\", \"order_estimated_delivery_date\"]].copy()\n        product_delivery = product_order_links.merge(delivery_data, on=\"order_id\", how=\"left\")\n        # Calculate delivery delay (days late/early)\n        def calc_delay(row):\n            if pd.notna(row[\"order_delivered_customer_date\"]) and pd.notna(row[\"order_estimated_delivery_date\"]):\n                return (row[\"order_delivered_customer_date\"] - row[\"order_estimated_delivery_date\"]).days\n            return np.nan\n        product_delivery[\"delivery_delay_days\"] = product_delivery.apply(calc_delay, axis=1)\n        delivery_agg = product_delivery.groupby(\"product_id\").agg(\n            avg_delivery_delay=(\"delivery_delay_days\", \"mean\"),\n            total_delivered_orders=(\"delivery_delay_days\", \"count\")\n        ).reset_index()\n        delivery_agg = delivery_agg.set_index(\"product_id\")\n    # --------------------------\n    # 6. Payment Aggregations\n    # --------------------------\n    pay_agg = pd.DataFrame()\n    if not product_order_links.empty:\n        hist_payments = db[\"payments\"][db[\"payments\"][\"ts\"] < seed_time].copy()\n        if not hist_payments.empty:\n            # Aggregate per order first\n            order_pay_agg = hist_payments.groupby(\"order_id\").agg(\n                total_order_payment=(\"payment_value\", \"sum\"),\n                avg_installments=(\"payment_installments\", \"mean\")\n            ).reset_index()\n            # Link to products\n            product_pay = product_order_links.merge(order_pay_agg, on=\"order_id\", how=\"left\")\n            pay_agg = product_pay.groupby(\"product_id\").agg(\n                avg_total_order_payment=(\"total_order_payment\", \"mean\"),\n                avg_payment_installments=(\"avg_installments\", \"mean\"),\n                total_orders_with_payment=(\"total_order_payment\", \"count\")\n            ).reset_index()\n            pay_agg = pay_agg.set_index(\"product_id\")\n    # --------------------------\n    # 7. Sales Activity Aggregations\n    # --------------------------\n    activity_agg = pd.DataFrame()\n    if not hist_items.empty:\n        sale_dates = hist_items.groupby(\"product_id\")[\"ts\"].agg([\"min\", \"max\"]).reset_index()\n        sale_dates.columns = [\"product_id\", \"first_sale_ts\", \"last_sale_ts\"]\n        sale_dates[\"days_active\"] = (sale_dates[\"last_sale_ts\"] - sale_dates[\"first_sale_ts\"]).dt.days\n        total_units = hist_items.groupby(\"product_id\").size().reset_index(name=\"total_units\")\n        activity_agg = sale_dates.merge(total_units, on=\"product_id\", how=\"inner\")\n        activity_agg[\"sales_per_week\"] = activity_agg.apply(\n            lambda r: r[\"total_units\"] / (r[\"days_active\"] / 7) if r[\"days_active\"] > 0 else 0,\n            axis=1\n        )\n        activity_agg = activity_agg.drop(columns=[\"first_sale_ts\", \"last_sale_ts\", \"total_units\"])\n        activity_agg = activity_agg.set_index(\"product_id\")\n    # --------------------------\n    # Merge all features into base dataframe\n    # --------------------------\n    result = base.copy()\n    for agg_df in [order_agg, review_agg, order_status_agg, delivery_agg, pay_agg, activity_agg]:\n        if not agg_df.empty:\n            result = result.join(agg_df, how=\"left\")\n    # --------------------------\n    # Fill missing values with consistent defaults\n    # --------------------------\n    fill_values = {\n        # Count columns (fill 0 for no data)\n        \"total_units_alltime\": 0,\n        \"total_units_180d\": 0,\n        \"total_units_90d\": 0,\n        \"total_units_30d\": 0,\n        \"total_revenue_alltime\": 0.0,\n        \"total_revenue_90d\": 0.0,\n        \"unique_sellers_alltime\": 0,\n        \"total_reviews\": 0,\n        \"total_orders_alltime\": 0,\n        \"total_delivered_orders\": 0,\n        \"total_orders_with_payment\": 0,\n        \"days_active\": 0,\n        # Average/rate columns (fill 0 for no data, acting as \"no signal\" value)\n        \"avg_price_alltime\": 0.0,\n        \"avg_freight_90d\": 0.0,\n        \"canceled_rate\": 0.0,\n        \"avg_delivery_delay\": 0.0,\n        \"avg_total_order_payment\": 0.0,\n        \"avg_payment_installments\": 0.0,\n        \"sales_per_week\": 0.0,\n        \"avg_review_score\": 0.0,\n        # Days since last activity (fill large value to indicate no prior activity)\n        \"days_since_last_sale\": 1000,\n        \"days_since_last_review\": 1000\n    }\n    # Apply fill values, then final safety fill for any remaining NaNs\n    result = result.fillna(value=fill_values)\n    result = result.fillna(0)\n    # --------------------------\n    # Enforce consistent column types\n    # --------------------------\n    int_cols = [\n        \"total_units_alltime\", \"total_units_180d\", \"total_units_90d\",\n        \"total_units_30d\", \"unique_sellers_alltime\", \"total_reviews\",\n        \"total_orders_alltime\", \"total_delivered_orders\", \"total_orders_with_payment\",\n        \"days_active\", \"days_since_last_sale\", \"days_since_last_review\"\n    ]\n    for col in int_cols:\n        if col in result.columns:\n            result[col] = result[col].astype(np.int64)\n    # Cast all other columns to float64\n    for col in result.columns:\n        if col not in int_cols:\n            result[col] = result[col].astype(np.float64)\n    # Ensure final index matches input entity IDs exactly (handles duplicates, ordering)\n    result = result.reindex(entity_ids)\n    return result",
+   "timestamp": "2026-09-18T21:13:07+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_delay",
+      "total_delivered_orders"
+     ],
+     "n_columns": 22,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_delay",
+      "total_delivered_orders"
+     ],
+     "n_columns": 22,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_delay",
+      "total_delivered_orders"
+     ],
+     "n_columns": 22,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_delay",
+      "total_delivered_orders"
+     ],
+     "n_columns": 22,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_delay",
+      "total_delivered_orders"
+     ],
+     "n_columns": 22,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_delay",
+      "total_delivered_orders"
+     ],
+     "n_columns": 22,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 153.1
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "a62b08df7b3fe1d91eb721cb9510fa9237b4d95b5c518ddd695e34be98b155c7",
+   "code": "import pandas as pd\nimport numpy as np\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Create base dataframe with input entity IDs as index\n    base = pd.DataFrame(index=entity_ids)\n    base.index.name = \"product_id\"\n    # Define time windows for historical aggregation\n    win_30 = seed_time - pd.Timedelta(days=30)\n    win_90 = seed_time - pd.Timedelta(days=90)\n    win_180 = seed_time - pd.Timedelta(days=180)\n    # --------------------------\n    # 1. Order Items Aggregations\n    # --------------------------\n    hist_items = db[\"order_items\"][db[\"order_items\"][\"ts\"] < seed_time].copy()\n    order_agg = pd.DataFrame()\n    if not hist_items.empty:\n        # Precompute window flags\n        hist_items = hist_items.assign(\n            in_30d=(hist_items[\"ts\"] >= win_30).astype(int),\n            in_90d=(hist_items[\"ts\"] >= win_90).astype(int),\n            in_180d=(hist_items[\"ts\"] >= win_180).astype(int)\n        )\n        # Group by product_id\n        order_agg = hist_items.groupby(\"product_id\").agg(\n            total_units_alltime=(\"order_item_id\", \"count\"),\n            total_units_180d=(\"in_180d\", \"sum\"),\n            total_units_90d=(\"in_90d\", \"sum\"),\n            total_units_30d=(\"in_30d\", \"sum\"),\n            total_revenue_alltime=(\"price\", \"sum\"),\n            total_revenue_90d=(\"price\", lambda x: (x * hist_items.loc[x.index, \"in_90d\"]).sum()),\n            avg_price_alltime=(\"price\", \"mean\"),\n            avg_freight_90d=(\"freight_value\", lambda x: x[hist_items.loc[x.index, \"in_90d\"] == 1].mean()),\n            unique_sellers_alltime=(\"seller_id\", \"nunique\"),\n            last_sale_ts=(\"ts\", \"max\")\n        ).reset_index()\n        # Derive days since last sale\n        order_agg[\"days_since_last_sale\"] = (seed_time - order_agg[\"last_sale_ts\"]).dt.days\n        order_agg = order_agg.drop(columns=[\"last_sale_ts\"])\n        order_agg = order_agg.set_index(\"product_id\")\n    # --------------------------\n    # 2. Product-Order Links (shared for downstream aggregations)\n    # --------------------------\n    product_order_links = pd.DataFrame()\n    if not hist_items.empty:\n        product_order_links = hist_items[[\"product_id\", \"order_id\"]].drop_duplicates()\n    # --------------------------\n    # 3. Review Aggregations\n    # --------------------------\n    review_agg = pd.DataFrame()\n    if not product_order_links.empty:\n        hist_reviews = db[\"reviews\"][db[\"reviews\"][\"review_creation_date\"] < seed_time].copy()\n        if not hist_reviews.empty:\n            review_product = hist_reviews.merge(product_order_links, on=\"order_id\", how=\"inner\")\n            if not review_product.empty:\n                review_agg = review_product.groupby(\"product_id\").agg(\n                    avg_review_score=(\"review_score\", \"mean\"),\n                    total_reviews=(\"review_id\", \"count\"),\n                    last_review_ts=(\"review_creation_date\", \"max\")\n                ).reset_index()\n                review_agg[\"days_since_last_review\"] = (seed_time - review_agg[\"last_review_ts\"]).dt.days\n                review_agg = review_agg.drop(columns=[\"last_review_ts\"])\n                review_agg = review_agg.set_index(\"product_id\")\n    # --------------------------\n    # 4. Order Status (Cancellation) Aggregations\n    # --------------------------\n    order_status_agg = pd.DataFrame()\n    if not product_order_links.empty:\n        order_status = db[\"orders\"][[\"order_id\", \"order_status\"]].copy()\n        product_order_status = product_order_links.merge(order_status, on=\"order_id\", how=\"left\")\n        order_status_agg = product_order_status.groupby(\"product_id\").agg(\n            total_orders_alltime=(\"order_id\", \"nunique\"),\n            canceled_orders=(\"order_status\", lambda x: (x == \"canceled\").sum())\n        ).reset_index()\n        order_status_agg[\"canceled_rate\"] = order_status_agg[\"canceled_orders\"] / order_status_agg[\"total_orders_alltime\"].replace(0, np.nan)\n        order_status_agg = order_status_agg.drop(columns=[\"canceled_orders\"])\n        order_status_agg = order_status_agg.set_index(\"product_id\")\n    # --------------------------\n    # 5. Delivery Performance Aggregations\n    # --------------------------\n    delivery_agg = pd.DataFrame()\n    if not product_order_links.empty:\n        delivery_data = db[\"orders\"][[\"order_id\", \"order_delivered_customer_date\", \"order_estimated_delivery_date\"]].copy()\n        product_delivery = product_order_links.merge(delivery_data, on=\"order_id\", how=\"left\")\n        # Only orders actually delivered on or before seed_time are usable:\n        # the delivered date is filled in after purchase, so a later date is\n        # information from the future at seed_time.\n        delivered_mask = product_delivery[\"order_delivered_customer_date\"].notna() & (\n            product_delivery[\"order_delivered_customer_date\"] <= seed_time\n        )\n        product_delivery = product_delivery[delivered_mask].copy()\n        # Calculate delivery delay (days late/early)\n        def calc_delay(row):\n            if pd.notna(row[\"order_delivered_customer_date\"]) and pd.notna(row[\"order_estimated_delivery_date\"]):\n                return (row[\"order_delivered_customer_date\"] - row[\"order_estimated_delivery_date\"]).days\n            return np.nan\n        product_delivery[\"delivery_delay_days\"] = product_delivery.apply(calc_delay, axis=1)\n        delivery_agg = product_delivery.groupby(\"product_id\").agg(\n            avg_delivery_delay=(\"delivery_delay_days\", \"mean\"),\n            total_delivered_orders=(\"delivery_delay_days\", \"count\")\n        ).reset_index()\n        delivery_agg = delivery_agg.set_index(\"product_id\")\n    # --------------------------\n    # 6. Payment Aggregations\n    # --------------------------\n    pay_agg = pd.DataFrame()\n    if not product_order_links.empty:\n        hist_payments = db[\"payments\"][db[\"payments\"][\"ts\"] < seed_time].copy()\n        if not hist_payments.empty:\n            # Aggregate per order first\n            order_pay_agg = hist_payments.groupby(\"order_id\").agg(\n                total_order_payment=(\"payment_value\", \"sum\"),\n                avg_installments=(\"payment_installments\", \"mean\")\n            ).reset_index()\n            # Link to products\n            product_pay = product_order_links.merge(order_pay_agg, on=\"order_id\", how=\"left\")\n            pay_agg = product_pay.groupby(\"product_id\").agg(\n                avg_total_order_payment=(\"total_order_payment\", \"mean\"),\n                avg_payment_installments=(\"avg_installments\", \"mean\"),\n                total_orders_with_payment=(\"total_order_payment\", \"count\")\n            ).reset_index()\n            pay_agg = pay_agg.set_index(\"product_id\")\n    # --------------------------\n    # 7. Sales Activity Aggregations\n    # --------------------------\n    activity_agg = pd.DataFrame()\n    if not hist_items.empty:\n        sale_dates = hist_items.groupby(\"product_id\")[\"ts\"].agg([\"min\", \"max\"]).reset_index()\n        sale_dates.columns = [\"product_id\", \"first_sale_ts\", \"last_sale_ts\"]\n        sale_dates[\"days_active\"] = (sale_dates[\"last_sale_ts\"] - sale_dates[\"first_sale_ts\"]).dt.days\n        total_units = hist_items.groupby(\"product_id\").size().reset_index(name=\"total_units\")\n        activity_agg = sale_dates.merge(total_units, on=\"product_id\", how=\"inner\")\n        activity_agg[\"sales_per_week\"] = activity_agg.apply(\n            lambda r: r[\"total_units\"] / (r[\"days_active\"] / 7) if r[\"days_active\"] > 0 else 0,\n            axis=1\n        )\n        activity_agg = activity_agg.drop(columns=[\"first_sale_ts\", \"last_sale_ts\", \"total_units\"])\n        activity_agg = activity_agg.set_index(\"product_id\")\n    # --------------------------\n    # Merge all features into base dataframe\n    # --------------------------\n    result = base.copy()\n    for agg_df in [order_agg, review_agg, order_status_agg, delivery_agg, pay_agg, activity_agg]:\n        if not agg_df.empty:\n            result = result.join(agg_df, how=\"left\")\n    # --------------------------\n    # Fill missing values with consistent defaults\n    # --------------------------\n    fill_values = {\n        # Count columns (fill 0 for no data)\n        \"total_units_alltime\": 0,\n        \"total_units_180d\": 0,\n        \"total_units_90d\": 0,\n        \"total_units_30d\": 0,\n        \"total_revenue_alltime\": 0.0,\n        \"total_revenue_90d\": 0.0,\n        \"unique_sellers_alltime\": 0,\n        \"total_reviews\": 0,\n        \"total_orders_alltime\": 0,\n        \"total_delivered_orders\": 0,\n        \"total_orders_with_payment\": 0,\n        \"days_active\": 0,\n        # Average/rate columns (fill 0 for no data, acting as \"no signal\" value)\n        \"avg_price_alltime\": 0.0,\n        \"avg_freight_90d\": 0.0,\n        \"canceled_rate\": 0.0,\n        \"avg_delivery_delay\": 0.0,\n        \"avg_total_order_payment\": 0.0,\n        \"avg_payment_installments\": 0.0,\n        \"sales_per_week\": 0.0,\n        \"avg_review_score\": 0.0,\n        # Days since last activity (fill large value to indicate no prior activity)\n        \"days_since_last_sale\": 1000,\n        \"days_since_last_review\": 1000\n    }\n    # Apply fill values, then final safety fill for any remaining NaNs\n    result = result.fillna(value=fill_values)\n    result = result.fillna(0)\n    # --------------------------\n    # Enforce consistent column types\n    # --------------------------\n    int_cols = [\n        \"total_units_alltime\", \"total_units_180d\", \"total_units_90d\",\n        \"total_units_30d\", \"unique_sellers_alltime\", \"total_reviews\",\n        \"total_orders_alltime\", \"total_delivered_orders\", \"total_orders_with_payment\",\n        \"days_active\", \"days_since_last_sale\", \"days_since_last_review\"\n    ]\n    for col in int_cols:\n        if col in result.columns:\n            result[col] = result[col].astype(np.int64)\n    # Cast all other columns to float64\n    for col in result.columns:\n        if col not in int_cols:\n            result[col] = result[col].astype(np.float64)\n    # Ensure final index matches input entity IDs exactly (handles duplicates, ordering)\n    result = result.reindex(entity_ids)\n    return result",
+   "timestamp": "2026-09-18T21:16:11+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 22,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 22,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 22,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 22,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 22,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 22,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 155.5
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

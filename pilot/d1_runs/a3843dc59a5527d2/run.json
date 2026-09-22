@@ -1,0 +1,27 @@
+{
+ "program_uid": "a3843dc59a5527d2",
+ "program": "deepseek-v4-flash-0731#76",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 58.0,
+ "assistant_turns": 6,
+ "tool_calls": 6,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "pit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=pit_state.json\n\nИтоговый вердикт: утечка была найдена и устранена. Исходный код присоединял таблицу `reviews` к заказам без ограничения по времени, поэтому в `total_reviews` и `avg_review_score` попадали отзывы, написанные после `seed_time` (witness-проверка подтвердила это на всех шести моментах, включая held-out). Починка: отзывы фильтруются по `review_creation_date <= seed_time` до агрегации. Повторная проверка на итерации 1 чистая по обоим уровням на всех шести моментах.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 77551,
+   "output_tokens": 2177
+  },
+  "message_count": 12,
+  "session_id": "92bc7eef5594",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

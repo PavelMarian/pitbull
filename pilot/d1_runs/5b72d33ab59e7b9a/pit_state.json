@@ -1,0 +1,186 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "5b72d33ab59e7b9a",
+ "source_sha256": "5b72d33ab59e7b9a4f1bc3fbfb9c7b6b9f1c75470d220b761fd5f7f6e49e6762",
+ "source_code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Unpack tables\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n    \n    # Base dataframe with requested product IDs\n    base = pd.DataFrame({\"product_id\": entity_ids})\n    seed_month = seed_time.month\n    seed_quarter = (seed_month - 1) // 3 + 1\n    \n    # 1. Preprocess historical order items (all data before seed_time)\n    hist_order_items = order_items[order_items[\"ts\"] < seed_time].copy()\n    if not hist_order_items.empty:\n        # Add time window flags\n        window_days_list = [7, 30, 90, 180, 365]\n        for wd in window_days_list:\n            cutoff = seed_time - pd.Timedelta(days=wd)\n            hist_order_items[f\"in_last_{wd}d\"] = hist_order_items[\"ts\"] >= cutoff\n        \n        # 1a. Recency feature\n        last_sale = hist_order_items.groupby(\"product_id\")[\"ts\"].max().reset_index(name=\"last_sale_ts\")\n        last_sale[\"recency_days\"] = (seed_time - last_sale[\"last_sale_ts\"]).dt.days\n        last_sale = last_sale.drop(columns=[\"last_sale_ts\"])\n        base = base.merge(last_sale, on=\"product_id\", how=\"left\")\n        \n        # 1b. All-time order items aggregates\n        all_time_agg = hist_order_items.groupby(\"product_id\").agg(\n            total_orders=(\"order_id\", \"nunique\"),\n            total_units_sold=(\"order_id\", \"count\"),\n            total_revenue=(\"price\", \"sum\"),\n            avg_price=(\"price\", \"mean\"),\n            std_price=(\"price\", \"std\"),\n            total_freight=(\"freight_value\", \"sum\"),\n            avg_freight=(\"freight_value\", \"mean\"),\n            std_freight=(\"freight_value\", \"std\")\n        ).reset_index()\n        all_time_agg[\"avg_items_per_order\"] = all_time_agg[\"total_units_sold\"] / all_time_agg[\"total_orders\"].replace(0, np.nan)\n        base = base.merge(all_time_agg, on=\"product_id\", how=\"left\")\n        \n        # 1c. Windowed order items aggregates\n        for wd in window_days_list:\n            window_col = f\"in_last_{wd}d\"\n            if window_col in hist_order_items.columns:\n                window_data = hist_order_items[hist_order_items[window_col]]\n                if not window_data.empty:\n                    w_agg = window_data.groupby(\"product_id\").agg(\n                        **{\n                            f\"orders_last_{wd}d\": (\"order_id\", \"nunique\"),\n                            f\"units_sold_last_{wd}d\": (\"order_id\", \"count\"),\n                            f\"revenue_last_{wd}d\": (\"price\", \"sum\"),\n                            f\"avg_price_last_{wd}d\": (\"price\", \"mean\"),\n                            f\"freight_last_{wd}d\": (\"freight_value\", \"sum\")\n                        }\n                    ).reset_index()\n                    base = base.merge(w_agg, on=\"product_id\", how=\"left\")\n        \n        # 2. Order-level features (delivery, status)\n        hist_orders_items = hist_order_items.merge(orders, on=\"order_id\", how=\"left\")\n        if not hist_orders_items.empty:\n            hist_orders_items[\"delivery_delay_days\"] = (hist_orders_items[\"order_delivered_customer_date\"] - hist_orders_items[\"order_estimated_delivery_date\"]).dt.days\n            hist_orders_items[\"delivery_time_days\"] = (hist_orders_items[\"order_delivered_customer_date\"] - hist_orders_items[\"order_purchase_timestamp\"]).dt.days\n            hist_orders_items[\"is_delivered\"] = (hist_orders_items[\"order_status\"] == \"delivered\").astype(int)\n            \n            order_features = hist_orders_items.groupby(\"product_id\").agg(\n                share_delivered_orders=(\"is_delivered\", \"mean\"),\n                avg_delivery_delay=(\"delivery_delay_days\", \"mean\"),\n                std_delivery_delay=(\"delivery_delay_days\", \"std\"),\n                avg_delivery_time=(\"delivery_time_days\", \"mean\"),\n                std_delivery_time=(\"delivery_time_days\", \"std\")\n            ).reset_index()\n            base = base.merge(order_features, on=\"product_id\", how=\"left\")\n        \n        # 3. Review features\n        hist_reviews = reviews[reviews[\"review_creation_date\"] < seed_time].copy()\n        if not hist_reviews.empty:\n            # Link reviews to products via order_items\n            reviews_with_product = hist_reviews.merge(\n                hist_order_items[[\"order_id\", \"product_id\"]].drop_duplicates(),\n                on=\"order_id\",\n                how=\"inner\"\n            )\n            if not reviews_with_product.empty:\n                reviews_with_product[\"has_comment\"] = (\n                    ~reviews_with_product[\"review_comment_title\"].isna() | \n                    ~reviews_with_product[\"review_comment_message\"].isna()\n                ).astype(int)\n                reviews_with_product = reviews_with_product.merge(\n                    orders[[\"order_id\", \"order_purchase_timestamp\"]],\n                    on=\"order_id\",\n                    how=\"left\"\n                )\n                reviews_with_product[\"time_to_review_days\"] = (\n                    reviews_with_product[\"review_creation_date\"] - reviews_with_product[\"order_purchase_timestamp\"]\n                ).dt.days\n                \n                review_features = reviews_with_product.groupby(\"product_id\").agg(\n                    avg_review_score=(\"review_score\", \"mean\"),\n                    total_reviews=(\"review_id\", \"count\"),\n                    share_5star_reviews=(\"review_score\", lambda x: (x == 5).mean()),\n                    share_1star_reviews=(\"review_score\", lambda x: (x == 1).mean()),\n                    share_commented_reviews=(\"has_comment\", \"mean\"),\n                    avg_days_to_review=(\"time_to_review_days\", \"mean\")\n                ).reset_index()\n                base = base.merge(review_features, on=\"product_id\", how=\"left\")\n        \n        # 4. Payment features\n        hist_payments = payments[payments[\"ts\"] < seed_time].copy()\n        if not hist_payments.empty:\n            # Aggregate per order first\n            order_payment_agg = hist_payments.groupby(\"order_id\").agg(\n                total_order_payment=(\"payment_value\", \"sum\"),\n                num_payment_methods=(\"payment_type\", \"nunique\"),\n                avg_installments=(\"payment_installments\", \"mean\"),\n                share_credit_card=(\"payment_type\", lambda x: (x == \"credit_card\").mean()),\n                share_boleto=(\"payment_type\", lambda x: (x == \"boleto\").mean())\n            ).reset_index()\n            # Link to products\n            product_payments = hist_order_items[[\"order_id\", \"product_id\"]].drop_duplicates().merge(\n                order_payment_agg,\n                on=\"order_id\",\n                how=\"inner\"\n            )\n            if not product_payments.empty:\n                payment_features = product_payments.groupby(\"product_id\").agg(\n                    avg_order_payment=(\"total_order_payment\", \"mean\"),\n                    avg_payment_methods_per_order=(\"num_payment_methods\", \"mean\"),\n                    avg_installments_per_order=(\"avg_installments\", \"mean\"),\n                    share_orders_credit_card=(\"share_credit_card\", \"mean\"),\n                    share_orders_boleto=(\"share_boleto\", \"mean\")\n                ).reset_index()\n                base = base.merge(payment_features, on=\"product_id\", how=\"left\")\n    \n    # 5. Add global/seed time features and clean up\n    # Recency fillna for products with no history\n    base[\"recency_days\"] = base[\"recency_days\"].fillna(9999)\n    # Has history flag\n    base[\"has_history\"] = (base[\"total_units_sold\"].fillna(0) > 0).astype(int)\n    # Seed time features\n    base[\"seed_month\"] = seed_month\n    base[\"seed_quarter\"] = seed_quarter\n    # Fill remaining NaNs with 0\n    base = base.fillna(0)\n    # Set index and reindex to input entity_ids\n    base = base.set_index(\"product_id\").reindex(entity_ids)\n    \n    return base",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "5b72d33ab59e7b9a4f1bc3fbfb9c7b6b9f1c75470d220b761fd5f7f6e49e6762",
+   "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Unpack tables\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n    \n    # Base dataframe with requested product IDs\n    base = pd.DataFrame({\"product_id\": entity_ids})\n    seed_month = seed_time.month\n    seed_quarter = (seed_month - 1) // 3 + 1\n    \n    # 1. Preprocess historical order items (all data before seed_time)\n    hist_order_items = order_items[order_items[\"ts\"] < seed_time].copy()\n    if not hist_order_items.empty:\n        # Add time window flags\n        window_days_list = [7, 30, 90, 180, 365]\n        for wd in window_days_list:\n            cutoff = seed_time - pd.Timedelta(days=wd)\n            hist_order_items[f\"in_last_{wd}d\"] = hist_order_items[\"ts\"] >= cutoff\n        \n        # 1a. Recency feature\n        last_sale = hist_order_items.groupby(\"product_id\")[\"ts\"].max().reset_index(name=\"last_sale_ts\")\n        last_sale[\"recency_days\"] = (seed_time - last_sale[\"last_sale_ts\"]).dt.days\n        last_sale = last_sale.drop(columns=[\"last_sale_ts\"])\n        base = base.merge(last_sale, on=\"product_id\", how=\"left\")\n        \n        # 1b. All-time order items aggregates\n        all_time_agg = hist_order_items.groupby(\"product_id\").agg(\n            total_orders=(\"order_id\", \"nunique\"),\n            total_units_sold=(\"order_id\", \"count\"),\n            total_revenue=(\"price\", \"sum\"),\n            avg_price=(\"price\", \"mean\"),\n            std_price=(\"price\", \"std\"),\n            total_freight=(\"freight_value\", \"sum\"),\n            avg_freight=(\"freight_value\", \"mean\"),\n            std_freight=(\"freight_value\", \"std\")\n        ).reset_index()\n        all_time_agg[\"avg_items_per_order\"] = all_time_agg[\"total_units_sold\"] / all_time_agg[\"total_orders\"].replace(0, np.nan)\n        base = base.merge(all_time_agg, on=\"product_id\", how=\"left\")\n        \n        # 1c. Windowed order items aggregates\n        for wd in window_days_list:\n            window_col = f\"in_last_{wd}d\"\n            if window_col in hist_order_items.columns:\n                window_data = hist_order_items[hist_order_items[window_col]]\n                if not window_data.empty:\n                    w_agg = window_data.groupby(\"product_id\").agg(\n                        **{\n                            f\"orders_last_{wd}d\": (\"order_id\", \"nunique\"),\n                            f\"units_sold_last_{wd}d\": (\"order_id\", \"count\"),\n                            f\"revenue_last_{wd}d\": (\"price\", \"sum\"),\n                            f\"avg_price_last_{wd}d\": (\"price\", \"mean\"),\n                            f\"freight_last_{wd}d\": (\"freight_value\", \"sum\")\n                        }\n                    ).reset_index()\n                    base = base.merge(w_agg, on=\"product_id\", how=\"left\")\n        \n        # 2. Order-level features (delivery, status)\n        hist_orders_items = hist_order_items.merge(orders, on=\"order_id\", how=\"left\")\n        if not hist_orders_items.empty:\n            hist_orders_items[\"delivery_delay_days\"] = (hist_orders_items[\"order_delivered_customer_date\"] - hist_orders_items[\"order_estimated_delivery_date\"]).dt.days\n            hist_orders_items[\"delivery_time_days\"] = (hist_orders_items[\"order_delivered_customer_date\"] - hist_orders_items[\"order_purchase_timestamp\"]).dt.days\n            hist_orders_items[\"is_delivered\"] = (hist_orders_items[\"order_status\"] == \"delivered\").astype(int)\n            \n            order_features = hist_orders_items.groupby(\"product_id\").agg(\n                share_delivered_orders=(\"is_delivered\", \"mean\"),\n                avg_delivery_delay=(\"delivery_delay_days\", \"mean\"),\n                std_delivery_delay=(\"delivery_delay_days\", \"std\"),\n                avg_delivery_time=(\"delivery_time_days\", \"mean\"),\n                std_delivery_time=(\"delivery_time_days\", \"std\")\n            ).reset_index()\n            base = base.merge(order_features, on=\"product_id\", how=\"left\")\n        \n        # 3. Review features\n        hist_reviews = reviews[reviews[\"review_creation_date\"] < seed_time].copy()\n        if not hist_reviews.empty:\n            # Link reviews to products via order_items\n            reviews_with_product = hist_reviews.merge(\n                hist_order_items[[\"order_id\", \"product_id\"]].drop_duplicates(),\n                on=\"order_id\",\n                how=\"inner\"\n            )\n            if not reviews_with_product.empty:\n                reviews_with_product[\"has_comment\"] = (\n                    ~reviews_with_product[\"review_comment_title\"].isna() | \n                    ~reviews_with_product[\"review_comment_message\"].isna()\n                ).astype(int)\n                reviews_with_product = reviews_with_product.merge(\n                    orders[[\"order_id\", \"order_purchase_timestamp\"]],\n                    on=\"order_id\",\n                    how=\"left\"\n                )\n                reviews_with_product[\"time_to_review_days\"] = (\n                    reviews_with_product[\"review_creation_date\"] - reviews_with_product[\"order_purchase_timestamp\"]\n                ).dt.days\n                \n                review_features = reviews_with_product.groupby(\"product_id\").agg(\n                    avg_review_score=(\"review_score\", \"mean\"),\n                    total_reviews=(\"review_id\", \"count\"),\n                    share_5star_reviews=(\"review_score\", lambda x: (x == 5).mean()),\n                    share_1star_reviews=(\"review_score\", lambda x: (x == 1).mean()),\n                    share_commented_reviews=(\"has_comment\", \"mean\"),\n                    avg_days_to_review=(\"time_to_review_days\", \"mean\")\n                ).reset_index()\n                base = base.merge(review_features, on=\"product_id\", how=\"left\")\n        \n        # 4. Payment features\n        hist_payments = payments[payments[\"ts\"] < seed_time].copy()\n        if not hist_payments.empty:\n            # Aggregate per order first\n            order_payment_agg = hist_payments.groupby(\"order_id\").agg(\n                total_order_payment=(\"payment_value\", \"sum\"),\n                num_payment_methods=(\"payment_type\", \"nunique\"),\n                avg_installments=(\"payment_installments\", \"mean\"),\n                share_credit_card=(\"payment_type\", lambda x: (x == \"credit_card\").mean()),\n                share_boleto=(\"payment_type\", lambda x: (x == \"boleto\").mean())\n            ).reset_index()\n            # Link to products\n            product_payments = hist_order_items[[\"order_id\", \"product_id\"]].drop_duplicates().merge(\n                order_payment_agg,\n                on=\"order_id\",\n                how=\"inner\"\n            )\n            if not product_payments.empty:\n                payment_features = product_payments.groupby(\"product_id\").agg(\n                    avg_order_payment=(\"total_order_payment\", \"mean\"),\n                    avg_payment_methods_per_order=(\"num_payment_methods\", \"mean\"),\n                    avg_installments_per_order=(\"avg_installments\", \"mean\"),\n                    share_orders_credit_card=(\"share_credit_card\", \"mean\"),\n                    share_orders_boleto=(\"share_boleto\", \"mean\")\n                ).reset_index()\n                base = base.merge(payment_features, on=\"product_id\", how=\"left\")\n    \n    # 5. Add global/seed time features and clean up\n    # Recency fillna for products with no history\n    base[\"recency_days\"] = base[\"recency_days\"].fillna(9999)\n    # Has history flag\n    base[\"has_history\"] = (base[\"total_units_sold\"].fillna(0) > 0).astype(int)\n    # Seed time features\n    base[\"seed_month\"] = seed_month\n    base[\"seed_quarter\"] = seed_quarter\n    # Fill remaining NaNs with 0\n    base = base.fillna(0)\n    # Set index and reindex to input entity_ids\n    base = base.set_index(\"product_id\").reindex(entity_ids)\n    \n    return base",
+   "timestamp": "2026-09-18T21:18:36+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_delay",
+      "std_delivery_delay",
+      "avg_delivery_time",
+      "std_delivery_time"
+     ],
+     "n_columns": 54,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_delay",
+      "std_delivery_delay",
+      "avg_delivery_time",
+      "std_delivery_time"
+     ],
+     "n_columns": 54,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_delay",
+      "std_delivery_delay",
+      "avg_delivery_time",
+      "std_delivery_time"
+     ],
+     "n_columns": 54,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_delay",
+      "std_delivery_delay",
+      "avg_delivery_time",
+      "std_delivery_time"
+     ],
+     "n_columns": 54,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_delay",
+      "std_delivery_delay",
+      "avg_delivery_time",
+      "std_delivery_time"
+     ],
+     "n_columns": 54,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": true,
+     "witness_columns": [],
+     "canary_columns": [
+      "avg_delivery_delay",
+      "std_delivery_delay",
+      "avg_delivery_time",
+      "std_delivery_time"
+     ],
+     "n_columns": 54,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 143.2
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "9ff8b58ead6d208e7d3f2d483f70185d6a4dc78bfdb58c4d17a9d48b81b35ebd",
+   "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    # Unpack tables\n    orders = db[\"orders\"]\n    order_items = db[\"order_items\"]\n    reviews = db[\"reviews\"]\n    payments = db[\"payments\"]\n    \n    # Base dataframe with requested product IDs\n    base = pd.DataFrame({\"product_id\": entity_ids})\n    seed_month = seed_time.month\n    seed_quarter = (seed_month - 1) // 3 + 1\n    \n    # 1. Preprocess historical order items (all data before seed_time)\n    hist_order_items = order_items[order_items[\"ts\"] < seed_time].copy()\n    if not hist_order_items.empty:\n        # Add time window flags\n        window_days_list = [7, 30, 90, 180, 365]\n        for wd in window_days_list:\n            cutoff = seed_time - pd.Timedelta(days=wd)\n            hist_order_items[f\"in_last_{wd}d\"] = hist_order_items[\"ts\"] >= cutoff\n        \n        # 1a. Recency feature\n        last_sale = hist_order_items.groupby(\"product_id\")[\"ts\"].max().reset_index(name=\"last_sale_ts\")\n        last_sale[\"recency_days\"] = (seed_time - last_sale[\"last_sale_ts\"]).dt.days\n        last_sale = last_sale.drop(columns=[\"last_sale_ts\"])\n        base = base.merge(last_sale, on=\"product_id\", how=\"left\")\n        \n        # 1b. All-time order items aggregates\n        all_time_agg = hist_order_items.groupby(\"product_id\").agg(\n            total_orders=(\"order_id\", \"nunique\"),\n            total_units_sold=(\"order_id\", \"count\"),\n            total_revenue=(\"price\", \"sum\"),\n            avg_price=(\"price\", \"mean\"),\n            std_price=(\"price\", \"std\"),\n            total_freight=(\"freight_value\", \"sum\"),\n            avg_freight=(\"freight_value\", \"mean\"),\n            std_freight=(\"freight_value\", \"std\")\n        ).reset_index()\n        all_time_agg[\"avg_items_per_order\"] = all_time_agg[\"total_units_sold\"] / all_time_agg[\"total_orders\"].replace(0, np.nan)\n        base = base.merge(all_time_agg, on=\"product_id\", how=\"left\")\n        \n        # 1c. Windowed order items aggregates\n        for wd in window_days_list:\n            window_col = f\"in_last_{wd}d\"\n            if window_col in hist_order_items.columns:\n                window_data = hist_order_items[hist_order_items[window_col]]\n                if not window_data.empty:\n                    w_agg = window_data.groupby(\"product_id\").agg(\n                        **{\n                            f\"orders_last_{wd}d\": (\"order_id\", \"nunique\"),\n                            f\"units_sold_last_{wd}d\": (\"order_id\", \"count\"),\n                            f\"revenue_last_{wd}d\": (\"price\", \"sum\"),\n                            f\"avg_price_last_{wd}d\": (\"price\", \"mean\"),\n                            f\"freight_last_{wd}d\": (\"freight_value\", \"sum\")\n                        }\n                    ).reset_index()\n                    base = base.merge(w_agg, on=\"product_id\", how=\"left\")\n        \n        # 2. Order-level features (delivery, status)\n        # Only orders already purchased before seed_time; delivery info is\n        # only used for orders actually delivered before seed_time, since\n        # delivery dates and order_status get filled in after the purchase.\n        hist_orders = orders[orders[\"order_purchase_timestamp\"] < seed_time]\n        hist_orders_items = hist_order_items.merge(hist_orders, on=\"order_id\", how=\"left\")\n        if not hist_orders_items.empty:\n            delivered_mask = (\n                hist_orders_items[\"order_delivered_customer_date\"].notna()\n                & (hist_orders_items[\"order_delivered_customer_date\"] <= seed_time)\n            )\n            hist_orders_items[\"is_delivered\"] = delivered_mask.astype(int)\n\n            share_delivered = hist_orders_items.groupby(\"product_id\").agg(\n                share_delivered_orders=(\"is_delivered\", \"mean\")\n            ).reset_index()\n            base = base.merge(share_delivered, on=\"product_id\", how=\"left\")\n\n            delivered_items = hist_orders_items[delivered_mask].copy()\n            if not delivered_items.empty:\n                delivered_items[\"delivery_delay_days\"] = (delivered_items[\"order_delivered_customer_date\"] - delivered_items[\"order_estimated_delivery_date\"]).dt.days\n                delivered_items[\"delivery_time_days\"] = (delivered_items[\"order_delivered_customer_date\"] - delivered_items[\"order_purchase_timestamp\"]).dt.days\n\n                order_features = delivered_items.groupby(\"product_id\").agg(\n                    avg_delivery_delay=(\"delivery_delay_days\", \"mean\"),\n                    std_delivery_delay=(\"delivery_delay_days\", \"std\"),\n                    avg_delivery_time=(\"delivery_time_days\", \"mean\"),\n                    std_delivery_time=(\"delivery_time_days\", \"std\")\n                ).reset_index()\n                base = base.merge(order_features, on=\"product_id\", how=\"left\")\n        \n        # 3. Review features\n        hist_reviews = reviews[reviews[\"review_creation_date\"] < seed_time].copy()\n        if not hist_reviews.empty:\n            # Link reviews to products via order_items\n            reviews_with_product = hist_reviews.merge(\n                hist_order_items[[\"order_id\", \"product_id\"]].drop_duplicates(),\n                on=\"order_id\",\n                how=\"inner\"\n            )\n            if not reviews_with_product.empty:\n                reviews_with_product[\"has_comment\"] = (\n                    ~reviews_with_product[\"review_comment_title\"].isna() | \n                    ~reviews_with_product[\"review_comment_message\"].isna()\n                ).astype(int)\n                reviews_with_product = reviews_with_product.merge(\n                    orders[[\"order_id\", \"order_purchase_timestamp\"]],\n                    on=\"order_id\",\n                    how=\"left\"\n                )\n                reviews_with_product[\"time_to_review_days\"] = (\n                    reviews_with_product[\"review_creation_date\"] - reviews_with_product[\"order_purchase_timestamp\"]\n                ).dt.days\n                \n                review_features = reviews_with_product.groupby(\"product_id\").agg(\n                    avg_review_score=(\"review_score\", \"mean\"),\n                    total_reviews=(\"review_id\", \"count\"),\n                    share_5star_reviews=(\"review_score\", lambda x: (x == 5).mean()),\n                    share_1star_reviews=(\"review_score\", lambda x: (x == 1).mean()),\n                    share_commented_reviews=(\"has_comment\", \"mean\"),\n                    avg_days_to_review=(\"time_to_review_days\", \"mean\")\n                ).reset_index()\n                base = base.merge(review_features, on=\"product_id\", how=\"left\")\n        \n        # 4. Payment features\n        hist_payments = payments[payments[\"ts\"] < seed_time].copy()\n        if not hist_payments.empty:\n            # Aggregate per order first\n            order_payment_agg = hist_payments.groupby(\"order_id\").agg(\n                total_order_payment=(\"payment_value\", \"sum\"),\n                num_payment_methods=(\"payment_type\", \"nunique\"),\n                avg_installments=(\"payment_installments\", \"mean\"),\n                share_credit_card=(\"payment_type\", lambda x: (x == \"credit_card\").mean()),\n                share_boleto=(\"payment_type\", lambda x: (x == \"boleto\").mean())\n            ).reset_index()\n            # Link to products\n            product_payments = hist_order_items[[\"order_id\", \"product_id\"]].drop_duplicates().merge(\n                order_payment_agg,\n                on=\"order_id\",\n                how=\"inner\"\n            )\n            if not product_payments.empty:\n                payment_features = product_payments.groupby(\"product_id\").agg(\n                    avg_order_payment=(\"total_order_payment\", \"mean\"),\n                    avg_payment_methods_per_order=(\"num_payment_methods\", \"mean\"),\n                    avg_installments_per_order=(\"avg_installments\", \"mean\"),\n                    share_orders_credit_card=(\"share_credit_card\", \"mean\"),\n                    share_orders_boleto=(\"share_boleto\", \"mean\")\n                ).reset_index()\n                base = base.merge(payment_features, on=\"product_id\", how=\"left\")\n    \n    # 5. Add global/seed time features and clean up\n    # Recency fillna for products with no history\n    base[\"recency_days\"] = base[\"recency_days\"].fillna(9999)\n    # Has history flag\n    base[\"has_history\"] = (base[\"total_units_sold\"].fillna(0) > 0).astype(int)\n    # Seed time features\n    base[\"seed_month\"] = seed_month\n    base[\"seed_quarter\"] = seed_quarter\n    # Fill remaining NaNs with 0\n    base = base.fillna(0)\n    # Set index and reindex to input entity_ids\n    base = base.set_index(\"product_id\").reindex(entity_ids)\n    \n    return base",
+   "timestamp": "2026-09-18T21:21:40+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 54,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 54,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 54,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 54,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 54,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 54,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 142.9
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "program_uid": "518638f43180d0e9",
+ "program": "deepseek-v4-flash-0731#30",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 416.9,
+ "assistant_turns": 14,
+ "tool_calls": 14,
+ "skill_loaded": true,
+ "pit_check_calls": 8,
+ "errors": [],
+ "final_text": "Готово. Код в `get_features.py` переписан и прошёл проверку.\n\n**Что было**: главная утечка в том, что `order_items` вообще не усекались по времени. Строки позиций с `ts > seed_time` проходили inner join с усечёнными заказами только случайно (когда заказ ещё не попал в `orders`), а позиции из будущих заказов без даты в `orders` отсекались не всегда. Сверх того отзывы (`review_creation_date`) и платежи (`ts`) не фильтровались вовсе, а `delivered_on_time` читал дату доставки, которая заполняется после покупки.\n\n**Что стало**: все четыре таблицы усекаются по времени появления строки (`order_purchase_timestamp` / `ts` / `review_creation_date` / `ts`); платежи и отзывы агрегируются на уровне уникальной пары заказ-продукт; даты одобрения и доставки используются только через маску доступности на `seed_time` (доли одобренных/переданных/доставленных заказов). Признаковая часть (окна, momentum, цены, платежи, отзывы) сохранена по смыслу.\n\n```\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1,\nwitness_final=[], canary_final=[],\nstate=/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/518638f43180d0e9/pit_state.json\n```",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 213677,
+   "output_tokens": 16389
+  },
+  "message_count": 28,
+  "session_id": "888aad158c15",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

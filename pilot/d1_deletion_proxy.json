@@ -1,0 +1,1583 @@
+[
+ {
+  "uid": "01e9c111a8d06f59",
+  "n0": 29,
+  "n1": 29,
+  "leak0": [
+   "avg_delivery_time_days",
+   "count_late_deliveries"
+  ],
+  "kept": [
+   "avg_delivery_time_days",
+   "count_late_deliveries"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "0282c30a9d6bd348",
+  "n0": 39,
+  "n1": 39,
+  "leak0": [
+   "avg_review",
+   "review_count"
+  ],
+  "kept": [
+   "avg_review",
+   "review_count"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "071d50199396f12f",
+  "n0": 44,
+  "n1": 44,
+  "leak0": [
+   "avg_review_score_30d",
+   "avg_review_score_7d",
+   "avg_review_score_90d",
+   "avg_review_score_alld",
+   "positive_review_ratio_30d",
+   "positive_review_ratio_7d",
+   "positive_review_ratio_90d",
+   "positive_review_ratio_alld"
+  ],
+  "kept": [
+   "avg_review_score_30d",
+   "avg_review_score_7d",
+   "avg_review_score_90d",
+   "avg_review_score_alld",
+   "positive_review_ratio_30d",
+   "positive_review_ratio_7d",
+   "positive_review_ratio_90d",
+   "positive_review_ratio_alld"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "07a9ff3958189650",
+  "n0": 28,
+  "n1": 28,
+  "leak0": [
+   "review_mean",
+   "review_mean_90"
+  ],
+  "kept": [
+   "review_mean",
+   "review_mean_90"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "171a1c132e6a3c4d",
+  "n0": 28,
+  "n1": 28,
+  "leak0": [
+   "avg_review_score",
+   "num_reviews",
+   "positive_ratio",
+   "positive_reviews"
+  ],
+  "kept": [
+   "avg_review_score",
+   "num_reviews",
+   "positive_ratio",
+   "positive_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "1c4cbd6256b111d8",
+  "n0": 27,
+  "n1": 26,
+  "leak0": [
+   "__shape__"
+  ],
+  "kept": [],
+  "dropped": [
+   "__shape__"
+  ],
+  "clean_at": 2
+ },
+ {
+  "uid": "219a0ca22b1feb02",
+  "n0": 28,
+  "n1": 28,
+  "leak0": [
+   "avg_review",
+   "pos_review_count",
+   "review_count"
+  ],
+  "kept": [
+   "avg_review",
+   "pos_review_count",
+   "review_count"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "22c221a3b242d5f8",
+  "n0": 23,
+  "n1": 23,
+  "leak0": [
+   "avg_delivery_delay",
+   "pct_on_time_deliveries"
+  ],
+  "kept": [
+   "avg_delivery_delay",
+   "pct_on_time_deliveries"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "23479bfa40103be3",
+  "n0": 24,
+  "n1": 24,
+  "leak0": [
+   "review_count",
+   "review_mean"
+  ],
+  "kept": [
+   "review_count",
+   "review_mean"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "28f9475f172c7de7",
+  "n0": 31,
+  "n1": 31,
+  "leak0": [
+   "avg_delivery_time",
+   "avg_review",
+   "frac_on_time",
+   "seller_avg_review",
+   "seller_review_count",
+   "total_reviews"
+  ],
+  "kept": [
+   "avg_delivery_time",
+   "avg_review",
+   "frac_on_time",
+   "seller_avg_review",
+   "seller_review_count",
+   "total_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "2ab5b139602be24b",
+  "n0": 14,
+  "n1": 15,
+  "leak0": [
+   "avg_delivery_delay",
+   "avg_review_score",
+   "frac_1star_reviews",
+   "frac_5star_reviews",
+   "max_delivery_delay",
+   "min_review_score"
+  ],
+  "kept": [
+   "avg_delivery_delay",
+   "avg_review_score",
+   "frac_1star_reviews",
+   "frac_5star_reviews",
+   "max_delivery_delay",
+   "min_review_score"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "304c8f0fe9d43d91",
+  "n0": 174,
+  "n1": 174,
+  "leak0": [
+   "avg_days_carrier_to_customer_14d",
+   "avg_days_carrier_to_customer_180d",
+   "avg_days_carrier_to_customer_30d",
+   "avg_days_carrier_to_customer_7d",
+   "avg_days_carrier_to_customer_90d",
+   "avg_days_carrier_to_customer_all",
+   "avg_days_to_carrier_14d",
+   "avg_days_to_carrier_180d",
+   "avg_days_to_carrier_30d",
+   "avg_days_to_carrier_7d",
+   "avg_days_to_carrier_90d",
+   "avg_days_to_carrier_all",
+   "avg_days_to_review_14d",
+   "avg_days_to_review_180d",
+   "avg_days_to_review_30d",
+   "avg_days_to_review_7d",
+   "avg_days_to_review_90d",
+   "avg_days_to_review_all",
+   "avg_delivery_delay_14d",
+   "avg_delivery_delay_180d",
+   "avg_delivery_delay_30d",
+   "avg_delivery_delay_7d",
+   "avg_delivery_delay_90d",
+   "avg_delivery_delay_all",
+   "avg_pct_reviews_with_messages_14d",
+   "avg_pct_reviews_with_messages_180d",
+   "avg_pct_reviews_with_messages_30d",
+   "avg_pct_reviews_with_messages_7d",
+   "avg_pct_reviews_with_messages_90d",
+   "avg_pct_reviews_with_messages_all",
+   "avg_pct_reviews_with_titles_14d",
+   "avg_pct_reviews_with_titles_180d",
+   "avg_pct_reviews_with_titles_30d",
+   "avg_pct_reviews_with_titles_7d",
+   "avg_pct_reviews_with_titles_90d",
+   "avg_pct_reviews_with_titles_all",
+   "avg_review_score_14d",
+   "avg_review_score_180d",
+   "avg_review_score_30d",
+   "avg_review_score_7d",
+   "avg_review_score_90d",
+   "avg_review_score_all",
+   "has_reviews_14d",
+   "has_reviews_180d",
+   "has_reviews_30d",
+   "has_reviews_7d",
+   "has_reviews_90d",
+   "has_reviews_all",
+   "pct_late_deliveries_14d",
+   "pct_late_deliveries_180d",
+   "pct_late_deliveries_30d",
+   "pct_late_deliveries_7d",
+   "pct_late_deliveries_90d",
+   "pct_late_deliveries_all",
+   "total_reviews_14d",
+   "total_reviews_180d",
+   "total_reviews_30d",
+   "total_reviews_7d",
+   "total_reviews_90d",
+   "total_reviews_all"
+  ],
+  "kept": [
+   "avg_days_carrier_to_customer_14d",
+   "avg_days_carrier_to_customer_180d",
+   "avg_days_carrier_to_customer_30d",
+   "avg_days_carrier_to_customer_7d",
+   "avg_days_carrier_to_customer_90d",
+   "avg_days_carrier_to_customer_all",
+   "avg_days_to_carrier_14d",
+   "avg_days_to_carrier_180d",
+   "avg_days_to_carrier_30d",
+   "avg_days_to_carrier_7d",
+   "avg_days_to_carrier_90d",
+   "avg_days_to_carrier_all",
+   "avg_days_to_review_14d",
+   "avg_days_to_review_180d",
+   "avg_days_to_review_30d",
+   "avg_days_to_review_7d",
+   "avg_days_to_review_90d",
+   "avg_days_to_review_all",
+   "avg_delivery_delay_14d",
+   "avg_delivery_delay_180d",
+   "avg_delivery_delay_30d",
+   "avg_delivery_delay_7d",
+   "avg_delivery_delay_90d",
+   "avg_delivery_delay_all",
+   "avg_pct_reviews_with_messages_14d",
+   "avg_pct_reviews_with_messages_180d",
+   "avg_pct_reviews_with_messages_30d",
+   "avg_pct_reviews_with_messages_7d",
+   "avg_pct_reviews_with_messages_90d",
+   "avg_pct_reviews_with_messages_all",
+   "avg_pct_reviews_with_titles_14d",
+   "avg_pct_reviews_with_titles_180d",
+   "avg_pct_reviews_with_titles_30d",
+   "avg_pct_reviews_with_titles_7d",
+   "avg_pct_reviews_with_titles_90d",
+   "avg_pct_reviews_with_titles_all",
+   "avg_review_score_14d",
+   "avg_review_score_180d",
+   "avg_review_score_30d",
+   "avg_review_score_7d",
+   "avg_review_score_90d",
+   "avg_review_score_all",
+   "has_reviews_14d",
+   "has_reviews_180d",
+   "has_reviews_30d",
+   "has_reviews_7d",
+   "has_reviews_90d",
+   "has_reviews_all",
+   "pct_late_deliveries_14d",
+   "pct_late_deliveries_180d",
+   "pct_late_deliveries_30d",
+   "pct_late_deliveries_7d",
+   "pct_late_deliveries_90d",
+   "pct_late_deliveries_all",
+   "total_reviews_14d",
+   "total_reviews_180d",
+   "total_reviews_30d",
+   "total_reviews_7d",
+   "total_reviews_90d",
+   "total_reviews_all"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "351ea6efee4ae94d",
+  "n0": 21,
+  "n1": 21,
+  "leak0": [
+   "avg_delivery_days",
+   "frac_late_deliveries"
+  ],
+  "kept": [
+   "avg_delivery_days",
+   "frac_late_deliveries"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "373ec22df8b444be",
+  "n0": 19,
+  "n1": 19,
+  "leak0": [
+   "avg_review_score",
+   "review_count"
+  ],
+  "kept": [
+   "avg_review_score",
+   "review_count"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "38139aada1834411",
+  "n0": 20,
+  "n1": 20,
+  "leak0": [
+   "avg_delivery_days"
+  ],
+  "kept": [
+   "avg_delivery_days"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "38682d36d89670a3",
+  "n0": 15,
+  "n1": 15,
+  "leak0": [
+   "avg_delivery_diff_days"
+  ],
+  "kept": [
+   "avg_delivery_diff_days"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "3db44025b2bf8c80",
+  "n0": 24,
+  "n1": 24,
+  "leak0": [
+   "avg_review_score",
+   "positive_review_ratio",
+   "reviews_count"
+  ],
+  "kept": [
+   "avg_review_score",
+   "positive_review_ratio",
+   "reviews_count"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "41c5faff7064774f",
+  "n0": 28,
+  "n1": 32,
+  "leak0": [
+   "avg_delivery_days",
+   "avg_review_score",
+   "pos_review_count",
+   "pos_review_ratio",
+   "review_count",
+   "std_delivery_days",
+   "std_review_score"
+  ],
+  "kept": [
+   "avg_delivery_days",
+   "avg_review_score",
+   "pos_review_count",
+   "pos_review_ratio",
+   "review_count",
+   "std_delivery_days",
+   "std_review_score"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "4322128e8c718a51",
+  "n0": 33,
+  "n1": 33,
+  "leak0": [
+   "positive_ratio",
+   "review_count",
+   "review_mean"
+  ],
+  "kept": [
+   "positive_ratio",
+   "review_count",
+   "review_mean"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "475766ef757f452a",
+  "n0": 26,
+  "n1": 26,
+  "leak0": [
+   "avg_review_score_mean",
+   "avg_review_score_std",
+   "num_low_reviews_sum",
+   "num_reviews_mean",
+   "num_reviews_sum"
+  ],
+  "kept": [
+   "avg_review_score_mean",
+   "avg_review_score_std",
+   "num_low_reviews_sum",
+   "num_reviews_mean",
+   "num_reviews_sum"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "488618eb19979bda",
+  "n0": 25,
+  "n1": 25,
+  "leak0": [
+   "avg_review_score",
+   "share_commented_reviews",
+   "total_reviews"
+  ],
+  "kept": [
+   "avg_review_score",
+   "share_commented_reviews",
+   "total_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "48d7ece1b190d778",
+  "n0": 27,
+  "n1": 27,
+  "leak0": [
+   "avg_review_score",
+   "count_reviews",
+   "max_review_score",
+   "min_review_score",
+   "std_review_score"
+  ],
+  "kept": [
+   "avg_review_score",
+   "count_reviews",
+   "max_review_score",
+   "min_review_score",
+   "std_review_score"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "4b29d5561b4abe07",
+  "n0": 50,
+  "n1": 50,
+  "leak0": [
+   "delivery_vs_est_mean",
+   "delivery_vs_est_std"
+  ],
+  "kept": [
+   "delivery_vs_est_mean",
+   "delivery_vs_est_std"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "518638f43180d0e9",
+  "n0": 29,
+  "n1": 46,
+  "leak0": [
+   "__shape__"
+  ],
+  "kept": [],
+  "dropped": [
+   "__shape__"
+  ],
+  "clean_at": 1
+ },
+ {
+  "uid": "52648fcdc514695b",
+  "n0": 16,
+  "n1": 16,
+  "leak0": [
+   "avg_delivery_days",
+   "avg_review",
+   "count_review"
+  ],
+  "kept": [
+   "avg_delivery_days",
+   "avg_review",
+   "count_review"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "579a1451fbe976ef",
+  "n0": 23,
+  "n1": 24,
+  "leak0": [
+   "avg_delivery_days",
+   "avg_review_score",
+   "late_delivery_rate",
+   "max_delivery_days",
+   "min_delivery_days"
+  ],
+  "kept": [
+   "avg_delivery_days",
+   "avg_review_score",
+   "late_delivery_rate",
+   "max_delivery_days",
+   "min_delivery_days"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "57e0e29334ca7f41",
+  "n0": 80,
+  "n1": 54,
+  "leak0": [
+   "avg_delivery_delay_w1",
+   "avg_delivery_delay_w2",
+   "avg_delivery_delay_w3",
+   "avg_review_score_history",
+   "avg_review_score_w1",
+   "num_reviews_w1",
+   "share_positive_reviews_w1",
+   "total_reviews_history"
+  ],
+  "kept": [
+   "avg_delivery_delay_w1",
+   "avg_delivery_delay_w2",
+   "avg_delivery_delay_w3",
+   "avg_review_score_history",
+   "avg_review_score_w1",
+   "num_reviews_w1",
+   "share_positive_reviews_w1",
+   "total_reviews_history"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "5b72d33ab59e7b9a",
+  "n0": 54,
+  "n1": 54,
+  "leak0": [
+   "avg_delivery_delay",
+   "avg_delivery_time",
+   "std_delivery_delay",
+   "std_delivery_time"
+  ],
+  "kept": [
+   "avg_delivery_delay",
+   "avg_delivery_time",
+   "std_delivery_delay",
+   "std_delivery_time"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "5eb7d019f552fc14",
+  "n0": 23,
+  "n1": 23,
+  "leak0": [
+   "avg_delivery_delay"
+  ],
+  "kept": [
+   "avg_delivery_delay"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "61d8db07ff0d961e",
+  "n0": 21,
+  "n1": 21,
+  "leak0": [
+   "review_count",
+   "review_mean"
+  ],
+  "kept": [
+   "review_count",
+   "review_mean"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "621a4e433ccbfe7e",
+  "n0": 31,
+  "n1": 31,
+  "leak0": [
+   "review_avg",
+   "review_avg_90d",
+   "review_cnt",
+   "review_cnt_90d"
+  ],
+  "kept": [
+   "review_avg",
+   "review_avg_90d",
+   "review_cnt",
+   "review_cnt_90d"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "67fadf27cd93da36",
+  "n0": 39,
+  "n1": 36,
+  "leak0": [
+   "avg_estimated_vs_actual_days",
+   "avg_purchase_to_carrier_days",
+   "avg_purchase_to_customer_days",
+   "avg_review_score",
+   "on_time_delivery_rate",
+   "review_response_rate",
+   "std_review_score",
+   "total_reviews"
+  ],
+  "kept": [
+   "avg_estimated_vs_actual_days",
+   "avg_purchase_to_carrier_days",
+   "avg_purchase_to_customer_days",
+   "avg_review_score",
+   "on_time_delivery_rate",
+   "std_review_score",
+   "total_reviews"
+  ],
+  "dropped": [
+   "review_response_rate"
+  ],
+  "clean_at": 1
+ },
+ {
+  "uid": "684c03be8cf9af21",
+  "n0": 235,
+  "n1": 205,
+  "leak0": [
+   "delivery_days_max_180d",
+   "delivery_days_max_30d",
+   "delivery_days_max_365d",
+   "delivery_days_max_90d",
+   "delivery_days_max_all",
+   "delivery_days_mean_180d",
+   "delivery_days_mean_30d",
+   "delivery_days_mean_365d",
+   "delivery_days_mean_90d",
+   "delivery_days_mean_all",
+   "delivery_days_min_180d",
+   "delivery_days_min_30d",
+   "delivery_days_min_365d",
+   "delivery_days_min_90d",
+   "delivery_days_min_all",
+   "delivery_days_std_180d",
+   "delivery_days_std_30d",
+   "delivery_days_std_365d",
+   "delivery_days_std_90d",
+   "delivery_days_std_all"
+  ],
+  "kept": [],
+  "dropped": [
+   "delivery_days_max_180d",
+   "delivery_days_max_30d",
+   "delivery_days_max_365d",
+   "delivery_days_max_90d",
+   "delivery_days_max_all",
+   "delivery_days_mean_180d",
+   "delivery_days_mean_30d",
+   "delivery_days_mean_365d",
+   "delivery_days_mean_90d",
+   "delivery_days_mean_all",
+   "delivery_days_min_180d",
+   "delivery_days_min_30d",
+   "delivery_days_min_365d",
+   "delivery_days_min_90d",
+   "delivery_days_min_all",
+   "delivery_days_std_180d",
+   "delivery_days_std_30d",
+   "delivery_days_std_365d",
+   "delivery_days_std_90d",
+   "delivery_days_std_all"
+  ],
+  "clean_at": 1
+ },
+ {
+  "uid": "72af1675e371e264",
+  "n0": 18,
+  "n1": 18,
+  "leak0": [
+   "avg_review_score",
+   "num_reviews"
+  ],
+  "kept": [
+   "avg_review_score",
+   "num_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "732715a1a807dc47",
+  "n0": 24,
+  "n1": 24,
+  "leak0": [
+   "avg_delivery_days",
+   "avg_review_score",
+   "num_reviews"
+  ],
+  "kept": [
+   "avg_delivery_days",
+   "avg_review_score",
+   "num_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "736c72715ccceaa9",
+  "n0": 13,
+  "n1": 13,
+  "leak0": [
+   "avg_review",
+   "total_reviews"
+  ],
+  "kept": [
+   "avg_review",
+   "total_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "76bddd18af603306",
+  "n0": 28,
+  "n1": 28,
+  "leak0": [
+   "avg_review_score",
+   "review_count"
+  ],
+  "kept": [
+   "avg_review_score",
+   "review_count"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "79151754b090fd88",
+  "n0": 119,
+  "n1": 119,
+  "leak0": [
+   "avg_delivery_early_180d",
+   "avg_delivery_early_30d",
+   "avg_delivery_early_7d",
+   "avg_delivery_early_90d",
+   "avg_delivery_early_all",
+   "avg_review_180d",
+   "avg_review_30d",
+   "avg_review_7d",
+   "avg_review_90d",
+   "avg_review_all",
+   "num_reviews_180d",
+   "num_reviews_30d",
+   "num_reviews_7d",
+   "num_reviews_90d",
+   "num_reviews_all"
+  ],
+  "kept": [
+   "avg_delivery_early_180d",
+   "avg_delivery_early_30d",
+   "avg_delivery_early_7d",
+   "avg_delivery_early_90d",
+   "avg_delivery_early_all",
+   "avg_review_180d",
+   "avg_review_30d",
+   "avg_review_7d",
+   "avg_review_90d",
+   "avg_review_all",
+   "num_reviews_180d",
+   "num_reviews_30d",
+   "num_reviews_7d",
+   "num_reviews_90d",
+   "num_reviews_all"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "7ae309f9171ae754",
+  "n0": 88,
+  "n1": 88,
+  "leak0": [
+   "__shape__",
+   "win_180_rev_count",
+   "win_180_rev_high",
+   "win_180_rev_mean",
+   "win_30_rev_count",
+   "win_30_rev_high",
+   "win_30_rev_mean",
+   "win_365_rev_count",
+   "win_365_rev_high",
+   "win_365_rev_mean",
+   "win_7_rev_count",
+   "win_7_rev_high",
+   "win_7_rev_mean",
+   "win_90_rev_count",
+   "win_90_rev_high",
+   "win_90_rev_mean"
+  ],
+  "kept": [
+   "win_180_rev_count",
+   "win_180_rev_high",
+   "win_180_rev_mean",
+   "win_30_rev_count",
+   "win_30_rev_high",
+   "win_30_rev_mean",
+   "win_365_rev_count",
+   "win_365_rev_high",
+   "win_365_rev_mean",
+   "win_7_rev_count",
+   "win_7_rev_high",
+   "win_7_rev_mean",
+   "win_90_rev_count",
+   "win_90_rev_high",
+   "win_90_rev_mean"
+  ],
+  "dropped": [
+   "__shape__"
+  ],
+  "clean_at": 1
+ },
+ {
+  "uid": "7b1d8e9357f3ef2a",
+  "n0": 44,
+  "n1": 44,
+  "leak0": [
+   "avg_delivery_days",
+   "pct_late_deliveries"
+  ],
+  "kept": [
+   "avg_delivery_days",
+   "pct_late_deliveries"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "7bd6c053eb5dbb05",
+  "n0": 44,
+  "n1": 44,
+  "leak0": [
+   "avg_review_30",
+   "avg_review_60",
+   "avg_review_90",
+   "avg_review_all",
+   "review_count_30",
+   "review_count_60",
+   "review_count_90",
+   "review_count_all"
+  ],
+  "kept": [
+   "avg_review_30",
+   "avg_review_60",
+   "avg_review_90",
+   "avg_review_all",
+   "review_count_30",
+   "review_count_60",
+   "review_count_90",
+   "review_count_all"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "7c006ce3c8435e3c",
+  "n0": 29,
+  "n1": 29,
+  "leak0": [
+   "avg_delivery_days"
+  ],
+  "kept": [
+   "avg_delivery_days"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "7cffa575655794d4",
+  "n0": 27,
+  "n1": 27,
+  "leak0": [
+   "avg_review_score",
+   "count_reviews"
+  ],
+  "kept": [
+   "avg_review_score",
+   "count_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "7e5e140d7dcb8cd3",
+  "n0": 11,
+  "n1": 11,
+  "leak0": [
+   "review_count",
+   "review_mean_score"
+  ],
+  "kept": [
+   "review_count",
+   "review_mean_score"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "7f0902132101548f",
+  "n0": 34,
+  "n1": 34,
+  "leak0": [
+   "avg_delay_days",
+   "avg_delivery_days",
+   "late_share"
+  ],
+  "kept": [
+   "avg_delay_days",
+   "avg_delivery_days",
+   "late_share"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "82feae377655715c",
+  "n0": 38,
+  "n1": 38,
+  "leak0": [
+   "avg_review_score",
+   "n_reviews",
+   "pct_positive_reviews"
+  ],
+  "kept": [
+   "avg_review_score",
+   "n_reviews",
+   "pct_positive_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "83af96bf638ca01b",
+  "n0": 23,
+  "n1": 23,
+  "leak0": [
+   "avg_review_score",
+   "num_reviews"
+  ],
+  "kept": [
+   "avg_review_score",
+   "num_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "88a6082cf5850778",
+  "n0": 13,
+  "n1": 13,
+  "leak0": [
+   "avg_delivery_days",
+   "avg_review_score"
+  ],
+  "kept": [
+   "avg_delivery_days",
+   "avg_review_score"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "926abae06dce6f32",
+  "n0": 75,
+  "n1": 75,
+  "leak0": [
+   "review_count",
+   "review_five_star_ratio",
+   "review_max",
+   "review_mean",
+   "review_min",
+   "review_one_star_ratio",
+   "review_std"
+  ],
+  "kept": [
+   "review_count",
+   "review_five_star_ratio",
+   "review_max",
+   "review_mean",
+   "review_min",
+   "review_one_star_ratio",
+   "review_std"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "955acbc837d37a98",
+  "n0": 40,
+  "n1": 40,
+  "leak0": [
+   "avg_delivery_days",
+   "avg_estimate_diff",
+   "avg_seller_price",
+   "n_sellers",
+   "std_delivery_days"
+  ],
+  "kept": [
+   "avg_delivery_days",
+   "avg_estimate_diff",
+   "avg_seller_price",
+   "n_sellers",
+   "std_delivery_days"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "95f538c90e6e869a",
+  "n0": 69,
+  "n1": 69,
+  "leak0": [
+   "avg_delivery_time",
+   "avg_review_score",
+   "five_star_share",
+   "has_reviews",
+   "late_delivery_rate",
+   "num_reviews",
+   "one_star_share",
+   "review_recency_days",
+   "std_delivery_time",
+   "std_review_score"
+  ],
+  "kept": [
+   "avg_delivery_time",
+   "avg_review_score",
+   "five_star_share",
+   "has_reviews",
+   "late_delivery_rate",
+   "num_reviews",
+   "one_star_share",
+   "review_recency_days",
+   "std_delivery_time",
+   "std_review_score"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "9be61d77a683e6c3",
+  "n0": 136,
+  "n1": 136,
+  "leak0": [
+   "avg_delivery_delay_days_30d",
+   "avg_delivery_delay_days_7d",
+   "avg_delivery_delay_days_90d",
+   "avg_delivery_delay_days_all_time",
+   "delivered_orders_30d",
+   "delivered_orders_7d",
+   "delivered_orders_90d",
+   "delivered_orders_all_time",
+   "std_delivery_delay_days_30d",
+   "std_delivery_delay_days_7d",
+   "std_delivery_delay_days_90d",
+   "std_delivery_delay_days_all_time"
+  ],
+  "kept": [
+   "avg_delivery_delay_days_30d",
+   "avg_delivery_delay_days_7d",
+   "avg_delivery_delay_days_90d",
+   "avg_delivery_delay_days_all_time",
+   "delivered_orders_30d",
+   "delivered_orders_7d",
+   "delivered_orders_90d",
+   "delivered_orders_all_time",
+   "std_delivery_delay_days_30d",
+   "std_delivery_delay_days_7d",
+   "std_delivery_delay_days_90d",
+   "std_delivery_delay_days_all_time"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "9f966e7fee72ee57",
+  "n0": 58,
+  "n1": 58,
+  "leak0": [
+   "avg_review_score",
+   "frac_reviews_with_comment",
+   "max_review_score",
+   "min_review_score",
+   "std_review_score",
+   "total_reviews"
+  ],
+  "kept": [
+   "avg_review_score",
+   "frac_reviews_with_comment",
+   "max_review_score",
+   "min_review_score",
+   "std_review_score",
+   "total_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "a3843dc59a5527d2",
+  "n0": 19,
+  "n1": 19,
+  "leak0": [
+   "avg_review_score",
+   "total_reviews"
+  ],
+  "kept": [
+   "avg_review_score",
+   "total_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "aad1af7da1f87c35",
+  "n0": 17,
+  "n1": 17,
+  "leak0": [
+   "avg_review_score",
+   "std_review_score"
+  ],
+  "kept": [
+   "avg_review_score",
+   "std_review_score"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "b1d4448578a845b6",
+  "n0": 20,
+  "n1": 20,
+  "leak0": [
+   "avg_review_score",
+   "count_reviews",
+   "mean_delivery_days",
+   "positive_review_ratio"
+  ],
+  "kept": [
+   "avg_review_score",
+   "count_reviews",
+   "mean_delivery_days",
+   "positive_review_ratio"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "bed2bbd129f46949",
+  "n0": 13,
+  "n1": 13,
+  "leak0": [
+   "avg_review_score",
+   "review_count"
+  ],
+  "kept": [
+   "avg_review_score",
+   "review_count"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "bf5c9bb63fa7cd53",
+  "n0": 82,
+  "n1": 72,
+  "leak0": [
+   "avg_delivery_days",
+   "avg_delivery_days_180d",
+   "avg_delivery_days_30d",
+   "avg_delivery_days_60d",
+   "avg_delivery_days_90d",
+   "avg_rating",
+   "avg_rating_180d",
+   "avg_rating_30d",
+   "avg_rating_60d",
+   "avg_rating_90d",
+   "n_reviews",
+   "n_reviews_180d",
+   "n_reviews_30d",
+   "n_reviews_60d",
+   "n_reviews_90d"
+  ],
+  "kept": [
+   "avg_rating",
+   "avg_rating_180d",
+   "avg_rating_30d",
+   "avg_rating_60d",
+   "avg_rating_90d",
+   "n_reviews",
+   "n_reviews_180d",
+   "n_reviews_30d",
+   "n_reviews_60d",
+   "n_reviews_90d"
+  ],
+  "dropped": [
+   "avg_delivery_days",
+   "avg_delivery_days_180d",
+   "avg_delivery_days_30d",
+   "avg_delivery_days_60d",
+   "avg_delivery_days_90d"
+  ],
+  "clean_at": 1
+ },
+ {
+  "uid": "c3581c8a0ec113e1",
+  "n0": 27,
+  "n1": 27,
+  "leak0": [
+   "avg_delivery_days",
+   "late_delivery_rate",
+   "review_avg",
+   "review_cnt",
+   "review_neg_rate",
+   "review_pos_rate"
+  ],
+  "kept": [
+   "avg_delivery_days",
+   "late_delivery_rate",
+   "review_avg",
+   "review_cnt",
+   "review_neg_rate",
+   "review_pos_rate"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "c3bef92f3f174aa4",
+  "n0": 11,
+  "n1": 11,
+  "leak0": [
+   "avg_delivery_days",
+   "avg_review_score",
+   "count_reviews",
+   "delayed_count",
+   "neg_review_count"
+  ],
+  "kept": [
+   "avg_delivery_days",
+   "avg_review_score",
+   "count_reviews",
+   "delayed_count",
+   "neg_review_count"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "c4d668fb8689bf02",
+  "n0": 35,
+  "n1": 35,
+  "leak0": [
+   "avg_delivery_time",
+   "avg_review_score",
+   "delivered_on_time_sum",
+   "has_review_sum",
+   "on_time_rate",
+   "review_rate"
+  ],
+  "kept": [
+   "avg_delivery_time",
+   "avg_review_score",
+   "delivered_on_time_sum",
+   "has_review_sum",
+   "on_time_rate",
+   "review_rate"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "c647c296f95c79e4",
+  "n0": null,
+  "n1": 18,
+  "leak0": [],
+  "kept": [],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "ca6a32358909b3c2",
+  "n0": 19,
+  "n1": 19,
+  "leak0": [
+   "avg_review_score",
+   "review_count"
+  ],
+  "kept": [
+   "avg_review_score",
+   "review_count"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "cc203d2b936c7ee5",
+  "n0": 27,
+  "n1": 27,
+  "leak0": [
+   "cnt_reviews",
+   "mean_review_score"
+  ],
+  "kept": [
+   "cnt_reviews",
+   "mean_review_score"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "cd619895f02e0f4b",
+  "n0": 22,
+  "n1": 22,
+  "leak0": [
+   "avg_delivery_delay",
+   "total_delivered_orders"
+  ],
+  "kept": [
+   "avg_delivery_delay",
+   "total_delivered_orders"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "d11eb908941f266c",
+  "n0": 28,
+  "n1": 28,
+  "leak0": [
+   "avg_review_score",
+   "high_review_ratio",
+   "review_count"
+  ],
+  "kept": [
+   "avg_review_score",
+   "high_review_ratio",
+   "review_count"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "d3f7e103215da781",
+  "n0": 11,
+  "n1": 11,
+  "leak0": [
+   "avg_review_score",
+   "pct_negative_reviews",
+   "total_reviews"
+  ],
+  "kept": [
+   "avg_review_score",
+   "pct_negative_reviews",
+   "total_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "d81050e01947bda7",
+  "n0": 39,
+  "n1": 40,
+  "leak0": [],
+  "kept": [],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "e44d35262384e019",
+  "n0": 22,
+  "n1": 22,
+  "leak0": [
+   "mean_delivery_delay",
+   "mean_review",
+   "review_count",
+   "review_rate"
+  ],
+  "kept": [
+   "mean_delivery_delay",
+   "mean_review",
+   "review_count",
+   "review_rate"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "e53ac06a970d17a2",
+  "n0": 23,
+  "n1": 25,
+  "leak0": [
+   "avg_delivery_days",
+   "avg_positive_ratio",
+   "avg_review_count",
+   "avg_review_score"
+  ],
+  "kept": [
+   "avg_delivery_days",
+   "avg_positive_ratio",
+   "avg_review_count",
+   "avg_review_score"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "e836c2f6b64089ba",
+  "n0": 19,
+  "n1": 19,
+  "leak0": [
+   "review_score_count",
+   "review_score_mean"
+  ],
+  "kept": [
+   "review_score_count",
+   "review_score_mean"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "ec8a75db4ce0aae8",
+  "n0": 13,
+  "n1": 13,
+  "leak0": [
+   "avg_review_score",
+   "count_reviews"
+  ],
+  "kept": [
+   "avg_review_score",
+   "count_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "f1cade690ca333e8",
+  "n0": 27,
+  "n1": 26,
+  "leak0": [
+   "avg_review",
+   "total_reviews"
+  ],
+  "kept": [
+   "avg_review",
+   "total_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "f2fa4d0ef44d18b3",
+  "n0": 21,
+  "n1": 21,
+  "leak0": [
+   "avg_review_score",
+   "num_reviews"
+  ],
+  "kept": [
+   "avg_review_score",
+   "num_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "f6a06bf37087b5b1",
+  "n0": 50,
+  "n1": 50,
+  "leak0": [
+   "avg_review_score_30d",
+   "avg_review_score_60d",
+   "avg_review_score_90d",
+   "avg_review_score_all",
+   "review_count_30d",
+   "review_count_60d",
+   "review_count_90d",
+   "review_count_all"
+  ],
+  "kept": [
+   "avg_review_score_30d",
+   "avg_review_score_60d",
+   "avg_review_score_90d",
+   "avg_review_score_all",
+   "review_count_30d",
+   "review_count_60d",
+   "review_count_90d",
+   "review_count_all"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ },
+ {
+  "uid": "fdbf050409d63994",
+  "n0": 22,
+  "n1": 22,
+  "leak0": [
+   "avg_review",
+   "n_reviews"
+  ],
+  "kept": [
+   "avg_review",
+   "n_reviews"
+  ],
+  "dropped": [],
+  "clean_at": 1
+ }
+]

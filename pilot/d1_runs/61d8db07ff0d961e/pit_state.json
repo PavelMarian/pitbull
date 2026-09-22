@@ -1,0 +1,186 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "61d8db07ff0d961e",
+ "source_sha256": "61d8db07ff0d961e6366a7ffaa33497cb3b21d329d42152df8242b207e22bc20",
+ "source_code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    \"\"\"\n    Функция строит матрицу признаков для заданных товаров (product_id)\n    на момент seed_time (т.е. используя только информацию, доступную до seed_time).\n    Возвращает DataFrame с индексами = entity_ids и числовыми признаками.\n    \"\"\"\n    orders = db['orders']\n    order_items = db['order_items']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    # Соединяем позиции с заказами, получаем дату и покупателя\n    merged = order_items.merge(\n        orders[['order_id', 'customer_id', 'order_purchase_timestamp']],\n        on='order_id'\n    )\n    # Оставляем только заказы, совершенные до seed_time\n    past = merged[merged['order_purchase_timestamp'] < seed_time]\n\n    # ---- Базовые агрегаты по продажам ----\n    base_agg = past.groupby('product_id').agg(\n        order_count=('order_id', 'count'),\n        price_sum=('price', 'sum'),\n        price_avg=('price', 'mean'),\n        price_max=('price', 'max'),\n        freight_sum=('freight_value', 'sum'),\n        freight_avg=('freight_value', 'mean'),\n        unique_buyers=('customer_id', 'nunique'),\n        last_purchase_date=('order_purchase_timestamp', 'max'),\n    ).reset_index()\n\n    # ---- Агрегаты по отзывам (через заказы) ----\n    # Все заказы с товаром, привязываем отзывы\n    past_reviews = past[['product_id', 'order_id']].merge(\n        reviews[['order_id', 'review_score']],\n        on='order_id',\n        how='left'\n    )\n    rev_agg = past_reviews.groupby('product_id').agg(\n        review_mean=('review_score', 'mean'),\n        review_count=('review_score', 'count'),\n    ).reset_index()\n\n    # ---- Агрегаты по платежам ----\n    past_payments = past[['product_id', 'order_id']].merge(\n        payments[['order_id', 'payment_value', 'payment_installments']],\n        on='order_id',\n        how='left'\n    )\n    pay_agg = past_payments.groupby('product_id').agg(\n        payment_sum=('payment_value', 'sum'),\n        payment_avg=('payment_value', 'mean'),\n        installment_mean=('payment_installments', 'mean'),\n        payment_count=('payment_value', 'count'),  # количество записей платежей\n    ).reset_index()\n\n    # ---- Объединяем все признаки ----\n    feats = base_agg.merge(rev_agg, on='product_id', how='left')\n    feats = feats.merge(pay_agg, on='product_id', how='left')\n\n    # ---- Признак: сколько дней прошло с последней покупки ----\n    feats['days_since_last_purchase'] = (seed_time - feats['last_purchase_date']).dt.days\n\n    # ---- Признаки: количество продаж за последние 30/60/90/180 дней ----\n    # Вспомогательная функция, чтобы не дублировать код\n    def count_last_n_days(days):\n        threshold = seed_time - pd.Timedelta(days=days)\n        mask = past['order_purchase_timestamp'] >= threshold\n        recent = past[mask]\n        return recent.groupby('product_id').size().reset_index(name=f'count_last_{days}_days')\n\n    for days in (30, 60, 90, 180):\n        cnt = count_last_n_days(days)\n        feats = feats.merge(cnt, on='product_id', how='left')\n\n    # ---- Средний интервал между покупками (в днях) ----\n    # Для каждого товара посчитаем количество заказов и разброс дат\n    # Интервал = (макс - мин) / (число покупок - 1), если покупок>1\n    purchase_stats = past.groupby('product_id').agg(\n        min_date=('order_purchase_timestamp', 'min'),\n        max_date=('order_purchase_timestamp', 'max'),\n        order_count2=('order_id', 'count')\n    ).reset_index()\n    purchase_stats['interval_mean'] = (\n        (purchase_stats['max_date'] - purchase_stats['min_date']).dt.days\n        / (purchase_stats['order_count2'] - 1)\n    )\n    purchase_stats.loc[purchase_stats['order_count2'] <= 1, 'interval_mean'] = np.nan\n    feats = feats.merge(\n        purchase_stats[['product_id', 'interval_mean']],\n        on='product_id',\n        how='left'\n    )\n\n    # ---- Дополнительные признаки: доля оплаты CREDIT_CARD, содержащая товар ----\n    past_pay_type = past[['product_id', 'order_id']].merge(\n        payments[['order_id', 'payment_type']],\n        on='order_id',\n        how='left'\n    )\n    pay_type_agg = past_pay_type.groupby('product_id').apply(\n        lambda x: (x['payment_type'] == 'credit_card').mean(),\n        include_groups=False\n    ).reset_index(name='credit_card_share')\n    feats = feats.merge(pay_type_agg, on='product_id', how='left')\n\n    # ---- Признак: количество уникальных продавцов для товара ----\n    seller_agg = past.groupby('product_id')['seller_id'].nunique().reset_index(name='unique_sellers')\n    feats = feats.merge(seller_agg, on='product_id', how='left')\n\n    # ---- Удаляем нечисловые вспомогательные колонки (datetime) ----\n    feats.drop(columns=['last_purchase_date', 'min_date', 'max_date'], inplace=True, errors='ignore')\n\n    # ---- Заменяем пропуски на 0 ----\n    feats = feats.fillna(0)\n\n    # ---- Реиндексируем под entity_ids ----\n    feats.set_index('product_id', inplace=True)\n    feats = feats.reindex(entity_ids, fill_value=0)\n\n    # Гарантируем, что все колонки числовые (преобразование floats даёт float64)\n    return feats[feats.columns] # все являются числами по контексту",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "61d8db07ff0d961e6366a7ffaa33497cb3b21d329d42152df8242b207e22bc20",
+   "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    \"\"\"\n    Функция строит матрицу признаков для заданных товаров (product_id)\n    на момент seed_time (т.е. используя только информацию, доступную до seed_time).\n    Возвращает DataFrame с индексами = entity_ids и числовыми признаками.\n    \"\"\"\n    orders = db['orders']\n    order_items = db['order_items']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    # Соединяем позиции с заказами, получаем дату и покупателя\n    merged = order_items.merge(\n        orders[['order_id', 'customer_id', 'order_purchase_timestamp']],\n        on='order_id'\n    )\n    # Оставляем только заказы, совершенные до seed_time\n    past = merged[merged['order_purchase_timestamp'] < seed_time]\n\n    # ---- Базовые агрегаты по продажам ----\n    base_agg = past.groupby('product_id').agg(\n        order_count=('order_id', 'count'),\n        price_sum=('price', 'sum'),\n        price_avg=('price', 'mean'),\n        price_max=('price', 'max'),\n        freight_sum=('freight_value', 'sum'),\n        freight_avg=('freight_value', 'mean'),\n        unique_buyers=('customer_id', 'nunique'),\n        last_purchase_date=('order_purchase_timestamp', 'max'),\n    ).reset_index()\n\n    # ---- Агрегаты по отзывам (через заказы) ----\n    # Все заказы с товаром, привязываем отзывы\n    past_reviews = past[['product_id', 'order_id']].merge(\n        reviews[['order_id', 'review_score']],\n        on='order_id',\n        how='left'\n    )\n    rev_agg = past_reviews.groupby('product_id').agg(\n        review_mean=('review_score', 'mean'),\n        review_count=('review_score', 'count'),\n    ).reset_index()\n\n    # ---- Агрегаты по платежам ----\n    past_payments = past[['product_id', 'order_id']].merge(\n        payments[['order_id', 'payment_value', 'payment_installments']],\n        on='order_id',\n        how='left'\n    )\n    pay_agg = past_payments.groupby('product_id').agg(\n        payment_sum=('payment_value', 'sum'),\n        payment_avg=('payment_value', 'mean'),\n        installment_mean=('payment_installments', 'mean'),\n        payment_count=('payment_value', 'count'),  # количество записей платежей\n    ).reset_index()\n\n    # ---- Объединяем все признаки ----\n    feats = base_agg.merge(rev_agg, on='product_id', how='left')\n    feats = feats.merge(pay_agg, on='product_id', how='left')\n\n    # ---- Признак: сколько дней прошло с последней покупки ----\n    feats['days_since_last_purchase'] = (seed_time - feats['last_purchase_date']).dt.days\n\n    # ---- Признаки: количество продаж за последние 30/60/90/180 дней ----\n    # Вспомогательная функция, чтобы не дублировать код\n    def count_last_n_days(days):\n        threshold = seed_time - pd.Timedelta(days=days)\n        mask = past['order_purchase_timestamp'] >= threshold\n        recent = past[mask]\n        return recent.groupby('product_id').size().reset_index(name=f'count_last_{days}_days')\n\n    for days in (30, 60, 90, 180):\n        cnt = count_last_n_days(days)\n        feats = feats.merge(cnt, on='product_id', how='left')\n\n    # ---- Средний интервал между покупками (в днях) ----\n    # Для каждого товара посчитаем количество заказов и разброс дат\n    # Интервал = (макс - мин) / (число покупок - 1), если покупок>1\n    purchase_stats = past.groupby('product_id').agg(\n        min_date=('order_purchase_timestamp', 'min'),\n        max_date=('order_purchase_timestamp', 'max'),\n        order_count2=('order_id', 'count')\n    ).reset_index()\n    purchase_stats['interval_mean'] = (\n        (purchase_stats['max_date'] - purchase_stats['min_date']).dt.days\n        / (purchase_stats['order_count2'] - 1)\n    )\n    purchase_stats.loc[purchase_stats['order_count2'] <= 1, 'interval_mean'] = np.nan\n    feats = feats.merge(\n        purchase_stats[['product_id', 'interval_mean']],\n        on='product_id',\n        how='left'\n    )\n\n    # ---- Дополнительные признаки: доля оплаты CREDIT_CARD, содержащая товар ----\n    past_pay_type = past[['product_id', 'order_id']].merge(\n        payments[['order_id', 'payment_type']],\n        on='order_id',\n        how='left'\n    )\n    pay_type_agg = past_pay_type.groupby('product_id').apply(\n        lambda x: (x['payment_type'] == 'credit_card').mean(),\n        include_groups=False\n    ).reset_index(name='credit_card_share')\n    feats = feats.merge(pay_type_agg, on='product_id', how='left')\n\n    # ---- Признак: количество уникальных продавцов для товара ----\n    seller_agg = past.groupby('product_id')['seller_id'].nunique().reset_index(name='unique_sellers')\n    feats = feats.merge(seller_agg, on='product_id', how='left')\n\n    # ---- Удаляем нечисловые вспомогательные колонки (datetime) ----\n    feats.drop(columns=['last_purchase_date', 'min_date', 'max_date'], inplace=True, errors='ignore')\n\n    # ---- Заменяем пропуски на 0 ----\n    feats = feats.fillna(0)\n\n    # ---- Реиндексируем под entity_ids ----\n    feats.set_index('product_id', inplace=True)\n    feats = feats.reindex(entity_ids, fill_value=0)\n\n    # Гарантируем, что все колонки числовые (преобразование floats даёт float64)\n    return feats[feats.columns] # все являются числами по контексту",
+   "timestamp": "2026-09-18T20:48:55+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_count"
+     ],
+     "canary_columns": [
+      "review_mean"
+     ],
+     "n_columns": 21,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_count"
+     ],
+     "canary_columns": [
+      "review_mean"
+     ],
+     "n_columns": 21,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_count"
+     ],
+     "canary_columns": [
+      "review_mean"
+     ],
+     "n_columns": 21,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_count"
+     ],
+     "canary_columns": [
+      "review_mean"
+     ],
+     "n_columns": 21,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_count"
+     ],
+     "canary_columns": [
+      "review_mean"
+     ],
+     "n_columns": 21,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "review_mean",
+      "review_count"
+     ],
+     "canary_columns": [
+      "review_mean"
+     ],
+     "n_columns": 21,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 31.7
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "e0ab644de86a4ed9eda8abd61c77bfde3a7914272d67f97ce669ac326d9541b4",
+   "code": "import pandas as pd\nimport numpy as np\n\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    \"\"\"\n    Функция строит матрицу признаков для заданных товаров (product_id)\n    на момент seed_time (т.е. используя только информацию, доступную до seed_time).\n    Возвращает DataFrame с индексами = entity_ids и числовыми признаками.\n    \"\"\"\n    orders = db['orders']\n    order_items = db['order_items']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    # Соединяем позиции с заказами, получаем дату и покупателя\n    merged = order_items.merge(\n        orders[['order_id', 'customer_id', 'order_purchase_timestamp']],\n        on='order_id'\n    )\n    # Оставляем только заказы, совершенные до seed_time\n    past = merged[merged['order_purchase_timestamp'] < seed_time]\n\n    # ---- Базовые агрегаты по продажам ----\n    base_agg = past.groupby('product_id').agg(\n        order_count=('order_id', 'count'),\n        price_sum=('price', 'sum'),\n        price_avg=('price', 'mean'),\n        price_max=('price', 'max'),\n        freight_sum=('freight_value', 'sum'),\n        freight_avg=('freight_value', 'mean'),\n        unique_buyers=('customer_id', 'nunique'),\n        last_purchase_date=('order_purchase_timestamp', 'max'),\n    ).reset_index()\n\n    # ---- Агрегаты по отзывам (через заказы) ----\n    # Все заказы с товаром, привязываем отзывы.\n    # Учитываем только отзывы, уже существующие на момент seed_time:\n    # отзыв появляется позже покупки, доступность определяем по review_creation_date.\n    available_reviews = reviews[reviews['review_creation_date'] < seed_time]\n    past_reviews = past[['product_id', 'order_id']].merge(\n        available_reviews[['order_id', 'review_score']],\n        on='order_id',\n        how='left'\n    )\n    rev_agg = past_reviews.groupby('product_id').agg(\n        review_mean=('review_score', 'mean'),\n        review_count=('review_score', 'count'),\n    ).reset_index()\n\n    # ---- Агрегаты по платежам ----\n    past_payments = past[['product_id', 'order_id']].merge(\n        payments[['order_id', 'payment_value', 'payment_installments']],\n        on='order_id',\n        how='left'\n    )\n    pay_agg = past_payments.groupby('product_id').agg(\n        payment_sum=('payment_value', 'sum'),\n        payment_avg=('payment_value', 'mean'),\n        installment_mean=('payment_installments', 'mean'),\n        payment_count=('payment_value', 'count'),  # количество записей платежей\n    ).reset_index()\n\n    # ---- Объединяем все признаки ----\n    feats = base_agg.merge(rev_agg, on='product_id', how='left')\n    feats = feats.merge(pay_agg, on='product_id', how='left')\n\n    # ---- Признак: сколько дней прошло с последней покупки ----\n    feats['days_since_last_purchase'] = (seed_time - feats['last_purchase_date']).dt.days\n\n    # ---- Признаки: количество продаж за последние 30/60/90/180 дней ----\n    # Вспомогательная функция, чтобы не дублировать код\n    def count_last_n_days(days):\n        threshold = seed_time - pd.Timedelta(days=days)\n        mask = past['order_purchase_timestamp'] >= threshold\n        recent = past[mask]\n        return recent.groupby('product_id').size().reset_index(name=f'count_last_{days}_days')\n\n    for days in (30, 60, 90, 180):\n        cnt = count_last_n_days(days)\n        feats = feats.merge(cnt, on='product_id', how='left')\n\n    # ---- Средний интервал между покупками (в днях) ----\n    # Для каждого товара посчитаем количество заказов и разброс дат\n    # Интервал = (макс - мин) / (число покупок - 1), если покупок>1\n    purchase_stats = past.groupby('product_id').agg(\n        min_date=('order_purchase_timestamp', 'min'),\n        max_date=('order_purchase_timestamp', 'max'),\n        order_count2=('order_id', 'count')\n    ).reset_index()\n    purchase_stats['interval_mean'] = (\n        (purchase_stats['max_date'] - purchase_stats['min_date']).dt.days\n        / (purchase_stats['order_count2'] - 1)\n    )\n    purchase_stats.loc[purchase_stats['order_count2'] <= 1, 'interval_mean'] = np.nan\n    feats = feats.merge(\n        purchase_stats[['product_id', 'interval_mean']],\n        on='product_id',\n        how='left'\n    )\n\n    # ---- Дополнительные признаки: доля оплаты CREDIT_CARD, содержащая товар ----\n    past_pay_type = past[['product_id', 'order_id']].merge(\n        payments[['order_id', 'payment_type']],\n        on='order_id',\n        how='left'\n    )\n    pay_type_agg = past_pay_type.groupby('product_id').apply(\n        lambda x: (x['payment_type'] == 'credit_card').mean(),\n        include_groups=False\n    ).reset_index(name='credit_card_share')\n    feats = feats.merge(pay_type_agg, on='product_id', how='left')\n\n    # ---- Признак: количество уникальных продавцов для товара ----\n    seller_agg = past.groupby('product_id')['seller_id'].nunique().reset_index(name='unique_sellers')\n    feats = feats.merge(seller_agg, on='product_id', how='left')\n\n    # ---- Удаляем нечисловые вспомогательные колонки (datetime) ----\n    feats.drop(columns=['last_purchase_date', 'min_date', 'max_date'], inplace=True, errors='ignore')\n\n    # ---- Заменяем пропуски на 0 ----\n    feats = feats.fillna(0)\n\n    # ---- Реиндексируем под entity_ids ----\n    feats.set_index('product_id', inplace=True)\n    feats = feats.reindex(entity_ids, fill_value=0)\n\n    # Гарантируем, что все колонки числовые (преобразование floats даёт float64)\n    return feats[feats.columns] # все являются числами по контексту",
+   "timestamp": "2026-09-18T20:49:52+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 21,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 21,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 21,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 21,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 21,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 21,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 32.3
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}

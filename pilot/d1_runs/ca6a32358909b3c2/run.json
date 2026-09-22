@@ -1,0 +1,27 @@
+{
+ "program_uid": "ca6a32358909b3c2",
+ "program": "deepseek-v4-flash-0731#43",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 61.0,
+ "assistant_turns": 6,
+ "tool_calls": 6,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "pit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=pit_state.json\n\nУтечка была: `avg_review_score` и `review_count` считались по всем отзывам без фильтра по времени, включая отзывы, созданные после `seed_time`. Исправление в `get_features.py:24`: отзывы фильтруются по `review_creation_date < seed_time` перед агрегацией. Повторная проверка на шести моментах (3 dev, 3 held-out) чистая по witness и canary.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 74302,
+   "output_tokens": 1038
+  },
+  "message_count": 12,
+  "session_id": "be9d246aa7ad",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

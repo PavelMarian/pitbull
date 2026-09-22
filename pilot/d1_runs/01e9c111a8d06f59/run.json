@@ -1,0 +1,27 @@
+{
+ "program_uid": "01e9c111a8d06f59",
+ "program": "seed-2.0-code#51",
+ "mechanism": "SELF_AVAILABILITY_CANARY",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 89.7,
+ "assistant_turns": 7,
+ "tool_calls": 7,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "Утечка найдена и устранена за одну итерацию.\n\n**Было:** witness молчал (все таблицы корректно фильтровались по `seed_time`), но canary сработал на `avg_delivery_time_days` и `count_late_deliveries`. Эти признаки агрегировали заказы со статусом `delivered` и читали `order_delivered_customer_date`. Заказ может быть куплен до `seed_time`, а доставлен после: на момент `seed_time` статус ещё «shipped», дата доставки пустая. Чтение этих полей даёт информацию из будущего.\n\n**Починка** (get_features.py:83): заказ считается доставленным только при `order_delivered_customer_date < seed_time` (и не NaT). Доля, время доставки и опоздания считаются только по таким заказам. `canceled`/`processing` счётчики остались по статусу на момент фильтрации, это можно считать моментальным снимком, который был виден.\n\n**Итог:**\n```\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1,\nwitness_final=[], canary_final=[],\nstate=/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/01e9c111a8d06f59/pit_state.json\n```",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 95681,
+   "output_tokens": 3392
+  },
+  "message_count": 14,
+  "session_id": "439fae900e4f",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

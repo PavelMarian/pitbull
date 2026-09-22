@@ -1,0 +1,27 @@
+{
+ "program_uid": "4b29d5561b4abe07",
+ "program": "seed-2.0-code#42",
+ "mechanism": "SELF_AVAILABILITY_CANARY",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 74.3,
+ "assistant_turns": 6,
+ "tool_calls": 6,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "Починка подтверждена на всех шести моментах, включая held-out.\n\n```\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[],\nstate=/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/4b29d5561b4abe07/pit_state.json\n```\n\n**Итоговый вердикт:** в исходном коде была утечка из будущего. Признаки `delivery_vs_est_mean` и `delivery_vs_est_std` строились по заказам с `order_status == \"delivered\"`, но статус и дата `order_delivered_customer_date` заполняются уже после `seed_time`: на момент предсказания заказ мог быть ещё в пути. Исправление в get_features.py:114: фильтр заменён с проверки статуса на `order_delivered_customer_date < seed_time`, то есть в признаки попадают только заказы, фактически доставленные до момента предсказания. Остальная логика уже была корректна: таблицы фильтруются по `ts` и `review_creation_date` до `seed_time`.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 77945,
+   "output_tokens": 1629
+  },
+  "message_count": 12,
+  "session_id": "141087ba9484",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "program_uid": "955acbc837d37a98",
+ "program": "deepseek-v4-flash-0731#47",
+ "mechanism": "VAR_MIXUP",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 110.8,
+ "assistant_turns": 7,
+ "tool_calls": 7,
+ "skill_loaded": true,
+ "pit_check_calls": 3,
+ "errors": [],
+ "final_text": "Итоговый вердикт: утечка была, починена с первой итерации, повторная проверка чистая на всех шести моментах, включая held-out.\n\n```\npit-repair: verdict=CLEAN, clean_at=1, iterations_used=1,\nwitness_final=[], canary_final=[],\nstate=/home/stas/Documents/GitHub/pitbull/pilot/d1_runs/955acbc837d37a98/pit_state.json\n```\n\nДетекция (итерация 0, `LEAK`):\n- **Witness**: `avg_seller_price`, `n_sellers` — агрегаты по продавцам считались по полной `order_items`, без фильтра по `seed_time`, то есть по покупкам из будущего.\n- **Canary**: `avg_delivery_days`, `std_delivery_days`, `avg_estimate_diff` — признаки читали `order_delivered_customer_date` заказов, купленных до `seed_time`, но доставленных после него; плюс `order_status == 'delivered'` как финальный статус из будущего.\n\nПочинка (исправленный код в `get_features.py`):\n1. Агрегация продавцов перенесена на `items`, уже отфильтрованные по `order_purchase_timestamp < seed_time`.\n2. Поля `order_approved_at`, `order_delivered_carrier_date`, `order_delivered_customer_date` обнуляются в `NaT`, если их метка времени позже `seed_time`; производные разности остаются `NaN` и после `fillna(0)` дают 0 для ещё не произошедших событий.\n3. `is_delivered` теперь вычисляется по факту доставки (`order_delivered_customer_date` заполнена на момент `seed_time`), а `order_status` из агрегатов исключён.\n\nПовторная проверка: `CLEAN` на итерации 1, witness и canary молчат на всех шести моментах.",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 98042,
+   "output_tokens": 4280
+  },
+  "message_count": 14,
+  "session_id": "eed716250458",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

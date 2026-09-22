@@ -1,0 +1,27 @@
+{
+ "program_uid": "9f966e7fee72ee57",
+ "program": "seed-2.0-code#78",
+ "mechanism": "REVIEWS_NO_FILTER",
+ "round": 1,
+ "status": "ok",
+ "returncode": 0,
+ "wall_seconds": 120.5,
+ "assistant_turns": 8,
+ "tool_calls": 9,
+ "skill_loaded": true,
+ "pit_check_calls": 4,
+ "errors": [],
+ "final_text": "pit-repair: verdict=CLEAN, clean_at=1, iterations_used=1, witness_final=[], canary_final=[], state=pit_state.json\n\nИтог:\n- Детекция (итерация 0): `LEAK`. Witness поймал чтение будущего во всех шести review-признаках (`avg_review_score`, `total_reviews`, `frac_reviews_with_comment` и др.): отзывы объединялись с историей заказов без фильтра по времени, хотя отзыв пишется позже покупки. Canary подтвердил на всех шести моментах, включая held-out.\n- Починка: добавлен фильтр `reviews[\"review_creation_date\"] <= seed_time` перед объединением (get_features.py:102).\n- Повторная проверка (итерация 1): `CLEAN`, witness и canary молчат на всех шести моментах (dev: 2018-01-01, 2018-04-01, 2018-07-01; held-out: 2017-10-01, 2018-02-01, 2018-06-01).",
+ "pit_status": "clean",
+ "clean_at": 1,
+ "iterations": 2,
+ "session": {
+  "usage": {
+   "input_tokens": 112550,
+   "output_tokens": 3361
+  },
+  "message_count": 16,
+  "session_id": "7e2f0759ad17",
+  "model": "z-ai/glm-5.3-flash"
+ }
+}

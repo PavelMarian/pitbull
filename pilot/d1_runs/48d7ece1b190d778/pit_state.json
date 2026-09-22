@@ -1,0 +1,213 @@
+{
+ "tool": "pit-repair",
+ "program_uid": "48d7ece1b190d778",
+ "source_sha256": "48d7ece1b190d778133bf155740201fef0fb59d9bab36a928c5d67f49816c575",
+ "source_code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    seed_time = pd.Timestamp(seed_time)\n    if seed_time.tzinfo is not None:\n        seed_time = seed_time.tz_localize(None)\n\n    # Prepare main tables\n    orders = db['orders'].copy()\n    order_items = db['order_items'].copy()\n    reviews = db['reviews'].copy()\n    payments = db['payments'].copy()\n\n    # Keep only orders placed before seed_time\n    orders_before = orders[orders['order_purchase_timestamp'] <= seed_time][\n        ['order_id', 'customer_id', 'order_estimated_delivery_date', 'order_delivered_customer_date']\n    ]\n\n    # Merge order_items with these orders\n    items = order_items[['order_id', 'product_id', 'seller_id', 'price',\n                         'freight_value', 'ts']].merge(\n        orders_before, on='order_id', how='inner'\n    )\n    # Safety filter by ts\n    items = items[items['ts'] <= seed_time].copy()\n\n    # Create an empty result DataFrame, reindexed to entity_ids\n    result = pd.DataFrame(index=pd.Index(entity_ids, name='product_id'))\n\n    # ---- Per‑product aggregation ----\n    grp = items.groupby('product_id')\n\n    # 1. Item and order counts\n    result['total_items'] = grp.size().reindex(entity_ids).fillna(0)\n    result['total_orders'] = grp['order_id'].nunique().reindex(entity_ids).fillna(0)\n\n    # 2. Price features\n    result['sum_price'] = grp['price'].sum().reindex(entity_ids).fillna(0)\n    result['mean_price'] = grp['price'].mean().reindex(entity_ids).fillna(0)\n    result['min_price'] = grp['price'].min().reindex(entity_ids).fillna(0)\n    result['max_price'] = grp['price'].max().reindex(entity_ids).fillna(0)\n    result['std_price'] = grp['price'].std().reindex(entity_ids).fillna(0)\n\n    # 3. Freight features\n    result['sum_freight'] = grp['freight_value'].sum().reindex(entity_ids).fillna(0)\n    result['mean_freight'] = grp['freight_value'].mean().reindex(entity_ids).fillna(0)\n    result['std_freight'] = grp['freight_value'].std().reindex(entity_ids).fillna(0)\n\n    # 4. Unique customers / sellers\n    result['unique_customers'] = grp['customer_id'].nunique().reindex(entity_ids).fillna(0)\n    result['unique_sellers'] = grp['seller_id'].nunique().reindex(entity_ids).fillna(0)\n\n    # 5. Time‑related features\n    first_purchase = grp['ts'].min()\n    last_purchase = grp['ts'].max()\n\n    result['days_since_first'] = (seed_time - first_purchase).dt.days.reindex(entity_ids).fillna(0)\n    result['days_since_last'] = (seed_time - last_purchase).dt.days.reindex(entity_ids).fillna(0)\n    span = (last_purchase - first_purchase).dt.days\n    result['purchase_span_days'] = span.reindex(entity_ids).fillna(0)\n\n    # 6. Average interval between distinct purchase dates\n    # keep one row per (product, order) to get distinct purchase events\n    unique_events = items[['product_id', 'order_id', 'ts']].drop_duplicates(\n        subset=['product_id', 'order_id']\n    ).sort_values(['product_id', 'ts'])\n    unique_events['prev_ts'] = unique_events.groupby('product_id')['ts'].shift()\n    unique_events['interval_days'] = (unique_events['ts'] - unique_events['prev_ts']).dt.days\n\n    avg_interval = unique_events.groupby('product_id')['interval_days'].mean()\n    min_interval = unique_events.groupby('product_id')['interval_days'].min()\n    max_interval = unique_events.groupby('product_id')['interval_days'].max()\n    n_distinct_dates = unique_events.groupby('product_id')['ts'].nunique()\n\n    result['avg_purchase_interval'] = avg_interval.reindex(entity_ids).fillna(0)\n    result['min_purchase_interval'] = min_interval.reindex(entity_ids).fillna(0)\n    result['max_purchase_interval'] = max_interval.reindex(entity_ids).fillna(0)\n    result['unique_purchase_dates'] = n_distinct_dates.reindex(entity_ids).fillna(0)\n\n    # 7. Features from reviews (only for orders that occurred before seed_time)\n    if len(items) > 0:\n        rev_merged = items[['order_id', 'product_id']].merge(\n            reviews[['order_id', 'review_score']], on='order_id', how='inner'\n        )\n        if not rev_merged.empty:\n            rev_grp = rev_merged.groupby('product_id')['review_score']\n            result['avg_review_score'] = rev_grp.mean().reindex(entity_ids).fillna(0)\n            result['count_reviews'] = rev_grp.count().reindex(entity_ids).fillna(0)\n            result['std_review_score'] = rev_grp.std().reindex(entity_ids).fillna(0)\n            result['min_review_score'] = rev_grp.min().reindex(entity_ids).fillna(0)\n            result['max_review_score'] = rev_grp.max().reindex(entity_ids).fillna(0)\n        else:\n            for c in ['avg_review_score', 'count_reviews', 'std_review_score',\n                      'min_review_score', 'max_review_score']:\n                result[c] = 0\n    else:\n        for c in ['avg_review_score', 'count_reviews', 'std_review_score',\n                  'min_review_score', 'max_review_score']:\n            result[c] = 0\n\n    # 8. Features from payments\n    if len(items) > 0:\n        pay_merged = items[['order_id', 'product_id']].merge(\n            payments[['order_id', 'payment_installments', 'payment_type']],\n            on='order_id', how='inner'\n        )\n        if not pay_merged.empty:\n            result['total_payments'] = pay_merged.groupby('product_id').size().reindex(entity_ids).fillna(0)\n            result['mean_installments'] = pay_merged.groupby('product_id')['payment_installments'].mean().reindex(entity_ids).fillna(0)\n            # ratio of credit_card payments\n            credit = pay_merged.copy()\n            credit['is_credit'] = (credit['payment_type'] == 'credit_card').astype(float)\n            result['credit_card_ratio'] = credit.groupby('product_id')['is_credit'].mean().reindex(entity_ids).fillna(0)\n        else:\n            result['total_payments'] = 0\n            result['mean_installments'] = 0\n            result['credit_card_ratio'] = 0\n    else:\n        result['total_payments'] = 0\n        result['mean_installments'] = 0\n        result['credit_card_ratio'] = 0\n\n    # Ensure all columns are numeric\n    result = result.astype(float)\n\n    return result",
+ "max_iterations": 5,
+ "dev_seeds": [
+  "2018-01-01",
+  "2018-04-01",
+  "2018-07-01"
+ ],
+ "held_out_seeds": [
+  "2017-10-01",
+  "2018-02-01",
+  "2018-06-01"
+ ],
+ "status": "clean",
+ "clean_at": 1,
+ "history": [
+  {
+   "iteration": 0,
+   "candidate_sha256": "48d7ece1b190d778133bf155740201fef0fb59d9bab36a928c5d67f49816c575",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    seed_time = pd.Timestamp(seed_time)\n    if seed_time.tzinfo is not None:\n        seed_time = seed_time.tz_localize(None)\n\n    # Prepare main tables\n    orders = db['orders'].copy()\n    order_items = db['order_items'].copy()\n    reviews = db['reviews'].copy()\n    payments = db['payments'].copy()\n\n    # Keep only orders placed before seed_time\n    orders_before = orders[orders['order_purchase_timestamp'] <= seed_time][\n        ['order_id', 'customer_id', 'order_estimated_delivery_date', 'order_delivered_customer_date']\n    ]\n\n    # Merge order_items with these orders\n    items = order_items[['order_id', 'product_id', 'seller_id', 'price',\n                         'freight_value', 'ts']].merge(\n        orders_before, on='order_id', how='inner'\n    )\n    # Safety filter by ts\n    items = items[items['ts'] <= seed_time].copy()\n\n    # Create an empty result DataFrame, reindexed to entity_ids\n    result = pd.DataFrame(index=pd.Index(entity_ids, name='product_id'))\n\n    # ---- Per‑product aggregation ----\n    grp = items.groupby('product_id')\n\n    # 1. Item and order counts\n    result['total_items'] = grp.size().reindex(entity_ids).fillna(0)\n    result['total_orders'] = grp['order_id'].nunique().reindex(entity_ids).fillna(0)\n\n    # 2. Price features\n    result['sum_price'] = grp['price'].sum().reindex(entity_ids).fillna(0)\n    result['mean_price'] = grp['price'].mean().reindex(entity_ids).fillna(0)\n    result['min_price'] = grp['price'].min().reindex(entity_ids).fillna(0)\n    result['max_price'] = grp['price'].max().reindex(entity_ids).fillna(0)\n    result['std_price'] = grp['price'].std().reindex(entity_ids).fillna(0)\n\n    # 3. Freight features\n    result['sum_freight'] = grp['freight_value'].sum().reindex(entity_ids).fillna(0)\n    result['mean_freight'] = grp['freight_value'].mean().reindex(entity_ids).fillna(0)\n    result['std_freight'] = grp['freight_value'].std().reindex(entity_ids).fillna(0)\n\n    # 4. Unique customers / sellers\n    result['unique_customers'] = grp['customer_id'].nunique().reindex(entity_ids).fillna(0)\n    result['unique_sellers'] = grp['seller_id'].nunique().reindex(entity_ids).fillna(0)\n\n    # 5. Time‑related features\n    first_purchase = grp['ts'].min()\n    last_purchase = grp['ts'].max()\n\n    result['days_since_first'] = (seed_time - first_purchase).dt.days.reindex(entity_ids).fillna(0)\n    result['days_since_last'] = (seed_time - last_purchase).dt.days.reindex(entity_ids).fillna(0)\n    span = (last_purchase - first_purchase).dt.days\n    result['purchase_span_days'] = span.reindex(entity_ids).fillna(0)\n\n    # 6. Average interval between distinct purchase dates\n    # keep one row per (product, order) to get distinct purchase events\n    unique_events = items[['product_id', 'order_id', 'ts']].drop_duplicates(\n        subset=['product_id', 'order_id']\n    ).sort_values(['product_id', 'ts'])\n    unique_events['prev_ts'] = unique_events.groupby('product_id')['ts'].shift()\n    unique_events['interval_days'] = (unique_events['ts'] - unique_events['prev_ts']).dt.days\n\n    avg_interval = unique_events.groupby('product_id')['interval_days'].mean()\n    min_interval = unique_events.groupby('product_id')['interval_days'].min()\n    max_interval = unique_events.groupby('product_id')['interval_days'].max()\n    n_distinct_dates = unique_events.groupby('product_id')['ts'].nunique()\n\n    result['avg_purchase_interval'] = avg_interval.reindex(entity_ids).fillna(0)\n    result['min_purchase_interval'] = min_interval.reindex(entity_ids).fillna(0)\n    result['max_purchase_interval'] = max_interval.reindex(entity_ids).fillna(0)\n    result['unique_purchase_dates'] = n_distinct_dates.reindex(entity_ids).fillna(0)\n\n    # 7. Features from reviews (only for orders that occurred before seed_time)\n    if len(items) > 0:\n        rev_merged = items[['order_id', 'product_id']].merge(\n            reviews[['order_id', 'review_score']], on='order_id', how='inner'\n        )\n        if not rev_merged.empty:\n            rev_grp = rev_merged.groupby('product_id')['review_score']\n            result['avg_review_score'] = rev_grp.mean().reindex(entity_ids).fillna(0)\n            result['count_reviews'] = rev_grp.count().reindex(entity_ids).fillna(0)\n            result['std_review_score'] = rev_grp.std().reindex(entity_ids).fillna(0)\n            result['min_review_score'] = rev_grp.min().reindex(entity_ids).fillna(0)\n            result['max_review_score'] = rev_grp.max().reindex(entity_ids).fillna(0)\n        else:\n            for c in ['avg_review_score', 'count_reviews', 'std_review_score',\n                      'min_review_score', 'max_review_score']:\n                result[c] = 0\n    else:\n        for c in ['avg_review_score', 'count_reviews', 'std_review_score',\n                  'min_review_score', 'max_review_score']:\n            result[c] = 0\n\n    # 8. Features from payments\n    if len(items) > 0:\n        pay_merged = items[['order_id', 'product_id']].merge(\n            payments[['order_id', 'payment_installments', 'payment_type']],\n            on='order_id', how='inner'\n        )\n        if not pay_merged.empty:\n            result['total_payments'] = pay_merged.groupby('product_id').size().reindex(entity_ids).fillna(0)\n            result['mean_installments'] = pay_merged.groupby('product_id')['payment_installments'].mean().reindex(entity_ids).fillna(0)\n            # ratio of credit_card payments\n            credit = pay_merged.copy()\n            credit['is_credit'] = (credit['payment_type'] == 'credit_card').astype(float)\n            result['credit_card_ratio'] = credit.groupby('product_id')['is_credit'].mean().reindex(entity_ids).fillna(0)\n        else:\n            result['total_payments'] = 0\n            result['mean_installments'] = 0\n            result['credit_card_ratio'] = 0\n    else:\n        result['total_payments'] = 0\n        result['mean_installments'] = 0\n        result['credit_card_ratio'] = 0\n\n    # Ensure all columns are numeric\n    result = result.astype(float)\n\n    return result",
+   "timestamp": "2026-09-18T20:29:22+00:00",
+   "status": "ok",
+   "clean": false,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews",
+      "std_review_score",
+      "min_review_score",
+      "max_review_score"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "std_review_score",
+      "min_review_score",
+      "max_review_score"
+     ],
+     "n_columns": 27,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews",
+      "std_review_score",
+      "min_review_score"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "std_review_score",
+      "min_review_score",
+      "max_review_score"
+     ],
+     "n_columns": 27,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews",
+      "std_review_score",
+      "max_review_score"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "std_review_score",
+      "max_review_score"
+     ],
+     "n_columns": 27,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews",
+      "std_review_score",
+      "min_review_score"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "std_review_score",
+      "min_review_score",
+      "max_review_score"
+     ],
+     "n_columns": 27,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews",
+      "std_review_score"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "std_review_score",
+      "max_review_score"
+     ],
+     "n_columns": 27,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": true,
+     "canary": true,
+     "witness_columns": [
+      "avg_review_score",
+      "count_reviews",
+      "std_review_score",
+      "max_review_score"
+     ],
+     "canary_columns": [
+      "avg_review_score",
+      "std_review_score",
+      "max_review_score"
+     ],
+     "n_columns": 27,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 7.0
+  },
+  {
+   "iteration": 1,
+   "candidate_sha256": "83eff613851821d9ae7542450a0ae922ee2a8cc54fc32f0669d9c9aebfa05656",
+   "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    seed_time = pd.Timestamp(seed_time)\n    if seed_time.tzinfo is not None:\n        seed_time = seed_time.tz_localize(None)\n\n    # Prepare main tables\n    orders = db['orders'].copy()\n    order_items = db['order_items'].copy()\n    reviews = db['reviews'].copy()\n    payments = db['payments'].copy()\n\n    # Keep only orders placed before seed_time\n    orders_before = orders[orders['order_purchase_timestamp'] <= seed_time][\n        ['order_id', 'customer_id', 'order_estimated_delivery_date', 'order_delivered_customer_date']\n    ]\n\n    # Merge order_items with these orders\n    items = order_items[['order_id', 'product_id', 'seller_id', 'price',\n                         'freight_value', 'ts']].merge(\n        orders_before, on='order_id', how='inner'\n    )\n    # Safety filter by ts\n    items = items[items['ts'] <= seed_time].copy()\n\n    # Create an empty result DataFrame, reindexed to entity_ids\n    result = pd.DataFrame(index=pd.Index(entity_ids, name='product_id'))\n\n    # ---- Per‑product aggregation ----\n    grp = items.groupby('product_id')\n\n    # 1. Item and order counts\n    result['total_items'] = grp.size().reindex(entity_ids).fillna(0)\n    result['total_orders'] = grp['order_id'].nunique().reindex(entity_ids).fillna(0)\n\n    # 2. Price features\n    result['sum_price'] = grp['price'].sum().reindex(entity_ids).fillna(0)\n    result['mean_price'] = grp['price'].mean().reindex(entity_ids).fillna(0)\n    result['min_price'] = grp['price'].min().reindex(entity_ids).fillna(0)\n    result['max_price'] = grp['price'].max().reindex(entity_ids).fillna(0)\n    result['std_price'] = grp['price'].std().reindex(entity_ids).fillna(0)\n\n    # 3. Freight features\n    result['sum_freight'] = grp['freight_value'].sum().reindex(entity_ids).fillna(0)\n    result['mean_freight'] = grp['freight_value'].mean().reindex(entity_ids).fillna(0)\n    result['std_freight'] = grp['freight_value'].std().reindex(entity_ids).fillna(0)\n\n    # 4. Unique customers / sellers\n    result['unique_customers'] = grp['customer_id'].nunique().reindex(entity_ids).fillna(0)\n    result['unique_sellers'] = grp['seller_id'].nunique().reindex(entity_ids).fillna(0)\n\n    # 5. Time‑related features\n    first_purchase = grp['ts'].min()\n    last_purchase = grp['ts'].max()\n\n    result['days_since_first'] = (seed_time - first_purchase).dt.days.reindex(entity_ids).fillna(0)\n    result['days_since_last'] = (seed_time - last_purchase).dt.days.reindex(entity_ids).fillna(0)\n    span = (last_purchase - first_purchase).dt.days\n    result['purchase_span_days'] = span.reindex(entity_ids).fillna(0)\n\n    # 6. Average interval between distinct purchase dates\n    # keep one row per (product, order) to get distinct purchase events\n    unique_events = items[['product_id', 'order_id', 'ts']].drop_duplicates(\n        subset=['product_id', 'order_id']\n    ).sort_values(['product_id', 'ts'])\n    unique_events['prev_ts'] = unique_events.groupby('product_id')['ts'].shift()\n    unique_events['interval_days'] = (unique_events['ts'] - unique_events['prev_ts']).dt.days\n\n    avg_interval = unique_events.groupby('product_id')['interval_days'].mean()\n    min_interval = unique_events.groupby('product_id')['interval_days'].min()\n    max_interval = unique_events.groupby('product_id')['interval_days'].max()\n    n_distinct_dates = unique_events.groupby('product_id')['ts'].nunique()\n\n    result['avg_purchase_interval'] = avg_interval.reindex(entity_ids).fillna(0)\n    result['min_purchase_interval'] = min_interval.reindex(entity_ids).fillna(0)\n    result['max_purchase_interval'] = max_interval.reindex(entity_ids).fillna(0)\n    result['unique_purchase_dates'] = n_distinct_dates.reindex(entity_ids).fillna(0)\n\n    # 7. Features from reviews (only for orders that occurred before seed_time).\n    # A review is written after the purchase, so only reviews that already\n    # exist at seed_time (review_creation_date <= seed_time) may be used.\n    if len(items) > 0:\n        reviews_before = reviews[reviews['review_creation_date'] <= seed_time][['order_id', 'review_score']]\n        rev_merged = items[['order_id', 'product_id']].merge(\n            reviews_before, on='order_id', how='inner'\n        )\n        if not rev_merged.empty:\n            rev_grp = rev_merged.groupby('product_id')['review_score']\n            result['avg_review_score'] = rev_grp.mean().reindex(entity_ids).fillna(0)\n            result['count_reviews'] = rev_grp.count().reindex(entity_ids).fillna(0)\n            result['std_review_score'] = rev_grp.std().reindex(entity_ids).fillna(0)\n            result['min_review_score'] = rev_grp.min().reindex(entity_ids).fillna(0)\n            result['max_review_score'] = rev_grp.max().reindex(entity_ids).fillna(0)\n        else:\n            for c in ['avg_review_score', 'count_reviews', 'std_review_score',\n                      'min_review_score', 'max_review_score']:\n                result[c] = 0\n    else:\n        for c in ['avg_review_score', 'count_reviews', 'std_review_score',\n                  'min_review_score', 'max_review_score']:\n            result[c] = 0\n\n    # 8. Features from payments\n    if len(items) > 0:\n        pay_merged = items[['order_id', 'product_id']].merge(\n            payments[['order_id', 'payment_installments', 'payment_type']],\n            on='order_id', how='inner'\n        )\n        if not pay_merged.empty:\n            result['total_payments'] = pay_merged.groupby('product_id').size().reindex(entity_ids).fillna(0)\n            result['mean_installments'] = pay_merged.groupby('product_id')['payment_installments'].mean().reindex(entity_ids).fillna(0)\n            # ratio of credit_card payments\n            credit = pay_merged.copy()\n            credit['is_credit'] = (credit['payment_type'] == 'credit_card').astype(float)\n            result['credit_card_ratio'] = credit.groupby('product_id')['is_credit'].mean().reindex(entity_ids).fillna(0)\n        else:\n            result['total_payments'] = 0\n            result['mean_installments'] = 0\n            result['credit_card_ratio'] = 0\n    else:\n        result['total_payments'] = 0\n        result['mean_installments'] = 0\n        result['credit_card_ratio'] = 0\n\n    # Ensure all columns are numeric\n    result = result.astype(float)\n\n    return result",
+   "timestamp": "2026-09-18T20:29:49+00:00",
+   "status": "ok",
+   "clean": true,
+   "checks": [
+    {
+     "seed": "2018-01-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 27,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-04-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 27,
+     "split": "dev"
+    },
+    {
+     "seed": "2018-07-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 27,
+     "split": "dev"
+    },
+    {
+     "seed": "2017-10-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 27,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-02-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 27,
+     "split": "held_out"
+    },
+    {
+     "seed": "2018-06-01",
+     "witness": false,
+     "canary": false,
+     "witness_columns": [],
+     "canary_columns": [],
+     "n_columns": 27,
+     "split": "held_out"
+    }
+   ],
+   "wall_seconds": 7.4
+  }
+ ],
+ "environment": {
+  "python": "3.12.11",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6"
+ }
+}
