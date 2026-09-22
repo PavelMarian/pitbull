@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Обёртка над scripts/pit_check.py. Интерпретатор: $PIT_PYTHON, иначе python3.
+HERE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+exec "${PIT_PYTHON:-python3}" "$HERE/../scripts/pit_check.py" "$@"

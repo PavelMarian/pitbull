@@ -1,0 +1,291 @@
+\documentclass[letterpaper]{article} % DO NOT CHANGE THIS
+\usepackage{aaai2027}  % DO NOT CHANGE THIS
+% The serif, sans-serif, and monospaced fonts are loaded automatically by
+% aaai2027.sty (newtxtext, helvet, courier). DO NOT add \usepackage{times},
+% \usepackage{helvet}, \usepackage{courier}, or any other font package.
+\usepackage[hyphens]{url}  % DO NOT CHANGE THIS
+\usepackage{graphicx} % DO NOT CHANGE THIS
+\urlstyle{rm} % DO NOT CHANGE THIS
+\def\UrlFont{\rm}  % DO NOT CHANGE THIS
+\usepackage{natbib}  % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\usepackage{caption} % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\frenchspacing  % DO NOT CHANGE THIS
+%
+% These are recommended to typeset algorithms but not required. See the subsubsection on algorithms. Remove them if you don't have algorithms in your paper.
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+%
+% These are recommended to typeset listings but not required. See the subsubsection on listing. Remove this block if you don't have listings in your paper.
+\usepackage{newfloat}
+\usepackage{listings}
+\DeclareCaptionStyle{ruled}{labelfont=normalfont,labelsep=colon,strut=off} % DO NOT CHANGE THIS
+\lstset{%
+	basicstyle={\footnotesize\ttfamily},% footnotesize acceptable for monospace
+	numbers=left,numberstyle=\footnotesize,xleftmargin=2em,% show line numbers, remove this entire line if you don't want the numbers.
+	aboveskip=0pt,belowskip=0pt,%
+	showstringspaces=false,tabsize=2,breaklines=true}
+\floatstyle{ruled}
+\newfloat{listing}{tb}{lst}{}
+\floatname{listing}{Listing}
+
+%
+% Recommended for better-looking tables
+\usepackage{booktabs}
+
+%
+% Keep the \pdfinfo as shown here. There's no need
+% for you to add the /Title and /Author tags.
+\pdfinfo{
+/TemplateVersion (2027.1)
+}
+
+% DISALLOWED PACKAGES
+% \usepackage{authblk} -- This package is specifically forbidden
+% \usepackage{balance} -- This package is specifically forbidden
+% \usepackage{CJK} -- This package is specifically forbidden
+% \usepackage{float} -- This package is specifically forbidden
+% \usepackage{flushend} -- This package is specifically forbidden
+% \usepackage{fullpage} -- This package is specifically forbidden
+% \usepackage{geometry} -- This package is specifically forbidden
+% \usepackage{hyperref} -- This package is specifically forbidden
+% \usepackage{navigator} -- This package is specifically forbidden
+% (or any other package that embeds links such as navigator or hyperref)
+% \usepackage{indentfirst} -- This package is specifically forbidden
+% \usepackage{layout} -- This package is specifically forbidden
+% \usepackage{multicol} -- This package is specifically forbidden
+% \usepackage{nameref} -- This package is specifically forbidden
+% \usepackage{savetrees} -- This package is specifically forbidden
+% \usepackage{setspace} -- This package is specifically forbidden
+% \usepackage{stfloats} -- This package is specifically forbidden
+% \usepackage{tabu} -- This package is specifically forbidden
+% \usepackage{titlesec} -- This package is specifically forbidden
+% \usepackage{tocbibind} -- This package is specifically forbidden
+% \usepackage{ulem} -- This package is specifically forbidden
+% \usepackage{wrapfig} -- This package is specifically forbidden
+% DISALLOWED COMMANDS
+% \nocopyright -- Your paper will not be published if you use this command
+% \addtolength -- This command may not be used
+% \balance -- This command may not be used
+% \baselinestretch -- Your paper will not be published if you use this command
+% \clearpage -- No page breaks of any kind may be used for the final version of your paper
+% \columnsep -- This command may not be used
+% \newpage -- No page breaks of any kind may be used for the final version of your paper
+% \pagebreak -- No page breaks of any kind may be used for the final version of your paper
+% \pagestyle -- This command may not be used
+% \tiny -- This is not an acceptable font size.
+% \vspace{- -- No negative value may be used in proximity of a caption, figure, table, section, subsection, subsubsection, or reference
+% \vskip{- -- No negative value may be used to alter spacing above or below a caption, figure, table, section, subsection, subsubsection, or reference
+
+\setcounter{secnumdepth}{0} %May be changed to 1 or 2 if section numbers are desired.
+
+% The file aaai2027.sty is the style file for AAAI Press
+% proceedings, working notes, and technical reports.
+%
+
+% Title
+% Single-blind submission: author names appear on the paper.
+\title{PITBULL: Temporal Safety Skill for Coding Agents}
+\author{
+    Pavel Marian\textsuperscript{\rm 1},
+    Stanislav Chumakov\textsuperscript{\rm 1},
+    Danil Ezhov\textsuperscript{\rm 1},
+    Alexander Boukhanovsky\textsuperscript{\rm 1}
+}
+\affiliations{
+    \textsuperscript{\rm 1}AI Institute, ITMO University, Saint Petersburg, Russian Federation\\
+    pmarian@itmo.ru, svchumakov@itmo.ru, doezhov@itmo.ru, boukhanovsky@mail.ifmo.ru % FILL IN: Pavel Marian e-mail
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We present \textsc{Pitbull}, an executable temporal-safety skill for
+agent-generated feature programs. The skill detects point-in-time violations
+by comparing pipeline outputs on full and temporally truncated databases,
+adds canary perturbations for late-arriving fields, and validates every
+agent repair on held-out prediction times. Across three runs over 62 leaking
+programs, 97.8\% of program--run pairs were repaired within five iterations.
+Packaged as a skill that an independent coding agent selects on its own, the
+same loop repairs 76 of 76 programs, matching direct invocation of the
+procedure.
+\end{abstract}
+
+\begin{links}
+    \link{Demo}{https://pavelmarian.github.io/pitbull/demo/temporal-safety/}
+    \link{Code}{https://github.com/pavelmarian/pitbull}
+\end{links}
+
+\section{Introduction}
+
+Successful execution of a relational feature pipeline by a coding agent
+does not guarantee its temporal correctness. A pipeline that filters on a
+single reference timestamp can still read information that did not exist at
+the prediction time, because availability is spread across related tables
+and columns. Such violations yield plausible features and inflated offline
+results that do not reproduce at serving time. The property that every
+feature computed at time $t$ depends only on facts available at time $t$ is
+called point-in-time correctness.
+
+The model alone misses most leaks: in our pilot, asked to check its own
+code for errors, it found the leak in 1 of 12 programs, and given the class
+of error by name it repaired 11 of 12. Reading code, it flags leaking
+programs with 97\% recall and 12\% false positives, which makes LLM
+inspection a signal and leaves the gate to execution. \textsc{Pitbull}
+closes this gap with a loop of execution-based detection, agent repair, and
+independent revalidation, packaged as a skill.
+
+\section{Related Work}
+
+Temporal leakage is a recurring source of irreproducible machine-learning
+results~\cite{10.1145/2382577.2382579,kapoor2022leakagereproducibilitycrisismlbased},
+including in temporally split process-mining
+benchmarks~\cite{DBLP:journals/corr/abs-2107-01905}. In relational data, features span several
+tables~\cite{robinson2024relbenchbenchmarkdeeplearning} and a value's
+availability may be governed by another row or by a column-specific timestamp.
+Static notebook analysis and pipeline instrumentation target preprocessing
+and train--test
+contamination~\cite{yang2022dataleakagenotebooksstatic,10.1145/3448016.3452759};
+LLM-based detectors read the code~\cite{alturayeif2025data}. The
+\textsc{Pitfall} system introduced black-box differential execution for
+detecting and localising point-in-time
+violations~\cite{chumakov2025pitfall}; \textsc{Pitbull} extends it from
+diagnosis to repair. The verification is one-sided, as in the formulation
+of look-ahead freedom as temporal non-interference: a divergence is a
+finite witness of a violation, while agreement at finitely many probes
+leaves the program
+unverified~\cite{fonseca2026lookaheadfreedomtemporalnoninterferenceverifiable}.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=0.92\linewidth]{Figures/loop.png}
+    \caption{One round of the \textsc{Pitbull} loop. The program runs on
+    three views of the same database; a feature that changes between them
+    was computed from data that did not exist at \texttt{seed\_time}. The
+    agent receives the differing feature and its source, rewrites the
+    program, and the candidate is re-checked at six prediction times, three
+    of them never shown to the agent.}
+    \label{fig:system_architecture}
+\end{figure*}
+
+\section{System Overview}
+
+\textsc{Pitbull} is a skill, a directory with a \texttt{SKILL.md}
+instruction and scripts that a coding agent loads by its description (the
+format of Claude Code and OpenHarness). The agent invokes it over a
+candidate feature program $\varphi(D, e, t)$: a database $D$, entities $e$,
+and a prediction time $t$. The agent writes and revises the program; the
+skill only executes it and returns evidence
+(Figure~\ref{fig:system_architecture}). Which column dates each table is
+declared in a hand-written availability map; the check is only as good as
+that map.
+
+\textbf{Differential witness.}
+For each prediction time the skill runs the program twice, on the full
+database and on the database truncated at $t$:
+\begin{equation}
+  y_{\mathrm{full}} = \varphi(D,e,t), \qquad
+  y_{\mathrm{past}} = \varphi(D|_t,e,t).
+\end{equation}
+Any difference beyond a numerical tolerance is a \texttt{LEAK} witness, and
+the skill names the affected output columns. Equality only says that no
+violation was observed at the times tested.
+
+\textbf{Canary.}
+Some channels survive truncation: a delivery date sits in a row placed
+before $t$ and is filled in later. The skill therefore rewrites such
+late-filled fields and all future rows with marker values (shifted numbers,
+a reserved category, dates beyond the data horizon). An output that reacts
+is a canary hit. Canary fired on 4 of 30 clean control programs, so its
+columns are listed separately for a human to judge.
+
+\textbf{Repair loop and held-out gate.}
+On a \texttt{LEAK}, the agent rewrites the program under a fixed
+natural-language instruction that names the class of error (features must
+use only information that exists at $t$; reviews and delivery dates arrive
+after the purchase) and reruns the check. A candidate is \texttt{CLEAN} only
+if it executes and shows neither witness nor canary divergence on all
+development and held-out prediction times; missing code, runtime errors and
+timeouts count as failures. The loop stops at the first \texttt{CLEAN} or
+after five repairs. The full history of candidates and their verdicts is
+kept in a state file next to the code. A \texttt{CLEAN} verdict is scoped to
+the declared availability map and the tested times.
+
+\section{Demonstration}
+
+The demonstration is a browser page at the linked address. It opens with
+the loop of Figure~\ref{fig:system_architecture} and one worked run: a
+leaking program from the corpus, the three database views, the diverging
+feature and its source (reviews joined without a cut on their creation
+date), the agent's repair, and the gate on three development and three
+held-out prediction times; the patched source, diff and JSON report can be
+downloaded. Three panels let visitors browse the evidence behind
+Table~\ref{tab:results}: CLEAN@$k$ over the 76 programs with the stubborn
+case explained, the three repeated runs, and detection against the number
+of prediction times with a clean-control check. The page ends with the
+findings, the limitations, and two downloads, \texttt{SKILL.md} and the 76
+leaking programs, for running the check in one's own agent.
+
+\section{Experimental Snapshot}
+
+Corpus: the Olist e-commerce database (four tables) and one task, whether
+a product is ordered in the 90 days after $t$. Two code models wrote
+feature programs from a task description that never mentions leakage; the
+checker flagged 76 as leaking, 62 by the witness and 14 only by the canary.
+Sixty leak through reviews, fourteen through delivery dates, two through
+payments or a variable mix-up. Table~\ref{tab:results}
+summarises repair with one repair model. In three independent direct runs
+over the 62 witness programs, 182 of 186 program--run pairs became clean
+within five iterations (cluster bootstrap 95\% CI [95.2\%, 100\%]). Two
+prediction times give 97.6\% conservative witness detection; the witness
+had no false positives on 30 clean control programs, the canary fired on
+four.
+
+\begin{table}[t]
+\centering\footnotesize
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Invocation & $n$ & CLEAN@1 & CLEAN@5 & Calls & Cost \\
+\midrule
+Direct, 1 run        & 76          & 85.5\% & 98.7\% & 91  & \$0.12 \\
+Direct, 3 runs       & 62$\times$3 & 84.4\% & 97.8\% & 255 & \$0.32 \\
+Agent-selected skill & 76          & 98.7\% & 100\%  & 578 & \$0.48 \\
+\bottomrule
+\end{tabular}
+\caption{Repair outcomes with one repair model (\texttt{z-ai/glm-5.3-flash}).
+The skill row uses the same 76 programs as the first row; exact McNemar
+over paired per-program outcomes: 0 vs.\ 1 discordant, $p = 1.0$.}
+\label{tab:results}
+\end{table}
+
+We then packaged the loop as a skill and ran it under OpenHarness~0.1.4,
+an agent harness that selects and invokes skills on its own; the skill name
+does not appear in the task prompt. On the same 76 programs the skill
+matches direct invocation: CLEAN@5 reaches 100\%. The one discordant
+program is the single failure of direct invocation, where the model had
+added a delivery-date feature that only the canary catches; under the skill
+it was repaired at the first iteration. In skill mode the agent also sees
+the checker output with column names, which explains part of the gain at
+CLEAN@1. The price is packaging overhead: about $4\times$ the inference
+cost and $6\times$ the model calls per program, driven by the harness
+system prompt on every turn.
+
+\textbf{Limitations.} One database, one task, one repair model, and a
+corpus dominated by review leakage; a hand-written availability map; a
+\texttt{CLEAN} verdict scoped to six tested times; a canary that flags
+13\% of clean programs and blocks acceptance; one skill run per program,
+in which the agent could read the checker's source.
+
+\section{Conclusion}
+
+\textsc{Pitbull} gives a coding agent an executable way to detect, localise,
+repair, and revalidate point-in-time violations in feature pipelines, with
+the verdict produced by execution and the repair by the agent. Next: independently annotated per-column availability maps and a corpus
+beyond review leakage.
+
+\bibliography{aaai2027}
+
+\end{document}
