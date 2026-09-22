@@ -1,8 +1,0 @@
-column,time_column,n,median_seconds,median_days,p90_days,max_days,share_positive
-position,avail_ts,26080,1.0,0.0,0.0,0.0,1.0
-points,avail_ts,26080,1.0,0.0,0.0,0.0,1.0
-laps,avail_ts,26080,1.0,0.0,0.0,0.0,1.0
-dnf,avail_ts,26080,1.0,0.0,0.0,0.0,1.0
-rank,avail_ts,26080,1.0,0.0,0.0,0.0,1.0
-milliseconds,avail_ts,26080,1.0,0.0,0.0,0.0,1.0
-position_gain,avail_ts,26080,1.0,0.0,0.0,0.0,1.0

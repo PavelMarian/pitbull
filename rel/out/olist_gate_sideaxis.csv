@@ -1,4 +1,0 @@
-column,time_column,n,median_days,p90_days,max_days,share_positive
-review_score,review_ts,111708,10.59,23.26,147.9,1.0
-late,deliv_ts,110196,10.18,22.92,209.63,1.0
-delay_days,deliv_ts,110196,10.18,22.92,209.63,1.0

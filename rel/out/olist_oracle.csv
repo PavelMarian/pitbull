@@ -1,9 +1,0 @@
-dataset,seed,program,verdict,columns,cells,note,seconds
-olist,negative_control,naive,LEAK,late_mean,478,,0.15
-olist,negative_control,pit,CLEAN,,0,,0.14
-olist,2018-01-01,naive,LEAK,review_score_mean;review_score_min;late_mean,1222,,0.07
-olist,2018-01-01,pit,CLEAN,,0,,0.08
-olist,2018-04-01,naive,LEAK,review_score_mean;review_score_min;late_mean,1679,,0.09
-olist,2018-04-01,pit,CLEAN,,0,,0.12
-olist,2018-07-01,naive,LEAK,review_score_mean;review_score_min;late_mean,1462,,0.15
-olist,2018-07-01,pit,CLEAN,,0,,0.13
