@@ -1,0 +1,150 @@
+[
+ {
+  "status": "ran",
+  "witness": false,
+  "canary": false,
+  "differing_w": [],
+  "differing_c": [],
+  "program": "correct_reference",
+  "kind": "control",
+  "seed": "2018-01-01"
+ },
+ {
+  "status": "ran",
+  "witness": false,
+  "canary": false,
+  "differing_w": [],
+  "differing_c": [],
+  "program": "correct_reference",
+  "kind": "control",
+  "seed": "2018-04-01"
+ },
+ {
+  "status": "ran",
+  "witness": false,
+  "canary": false,
+  "differing_w": [],
+  "differing_c": [],
+  "program": "correct_reference",
+  "kind": "control",
+  "seed": "2018-07-01"
+ },
+ {
+  "status": "ran",
+  "witness": true,
+  "canary": true,
+  "differing_w": [
+   "max_review"
+  ],
+  "differing_c": [
+   "max_review"
+  ],
+  "program": "naive_max",
+  "kind": "coincidence",
+  "seed": "2018-01-01"
+ },
+ {
+  "status": "ran",
+  "witness": false,
+  "canary": true,
+  "differing_w": [],
+  "differing_c": [
+   "max_review"
+  ],
+  "program": "naive_max",
+  "kind": "coincidence",
+  "seed": "2018-04-01"
+ },
+ {
+  "status": "ran",
+  "witness": true,
+  "canary": true,
+  "differing_w": [
+   "max_review"
+  ],
+  "differing_c": [
+   "max_review"
+  ],
+  "program": "naive_max",
+  "kind": "coincidence",
+  "seed": "2018-07-01"
+ },
+ {
+  "status": "ran",
+  "witness": false,
+  "canary": true,
+  "differing_w": [],
+  "differing_c": [
+   "delivery_days"
+  ],
+  "program": "delivery_date_feature",
+  "kind": "self_availability_control",
+  "seed": "2018-01-01"
+ },
+ {
+  "status": "ran",
+  "witness": false,
+  "canary": true,
+  "differing_w": [],
+  "differing_c": [
+   "delivery_days"
+  ],
+  "program": "delivery_date_feature",
+  "kind": "self_availability_control",
+  "seed": "2018-04-01"
+ },
+ {
+  "status": "ran",
+  "witness": false,
+  "canary": true,
+  "differing_w": [],
+  "differing_c": [
+   "delivery_days"
+  ],
+  "program": "delivery_date_feature",
+  "kind": "self_availability_control",
+  "seed": "2018-07-01"
+ },
+ {
+  "status": "ran",
+  "witness": false,
+  "canary": false,
+  "differing_w": [],
+  "differing_c": [],
+  "program": "seed-2.0-code#35",
+  "kind": "corpus_clean",
+  "seed": "2018-01-01",
+  "program_uid": "81ba605ad5cee78d",
+  "source_row": 75,
+  "source_model": "bytedance-seed/seed-2.0-code",
+  "source_idx": 35
+ },
+ {
+  "status": "ran",
+  "witness": false,
+  "canary": false,
+  "differing_w": [],
+  "differing_c": [],
+  "program": "seed-2.0-code#35",
+  "kind": "corpus_clean",
+  "seed": "2018-04-01",
+  "program_uid": "81ba605ad5cee78d",
+  "source_row": 75,
+  "source_model": "bytedance-seed/seed-2.0-code",
+  "source_idx": 35
+ },
+ {
+  "status": "ran",
+  "witness": false,
+  "canary": false,
+  "differing_w": [],
+  "differing_c": [],
+  "program": "seed-2.0-code#35",
+  "kind": "corpus_clean",
+  "seed": "2018-07-01",
+  "program_uid": "81ba605ad5cee78d",
+  "source_row": 75,
+  "source_model": "bytedance-seed/seed-2.0-code",
+  "source_idx": 35
+ }
+]

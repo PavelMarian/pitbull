@@ -1,0 +1,41 @@
+{
+ "item_id": "fd774c2abceb9b0a",
+ "pair_id": "featuretools_cutoff",
+ "category": "handwritten_pair",
+ "arm": "F1",
+ "model": "z-ai/glm-5.3-flash",
+ "code_sha256": "8efcd429a6b19396872fd0c41557c9c7bd6032528ebfdac696a322ed0199bb46",
+ "prompt_sha256": "96664a13e3c8a1719a85227cff96a009394fbca74b77dcef82b3881e9e6613cb",
+ "status": "ok",
+ "finish_reason": "stop",
+ "raw_response": "{\"verdict\": \"CLEAN\", \"rationale\": \"cutoff_time with include_cutoff_time=False restricts aggregations to events strictly before each row's prediction time, and last-time indexes ensure columns not yet available at that time are excluded even when their values arrive after their row timestamp.\"}",
+ "usage": {
+  "completion_tokens": 66,
+  "prompt_tokens": 187,
+  "total_tokens": 253,
+  "completion_tokens_details": {
+   "accepted_prediction_tokens": null,
+   "audio_tokens": 0,
+   "reasoning_tokens": 4,
+   "rejected_prediction_tokens": null,
+   "text_tokens": null,
+   "image_tokens": 0
+  },
+  "prompt_tokens_details": {
+   "audio_tokens": 0,
+   "cached_tokens": 0,
+   "text_tokens": null,
+   "image_tokens": null,
+   "cache_write_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost": 4.57875e-05,
+  "is_byok": false,
+  "cost_details": {
+   "upstream_inference_cost": 4.57875e-05,
+   "upstream_inference_prompt_cost": 2.10375e-05,
+   "upstream_inference_completions_cost": 2.475e-05
+  }
+ },
+ "wall_seconds": 2.9
+}

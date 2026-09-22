@@ -1,0 +1,88 @@
+{
+ "program_uid": "cc203d2b936c7ee5",
+ "program": "deepseek-v4-flash-0731#1",
+ "repeat": 3,
+ "iteration": 1,
+ "repair_model": "z-ai/glm-5.3-flash",
+ "source_code_sha256": "cc203d2b936c7ee5c277be7a4f12196d1763fb51e0848a7da79d7dba30c637d8",
+ "prompt_sha256": "e8633c57a913f3e3ad7200946bfbfe7d81d63bdc760f7dccf5f502b4c8758269",
+ "attempts": [
+  {
+   "attempt": 1,
+   "status": "no_code",
+   "finish_reason": "length",
+   "raw_response": "",
+   "usage": {
+    "completion_tokens": 14000,
+    "prompt_tokens": 2734,
+    "total_tokens": 16734,
+    "completion_tokens_details": {
+     "accepted_prediction_tokens": null,
+     "audio_tokens": 0,
+     "reasoning_tokens": 14000,
+     "rejected_prediction_tokens": null,
+     "text_tokens": null,
+     "image_tokens": 0
+    },
+    "prompt_tokens_details": {
+     "audio_tokens": 0,
+     "cached_tokens": 0,
+     "text_tokens": null,
+     "image_tokens": null,
+     "cache_write_tokens": 0,
+     "video_tokens": 0
+    },
+    "cost": 0.0051734,
+    "is_byok": false,
+    "cost_details": {
+     "upstream_inference_cost": 0.0051734,
+     "upstream_inference_prompt_cost": 0.0002734,
+     "upstream_inference_completions_cost": 0.0049
+    }
+   }
+  },
+  {
+   "attempt": 2,
+   "status": "ok",
+   "finish_reason": "stop",
+   "raw_response": "```python\ndef get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    orders = db['orders']\n    order_items = db['order_items']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    # 1. Позиции, купленные строго до seed_time\n    items = order_items[order_items['product_id'].isin(entity_ids) &\n                        (order_items['ts'] < seed_time)]\n    if items.empty:\n        base = pd.DataFrame(index=pd.Index(entity_ids, name='product_id'))\n        return base.fillna(0)\n\n    # Информация о заказе: используем только то, что уже известно на seed_time\n    ord_cols = orders[['order_id', 'customer_id', 'order_status',\n                       'order_purchase_timestamp', 'order_approved_at',\n                       'order_delivered_carrier_date',\n                       'order_delivered_customer_date',\n                       'order_estimated_delivery_date']]\n    items = items.merge(ord_cols, on='order_id', how='left')\n\n    # Статус/даты видимы, только если событие уже произошло до seed_time\n    st = items['order_purchase_timestamp']\n    items['is_approved'] = ((items['order_approved_at'].notna()) &\n                            (items['order_approved_at'] < seed_time)).astype(float)\n    items['is_shipped'] = ((items['order_delivered_carrier_date'].notna()) &\n                           (items['order_delivered_carrier_date'] < seed_time)).astype(float)\n    items['is_delivered'] = ((items['order_delivered_customer_date'].notna()) &\n                             (items['order_delivered_customer_date'] < seed_time)).astype(float)\n    items['is_canceled'] = ((items['order_status'] == 'canceled') &\n                            (st < seed_time)).astype(float)\n    items['purchase_lag_days'] = (seed_time - st).dt.days\n\n    # Оценка задержки доставки известна всегда (оценка делается при покупке),\n    # но фактическая задержка — только если доставка уже случилась\n    est = items['order_estimated_delivery_date']\n    items['est_delivery_lag_days'] = (est - st).dt.days\n    delivered_mask = items['is_delivered'] == 1\n    items['actual_delivery_lag_days'] = np.where(\n        delivered_mask,\n        (items['order_delivered_customer_date'] - st).dt.days,\n        np.nan)\n    items['delivered_late'] = np.where(\n        delivered_mask & (items['order_delivered_customer_date'] > est), 1.0, np.nan)\n\n    # 2. Отзывы: видимы только те, что созданы до seed_time\n    rev = reviews[reviews['review_creation_date'] < seed_time]\n    rev_agg = rev.groupby('order_id').agg(\n        mean_score=('review_score', 'mean'),\n        min_score=('review_score', 'min'),\n        cnt_review=('review_score', 'count')\n    ).reset_index()\n\n    # 3. Платежи: видимы только те, что произошли до seed_time\n    pay = payments[payments['ts'] < seed_time]\n    pay_agg = pay.groupby('order_id').agg(\n        sum_paid=('payment_value', 'sum'),\n        cnt_payments=('payment_sequential', 'count'),\n        mean_installments=('payment_installments', 'mean'),\n        n_pay_types=('payment_type', 'nunique')\n    ).reset_index()\n\n    items = items.merge(rev_agg, on='order_id', how='left')\n    items = items.merge(pay_agg, on='order_id', how='left')\n\n    # 4. Базовая агрегация по всей истории до seed_time\n    base = items.groupby('product_id').agg(\n        cnt_orders=('order_id', 'nunique'),\n        cnt_items=('order_item_id', 'count'),\n        sum_price=('price', 'sum'),\n        mean_price=('price', 'mean'),\n        std_price=('price', 'std'),\n        min_price=('price', 'min'),\n        max_price=('price', 'max'),\n        mean_freight=('freight_value', 'mean'),\n        sum_freight=('freight_value', 'sum'),\n        cnt_sellers=('seller_id', 'nunique'),\n        cnt_customers=('customer_id', 'nunique'),\n        mean_review_score=('mean_score', 'mean'),\n        min_review_score=('min_score', 'min'),\n        cnt_reviews=('cnt_review', 'sum'),\n        sum_paid=('sum_paid', 'sum'),\n        cnt_payments=('cnt_payments', 'sum'),\n        mean_installments=('mean_installments', 'mean'),\n        n_pay_types=('n_pay_types', 'mean'),\n        is_approved=('is_approved', 'mean'),\n        is_shipped=('is_shipped', 'mean'),\n        is_delivered=('is_delivered', 'mean'),\n        is_canceled=('is_canceled', 'mean'),\n        mean_purchase_lag=('purchase_lag_days', 'mean'),\n        mean_est_delivery_lag=('est_delivery_lag_days', 'mean'),\n        mean_actual_delivery_lag=('actual_delivery_lag_days', 'mean'),\n        delivered_late_rate=('delivered_late', 'mean')\n    ).reset_index()\n\n    # 5. Оконные признаки за последние 14, 30, 60, 90, 180, 365 дней\n    for N in [14, 30, 60, 90, 180, 365]:\n        sub = items[items['ts'] > seed_time - pd.Timedelta(days=N)]\n        g = sub.groupby('product_id')\n        ord_cnt = g['order_id'].nunique()\n        rev_sum = g['price'].sum()\n        cust_cnt = g['customer_id'].nunique()\n        mean_price = g['price'].mean()\n        idx = base['product_id']\n        base[f'orders_{N}d'] = ord_cnt.reindex(idx, fill_value=0).values\n        base[f'revenue_{N}d'] = rev_sum.reindex(idx, fill_value=0).values\n        base[f'customers_{N}d'] = cust_cnt.reindex(idx, fill_value=0).values\n        base[f'mean_price_{N}d'] = mean_price.reindex(idx).values\n\n    # 6. Возраст продукта и время с последней покупки\n    first_ts = items.groupby('product_id')['ts'].min()\n    last_ts = items.groupby('product_id')['ts'].max()\n    idx = base['product_id']\n    base['days_since_first'] = (seed_time - first_ts.reindex(idx)).dt.days.values\n    base['days_since_last'] = (seed_time - last_ts.reindex(idx)).dt.days.values\n\n    # 7. Приводим к полному списку экземпляров\n    base = base.set_index('product_id').reindex(entity_ids)\n    base = base.fillna(0)\n\n    return base\n```",
+   "usage": {
+    "completion_tokens": 1516,
+    "prompt_tokens": 2734,
+    "total_tokens": 4250,
+    "completion_tokens_details": {
+     "accepted_prediction_tokens": null,
+     "audio_tokens": 0,
+     "reasoning_tokens": 44,
+     "rejected_prediction_tokens": null,
+     "text_tokens": null,
+     "image_tokens": 0
+    },
+    "prompt_tokens_details": {
+     "audio_tokens": 0,
+     "cached_tokens": 0,
+     "text_tokens": null,
+     "image_tokens": null,
+     "cache_write_tokens": 0,
+     "video_tokens": 0
+    },
+    "cost": 0.0011681,
+    "is_byok": false,
+    "cost_details": {
+     "upstream_inference_cost": 0.0011681,
+     "upstream_inference_prompt_cost": 0.0004101,
+     "upstream_inference_completions_cost": 0.000758
+    }
+   }
+  }
+ ],
+ "status": "ok",
+ "code": "def get_features(db: dict, entity_ids, seed_time) -> pd.DataFrame:\n    orders = db['orders']\n    order_items = db['order_items']\n    reviews = db['reviews']\n    payments = db['payments']\n\n    # 1. Позиции, купленные строго до seed_time\n    items = order_items[order_items['product_id'].isin(entity_ids) &\n                        (order_items['ts'] < seed_time)]\n    if items.empty:\n        base = pd.DataFrame(index=pd.Index(entity_ids, name='product_id'))\n        return base.fillna(0)\n\n    # Информация о заказе: используем только то, что уже известно на seed_time\n    ord_cols = orders[['order_id', 'customer_id', 'order_status',\n                       'order_purchase_timestamp', 'order_approved_at',\n                       'order_delivered_carrier_date',\n                       'order_delivered_customer_date',\n                       'order_estimated_delivery_date']]\n    items = items.merge(ord_cols, on='order_id', how='left')\n\n    # Статус/даты видимы, только если событие уже произошло до seed_time\n    st = items['order_purchase_timestamp']\n    items['is_approved'] = ((items['order_approved_at'].notna()) &\n                            (items['order_approved_at'] < seed_time)).astype(float)\n    items['is_shipped'] = ((items['order_delivered_carrier_date'].notna()) &\n                           (items['order_delivered_carrier_date'] < seed_time)).astype(float)\n    items['is_delivered'] = ((items['order_delivered_customer_date'].notna()) &\n                             (items['order_delivered_customer_date'] < seed_time)).astype(float)\n    items['is_canceled'] = ((items['order_status'] == 'canceled') &\n                            (st < seed_time)).astype(float)\n    items['purchase_lag_days'] = (seed_time - st).dt.days\n\n    # Оценка задержки доставки известна всегда (оценка делается при покупке),\n    # но фактическая задержка — только если доставка уже случилась\n    est = items['order_estimated_delivery_date']\n    items['est_delivery_lag_days'] = (est - st).dt.days\n    delivered_mask = items['is_delivered'] == 1\n    items['actual_delivery_lag_days'] = np.where(\n        delivered_mask,\n        (items['order_delivered_customer_date'] - st).dt.days,\n        np.nan)\n    items['delivered_late'] = np.where(\n        delivered_mask & (items['order_delivered_customer_date'] > est), 1.0, np.nan)\n\n    # 2. Отзывы: видимы только те, что созданы до seed_time\n    rev = reviews[reviews['review_creation_date'] < seed_time]\n    rev_agg = rev.groupby('order_id').agg(\n        mean_score=('review_score', 'mean'),\n        min_score=('review_score', 'min'),\n        cnt_review=('review_score', 'count')\n    ).reset_index()\n\n    # 3. Платежи: видимы только те, что произошли до seed_time\n    pay = payments[payments['ts'] < seed_time]\n    pay_agg = pay.groupby('order_id').agg(\n        sum_paid=('payment_value', 'sum'),\n        cnt_payments=('payment_sequential', 'count'),\n        mean_installments=('payment_installments', 'mean'),\n        n_pay_types=('payment_type', 'nunique')\n    ).reset_index()\n\n    items = items.merge(rev_agg, on='order_id', how='left')\n    items = items.merge(pay_agg, on='order_id', how='left')\n\n    # 4. Базовая агрегация по всей истории до seed_time\n    base = items.groupby('product_id').agg(\n        cnt_orders=('order_id', 'nunique'),\n        cnt_items=('order_item_id', 'count'),\n        sum_price=('price', 'sum'),\n        mean_price=('price', 'mean'),\n        std_price=('price', 'std'),\n        min_price=('price', 'min'),\n        max_price=('price', 'max'),\n        mean_freight=('freight_value', 'mean'),\n        sum_freight=('freight_value', 'sum'),\n        cnt_sellers=('seller_id', 'nunique'),\n        cnt_customers=('customer_id', 'nunique'),\n        mean_review_score=('mean_score', 'mean'),\n        min_review_score=('min_score', 'min'),\n        cnt_reviews=('cnt_review', 'sum'),\n        sum_paid=('sum_paid', 'sum'),\n        cnt_payments=('cnt_payments', 'sum'),\n        mean_installments=('mean_installments', 'mean'),\n        n_pay_types=('n_pay_types', 'mean'),\n        is_approved=('is_approved', 'mean'),\n        is_shipped=('is_shipped', 'mean'),\n        is_delivered=('is_delivered', 'mean'),\n        is_canceled=('is_canceled', 'mean'),\n        mean_purchase_lag=('purchase_lag_days', 'mean'),\n        mean_est_delivery_lag=('est_delivery_lag_days', 'mean'),\n        mean_actual_delivery_lag=('actual_delivery_lag_days', 'mean'),\n        delivered_late_rate=('delivered_late', 'mean')\n    ).reset_index()\n\n    # 5. Оконные признаки за последние 14, 30, 60, 90, 180, 365 дней\n    for N in [14, 30, 60, 90, 180, 365]:\n        sub = items[items['ts'] > seed_time - pd.Timedelta(days=N)]\n        g = sub.groupby('product_id')\n        ord_cnt = g['order_id'].nunique()\n        rev_sum = g['price'].sum()\n        cust_cnt = g['customer_id'].nunique()\n        mean_price = g['price'].mean()\n        idx = base['product_id']\n        base[f'orders_{N}d'] = ord_cnt.reindex(idx, fill_value=0).values\n        base[f'revenue_{N}d'] = rev_sum.reindex(idx, fill_value=0).values\n        base[f'customers_{N}d'] = cust_cnt.reindex(idx, fill_value=0).values\n        base[f'mean_price_{N}d'] = mean_price.reindex(idx).values\n\n    # 6. Возраст продукта и время с последней покупки\n    first_ts = items.groupby('product_id')['ts'].min()\n    last_ts = items.groupby('product_id')['ts'].max()\n    idx = base['product_id']\n    base['days_since_first'] = (seed_time - first_ts.reindex(idx)).dt.days.values\n    base['days_since_last'] = (seed_time - last_ts.reindex(idx)).dt.days.values\n\n    # 7. Приводим к полному списку экземпляров\n    base = base.set_index('product_id').reindex(entity_ids)\n    base = base.fillna(0)\n\n    return base",
+ "usage": {
+  "prompt_tokens": 5468,
+  "completion_tokens": 15516,
+  "total_tokens": 20984,
+  "cost": 0.0063415
+ },
+ "wall_seconds": 353.5
+}

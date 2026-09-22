@@ -1,0 +1,21 @@
+{
+  "experiment": "A6",
+  "status": "in_process; not_finished",
+  "relbench_version": "2.1.2",
+  "scope": {
+    "rel-stack": 50,
+    "rel-event": 129,
+    "total": 179
+  },
+  "human_annotations_required": 2,
+  "human_annotations_complete": 0,
+  "independence_rule": "Do not expose bootstrap_map.csv before both submissions.",
+  "next_step": "Two eligible coauthors fill annotator_1.csv and annotator_2.csv independently.",
+  "model_assisted_annotation": {
+    "complete": true,
+    "items": 179,
+    "human_vote": false,
+    "summary": "model_annotation_summary.json",
+    "operational_map": "provisional_operational_map.csv"
+  }
+}

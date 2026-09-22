@@ -1,0 +1,41 @@
+{
+ "item_id": "494578068a069efa",
+ "pair_id": "a2-ca6a32358909b3c2",
+ "category": "checker_pair",
+ "arm": "F1",
+ "model": "z-ai/glm-5.3-flash",
+ "code_sha256": "b1864d72ee228aee9acd9bdedfd36fcb7e68ada3b74dcccebffa73e97d3145a9",
+ "prompt_sha256": "04dc1f9dc8532227220dcb82c1e7918a7cadc8885caadf1250390e52275276e0",
+ "status": "ok",
+ "finish_reason": "stop",
+ "raw_response": "{\"verdict\": \"LEAK\", \"rationale\": \"When payments lacks a 'ts' column the code falls back to using all payment records unfiltered, so payment_value/installments recorded after seed_time can leak into features for orders placed before seed_time.\"}",
+ "usage": {
+  "completion_tokens": 195,
+  "prompt_tokens": 1405,
+  "total_tokens": 1600,
+  "completion_tokens_details": {
+   "accepted_prediction_tokens": null,
+   "audio_tokens": 0,
+   "reasoning_tokens": 139,
+   "rejected_prediction_tokens": null,
+   "text_tokens": null,
+   "image_tokens": 0
+  },
+  "prompt_tokens_details": {
+   "audio_tokens": 0,
+   "cached_tokens": 0,
+   "text_tokens": null,
+   "image_tokens": null,
+   "cache_write_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost": 0.00023087925,
+  "is_byok": false,
+  "cost_details": {
+   "upstream_inference_cost": 0.00023087925,
+   "upstream_inference_prompt_cost": 0.00015785175,
+   "upstream_inference_completions_cost": 7.30275e-05
+  }
+ },
+ "wall_seconds": 15.6
+}

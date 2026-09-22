@@ -1,0 +1,41 @@
+{
+ "item_id": "2c3042b986385bf5",
+ "pair_id": "a2-82feae377655715c",
+ "category": "checker_pair",
+ "arm": "F0",
+ "model": "z-ai/glm-5.3-flash",
+ "code_sha256": "82feae377655715c909c944d35b652f2541737cf44310eb9993025209ce7c66f",
+ "prompt_sha256": "612861dcba6e071d03972cf3d5f288fcdf5e8764207f31d6f3ea2f6a3bc8fb2b",
+ "status": "ok",
+ "finish_reason": "stop",
+ "raw_response": "{\"verdict\": \"LEAK\", \"rationale\": \"Review features are joined without filtering by review creation/answer timestamp, so reviews for past orders that were created or answered after seed_time can leak future information into the features.\"}",
+ "usage": {
+  "completion_tokens": 349,
+  "prompt_tokens": 1236,
+  "total_tokens": 1585,
+  "completion_tokens_details": {
+   "accepted_prediction_tokens": null,
+   "audio_tokens": 0,
+   "reasoning_tokens": 299,
+   "rejected_prediction_tokens": null,
+   "text_tokens": null,
+   "image_tokens": 0
+  },
+  "prompt_tokens_details": {
+   "audio_tokens": 0,
+   "cached_tokens": 0,
+   "text_tokens": null,
+   "image_tokens": null,
+   "cache_write_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost": 0.000269925,
+  "is_byok": false,
+  "cost_details": {
+   "upstream_inference_cost": 0.000269925,
+   "upstream_inference_prompt_cost": 0.00013905,
+   "upstream_inference_completions_cost": 0.000130875
+  }
+ },
+ "wall_seconds": 10.6
+}

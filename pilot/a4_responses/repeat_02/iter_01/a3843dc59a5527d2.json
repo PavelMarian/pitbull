@@ -1,0 +1,54 @@
+{
+ "program_uid": "a3843dc59a5527d2",
+ "program": "deepseek-v4-flash-0731#76",
+ "repeat": 2,
+ "iteration": 1,
+ "repair_model": "z-ai/glm-5.3-flash",
+ "source_code_sha256": "a3843dc59a5527d263bf48f18deede84f52196362c8f1407f888b6ffc4364b3b",
+ "prompt_sha256": "c7f9a73cbe52e97ff883cfe1009908bb9051f0697a5a2e5577a123bbcf035eba",
+ "attempts": [
+  {
+   "attempt": 1,
+   "status": "ok",
+   "finish_reason": "stop",
+   "raw_response": "```python\ndef get_features(db: dict, entity_ids, seed_time):\n    entity_ids = pd.Index(pd.unique(entity_ids))\n\n    items = db['order_items'][['order_id', 'product_id', 'seller_id', 'price', 'freight_value', 'ts']]\n    reviews = db['reviews'][['order_id', 'review_score', 'review_creation_date']]\n\n    # Только события, которые уже произошли на момент seed_time\n    df = items[items['ts'] < seed_time]\n\n    # Отзывы учитываем только если они уже созданы (написаны) до seed_time\n    rev = reviews[reviews['review_creation_date'] < seed_time][['order_id', 'review_score']]\n\n    df = df[df['product_id'].isin(entity_ids)]\n    df = df.merge(rev, on='order_id', how='left')\n\n    # Пустой датасет\n    if df.empty:\n        features = pd.DataFrame(index=entity_ids, dtype=float)\n        for c in ['total_orders', 'total_units', 'total_freight', 'unique_customers',\n                  'unique_sellers', 'total_reviews', 'orders_30d', 'units_30d',\n                  'orders_60d', 'units_60d', 'orders_90d', 'units_90d', 'has_sales']:\n            features[c] = 0\n        for c in ['total_revenue', 'avg_price', 'avg_freight', 'avg_review_score', 'repeat_rate']:\n            features[c] = 0.0\n        features['days_since_last_order'] = -1.0\n        features['trend_30v60'] = 0.0\n        return features.reindex(entity_ids)\n\n    base_group = df.groupby('product_id').agg(\n        total_orders=('order_id', 'nunique'),\n        total_units=('price', 'count'),\n        total_revenue=('price', 'sum'),\n        total_freight=('freight_value', 'sum'),\n        avg_price=('price', 'mean'),\n        avg_freight=('freight_value', 'mean'),\n        unique_sellers=('seller_id', 'nunique'),\n        total_reviews=('review_score', 'count'),\n        avg_review_score=('review_score', 'mean')\n    )\n\n    last_ts = df.groupby('product_id')['ts'].max()\n    days_since = (seed_time - last_ts).dt.days.astype(float)\n\n    window_features = {}\n    for days in [30, 60, 90]:\n        sub = df[df['ts'] >= seed_time - pd.Timedelta(days=days)]\n        if len(sub) > 0:\n            window_features[f'orders_{days}d'] = sub.groupby('product_id')['order_id'].nunique()\n            window_features[f'units_{days}d'] = sub.groupby('product_id')['price'].count()\n        else:\n            window_features[f'orders_{days}d'] = pd.Series(dtype=float)\n            window_features[f'units_{days}d'] = pd.Series(dtype=float)\n\n    features = pd.DataFrame(index=entity_ids, dtype=float)\n    features = features.join(base_group, how='left')\n    features = features.join(days_since.rename('days_since_last_order'), how='left')\n    for col, series in window_features.items():\n        features = features.join(series.rename(col), how='left')\n\n    cnt_cols = ['total_orders', 'total_units', 'total_freight', 'unique_sellers',\n                'total_reviews', 'orders_30d', 'units_30d',\n                'orders_60d', 'units_60d', 'orders_90d', 'units_90d']\n    features[cnt_cols] = features[cnt_cols].fillna(0)\n    features['total_revenue'] = features['total_revenue'].fillna(0.0)\n\n    mean_cols = ['avg_price', 'avg_freight', 'avg_review_score']\n    features[mean_cols] = features[mean_cols].fillna(0.0)\n    features['days_since_last_order'] = features['days_since_last_order'].fillna(-1.0)\n\n    features['has_sales'] = (features['total_orders'] > 0).astype(float)\n    features['repeat_rate'] = np.where(\n        features['total_orders'] > 0,\n        features['total_units'] / features['total_orders'],\n        0.0\n    )\n    features['trend_30v60'] = np.where(\n        features['units_60d'] > 0,\n        features['units_30d'] / features['units_60d'],\n        0.0\n    )\n\n    features = features.reindex(entity_ids)\n    return features\n```",
+   "usage": {
+    "completion_tokens": 1013,
+    "prompt_tokens": 3173,
+    "total_tokens": 4186,
+    "completion_tokens_details": {
+     "accepted_prediction_tokens": null,
+     "audio_tokens": 0,
+     "reasoning_tokens": 30,
+     "rejected_prediction_tokens": null,
+     "text_tokens": null,
+     "image_tokens": 0
+    },
+    "prompt_tokens_details": {
+     "audio_tokens": 0,
+     "cached_tokens": 1920,
+     "text_tokens": null,
+     "image_tokens": null,
+     "cache_write_tokens": 0,
+     "video_tokens": 0
+    },
+    "cost": 0.00075205,
+    "is_byok": false,
+    "cost_details": {
+     "upstream_inference_cost": 0.00075205,
+     "upstream_inference_prompt_cost": 0.00024555,
+     "upstream_inference_completions_cost": 0.0005065
+    }
+   }
+  }
+ ],
+ "status": "ok",
+ "code": "def get_features(db: dict, entity_ids, seed_time):\n    entity_ids = pd.Index(pd.unique(entity_ids))\n\n    items = db['order_items'][['order_id', 'product_id', 'seller_id', 'price', 'freight_value', 'ts']]\n    reviews = db['reviews'][['order_id', 'review_score', 'review_creation_date']]\n\n    # Только события, которые уже произошли на момент seed_time\n    df = items[items['ts'] < seed_time]\n\n    # Отзывы учитываем только если они уже созданы (написаны) до seed_time\n    rev = reviews[reviews['review_creation_date'] < seed_time][['order_id', 'review_score']]\n\n    df = df[df['product_id'].isin(entity_ids)]\n    df = df.merge(rev, on='order_id', how='left')\n\n    # Пустой датасет\n    if df.empty:\n        features = pd.DataFrame(index=entity_ids, dtype=float)\n        for c in ['total_orders', 'total_units', 'total_freight', 'unique_customers',\n                  'unique_sellers', 'total_reviews', 'orders_30d', 'units_30d',\n                  'orders_60d', 'units_60d', 'orders_90d', 'units_90d', 'has_sales']:\n            features[c] = 0\n        for c in ['total_revenue', 'avg_price', 'avg_freight', 'avg_review_score', 'repeat_rate']:\n            features[c] = 0.0\n        features['days_since_last_order'] = -1.0\n        features['trend_30v60'] = 0.0\n        return features.reindex(entity_ids)\n\n    base_group = df.groupby('product_id').agg(\n        total_orders=('order_id', 'nunique'),\n        total_units=('price', 'count'),\n        total_revenue=('price', 'sum'),\n        total_freight=('freight_value', 'sum'),\n        avg_price=('price', 'mean'),\n        avg_freight=('freight_value', 'mean'),\n        unique_sellers=('seller_id', 'nunique'),\n        total_reviews=('review_score', 'count'),\n        avg_review_score=('review_score', 'mean')\n    )\n\n    last_ts = df.groupby('product_id')['ts'].max()\n    days_since = (seed_time - last_ts).dt.days.astype(float)\n\n    window_features = {}\n    for days in [30, 60, 90]:\n        sub = df[df['ts'] >= seed_time - pd.Timedelta(days=days)]\n        if len(sub) > 0:\n            window_features[f'orders_{days}d'] = sub.groupby('product_id')['order_id'].nunique()\n            window_features[f'units_{days}d'] = sub.groupby('product_id')['price'].count()\n        else:\n            window_features[f'orders_{days}d'] = pd.Series(dtype=float)\n            window_features[f'units_{days}d'] = pd.Series(dtype=float)\n\n    features = pd.DataFrame(index=entity_ids, dtype=float)\n    features = features.join(base_group, how='left')\n    features = features.join(days_since.rename('days_since_last_order'), how='left')\n    for col, series in window_features.items():\n        features = features.join(series.rename(col), how='left')\n\n    cnt_cols = ['total_orders', 'total_units', 'total_freight', 'unique_sellers',\n                'total_reviews', 'orders_30d', 'units_30d',\n                'orders_60d', 'units_60d', 'orders_90d', 'units_90d']\n    features[cnt_cols] = features[cnt_cols].fillna(0)\n    features['total_revenue'] = features['total_revenue'].fillna(0.0)\n\n    mean_cols = ['avg_price', 'avg_freight', 'avg_review_score']\n    features[mean_cols] = features[mean_cols].fillna(0.0)\n    features['days_since_last_order'] = features['days_since_last_order'].fillna(-1.0)\n\n    features['has_sales'] = (features['total_orders'] > 0).astype(float)\n    features['repeat_rate'] = np.where(\n        features['total_orders'] > 0,\n        features['total_units'] / features['total_orders'],\n        0.0\n    )\n    features['trend_30v60'] = np.where(\n        features['units_60d'] > 0,\n        features['units_30d'] / features['units_60d'],\n        0.0\n    )\n\n    features = features.reindex(entity_ids)\n    return features",
+ "usage": {
+  "prompt_tokens": 3173,
+  "completion_tokens": 1013,
+  "total_tokens": 4186,
+  "cost": 0.00075205
+ },
+ "wall_seconds": 7.1
+}

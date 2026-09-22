@@ -1,0 +1,41 @@
+{
+ "item_id": "494578068a069efa",
+ "pair_id": "a2-ca6a32358909b3c2",
+ "category": "checker_pair",
+ "arm": "F0",
+ "model": "z-ai/glm-5.3-flash",
+ "code_sha256": "b1864d72ee228aee9acd9bdedfd36fcb7e68ada3b74dcccebffa73e97d3145a9",
+ "prompt_sha256": "d51f2e68ab1583433effa8cae46b026cd0bcab12379d1aa0e42891770083c881",
+ "status": "ok",
+ "finish_reason": "stop",
+ "raw_response": "{\"verdict\": \"LEAK\", \"rationale\": \"When the payments table lacks a 'ts' column, all payment rows are used without any time filter, so payments recorded after seed_time can leak into features.\"}",
+ "usage": {
+  "completion_tokens": 192,
+  "prompt_tokens": 1391,
+  "total_tokens": 1583,
+  "completion_tokens_details": {
+   "accepted_prediction_tokens": null,
+   "audio_tokens": 0,
+   "reasoning_tokens": 187,
+   "rejected_prediction_tokens": null,
+   "text_tokens": null,
+   "image_tokens": 0
+  },
+  "prompt_tokens_details": {
+   "audio_tokens": 0,
+   "cached_tokens": 0,
+   "text_tokens": null,
+   "image_tokens": null,
+   "cache_write_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost": 0.00018279,
+  "is_byok": false,
+  "cost_details": {
+   "upstream_inference_cost": 0.00018279,
+   "upstream_inference_prompt_cost": 0.00012519,
+   "upstream_inference_completions_cost": 5.76e-05
+  }
+ },
+ "wall_seconds": 17.1
+}

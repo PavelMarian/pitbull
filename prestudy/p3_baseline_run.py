@@ -17,6 +17,7 @@ P3 §3 — «лестница моделей» на нейтральном пр�
 (entity, seed_time, label) и формулировку задачи. НЕ упоминаем "утечка",
 "point-in-time", необходимость временного фильтра, примеры с/без фильтра.
 """
+import hashlib
 import json
 import os
 import re
@@ -35,7 +36,10 @@ import litellm
 sys.path.insert(0, str(Path(__file__).parent))
 from oracle import is_pit_correct, TIME_COLS
 
-D = str(Path(__file__).parent / "p1_repro") + "/"
+_default_data = Path(__file__).parent / "p1_repro"
+if not _default_data.exists():
+    _default_data = Path(__file__).parent.parent / "PITFALL_olist_data"
+D = os.environ.get("P3_OLIST", str(_default_data)) + "/"
 OUT_DIR = Path(__file__).parent / "p3_out" / "baseline"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -123,7 +127,8 @@ def _train_table_sample():
         seed, prods, y = labels(s)
         if len(prods) < 50:
             continue
-        idx = np.random.RandomState(hash(s) % (2**32)).choice(len(prods), size=min(6, len(prods)), replace=False)
+        stable_seed = int.from_bytes(hashlib.sha256(s.encode()).digest()[:4], "little")
+        idx = np.random.RandomState(stable_seed).choice(len(prods), size=min(6, len(prods)), replace=False)
         for i in idx:
             rows.append({"product_id": prods[i], "seed_time": str(seed.date()), "label": int(y.iloc[i])})
     df = pd.DataFrame(rows)

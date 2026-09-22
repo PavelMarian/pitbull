@@ -1,0 +1,41 @@
+{
+ "item_id": "bd4a023a25df2b51",
+ "pair_id": "a2-9f966e7fee72ee57",
+ "category": "checker_pair",
+ "arm": "F1",
+ "model": "z-ai/glm-5.3-flash",
+ "code_sha256": "3a367dc818e060bf835ffa24c3ca8daf22412f6c9766a05550786675e357abed",
+ "prompt_sha256": "ca279ef6db481de7a836a48b99610f8973c36a357fa8f0334865a2233b07f549",
+ "status": "ok",
+ "finish_reason": "stop",
+ "raw_response": "{\"verdict\": \"CLEAN\", \"rationale\": \"All source rows are filtered to timestamps before seed_time (order_items ts, review_creation_date, payments ts), and the future-prone order_status is replaced by a delivered-before-seed_time indicator, so no post-seed information enters any feature after joins.\"}",
+ "usage": {
+  "completion_tokens": 155,
+  "prompt_tokens": 2423,
+  "total_tokens": 2578,
+  "completion_tokens_details": {
+   "accepted_prediction_tokens": null,
+   "audio_tokens": 0,
+   "reasoning_tokens": 87,
+   "rejected_prediction_tokens": null,
+   "text_tokens": null,
+   "image_tokens": 0
+  },
+  "prompt_tokens_details": {
+   "audio_tokens": 0,
+   "cached_tokens": 0,
+   "text_tokens": null,
+   "image_tokens": null,
+   "cache_write_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost": 0.0003307125,
+  "is_byok": false,
+  "cost_details": {
+   "upstream_inference_cost": 0.0003307125,
+   "upstream_inference_prompt_cost": 0.0002725875,
+   "upstream_inference_completions_cost": 5.8125e-05
+  }
+ },
+ "wall_seconds": 6.9
+}
