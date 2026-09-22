@@ -3,7 +3,7 @@
   "items_total": 179,
   "items_complete_by_both": 0,
   "incomplete": {
-    "annotator_1": 179,
+    "annotator_1": 0,
     "annotator_2": 179
   },
   "cohen_kappa_availability_class": null,

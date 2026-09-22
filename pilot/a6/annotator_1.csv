@@ -1,180 +1,180 @@
 item_id,dataset,table,column,data_type,role,table_time_col,availability_class,availability_column,boundary,mutable,checkability,confidence,rationale
-rel-stack:001,rel-stack,badges,Id,key,key,Date,,,,,,,
-rel-stack:002,rel-stack,badges,UserId,key,key,Date,,,,,,,
-rel-stack:003,rel-stack,badges,Date,datetime,time,Date,,,,,,,
-rel-stack:004,rel-stack,badges,Class,int,value,Date,,,,,,,
-rel-stack:005,rel-stack,badges,Name,str,value,Date,,,,,,,
-rel-stack:006,rel-stack,badges,TagBased,bool,value,Date,,,,,,,
-rel-stack:007,rel-stack,votes,Id,key,key,CreationDate,,,,,,,
-rel-stack:008,rel-stack,votes,UserId,key,key,CreationDate,,,,,,,
-rel-stack:009,rel-stack,votes,PostId,key,key,CreationDate,,,,,,,
-rel-stack:010,rel-stack,votes,CreationDate,datetime,time,CreationDate,,,,,,,
-rel-stack:011,rel-stack,votes,VoteTypeId,int,value,CreationDate,,,,,,,
-rel-stack:012,rel-stack,users,Id,key,key,CreationDate,,,,,,,
-rel-stack:013,rel-stack,users,CreationDate,datetime,time,CreationDate,,,,,,,
-rel-stack:014,rel-stack,users,AccountId,float,value,CreationDate,,,,,,,
-rel-stack:015,rel-stack,users,DisplayName,str,value,CreationDate,,,,,,,
-rel-stack:016,rel-stack,users,Location,str,value,CreationDate,,,,,,,
-rel-stack:017,rel-stack,users,WebsiteUrl,str,value,CreationDate,,,,,,,
-rel-stack:018,rel-stack,users,AboutMe,str,value,CreationDate,,,,,,,
-rel-stack:019,rel-stack,comments,Id,key,key,CreationDate,,,,,,,
-rel-stack:020,rel-stack,comments,PostId,key,key,CreationDate,,,,,,,
-rel-stack:021,rel-stack,comments,UserId,key,key,CreationDate,,,,,,,
-rel-stack:022,rel-stack,comments,CreationDate,datetime,time,CreationDate,,,,,,,
-rel-stack:023,rel-stack,comments,ContentLicense,str,value,CreationDate,,,,,,,
-rel-stack:024,rel-stack,comments,UserDisplayName,str,value,CreationDate,,,,,,,
-rel-stack:025,rel-stack,comments,Text,str,value,CreationDate,,,,,,,
-rel-stack:026,rel-stack,posts,Id,key,key,CreationDate,,,,,,,
-rel-stack:027,rel-stack,posts,OwnerUserId,key,key,CreationDate,,,,,,,
-rel-stack:028,rel-stack,posts,ParentId,key,key,CreationDate,,,,,,,
-rel-stack:029,rel-stack,posts,CreationDate,datetime,time,CreationDate,,,,,,,
-rel-stack:030,rel-stack,posts,PostTypeId,int,value,CreationDate,,,,,,,
-rel-stack:031,rel-stack,posts,OwnerDisplayName,str,value,CreationDate,,,,,,,
-rel-stack:032,rel-stack,posts,Title,str,value,CreationDate,,,,,,,
-rel-stack:033,rel-stack,posts,Tags,str,value,CreationDate,,,,,,,
-rel-stack:034,rel-stack,posts,ContentLicense,str,value,CreationDate,,,,,,,
-rel-stack:035,rel-stack,posts,Body,str,value,CreationDate,,,,,,,
-rel-stack:036,rel-stack,postLinks,Id,key,key,CreationDate,,,,,,,
-rel-stack:037,rel-stack,postLinks,RelatedPostId,key,key,CreationDate,,,,,,,
-rel-stack:038,rel-stack,postLinks,PostId,key,key,CreationDate,,,,,,,
-rel-stack:039,rel-stack,postLinks,CreationDate,datetime,time,CreationDate,,,,,,,
-rel-stack:040,rel-stack,postLinks,LinkTypeId,int,value,CreationDate,,,,,,,
-rel-stack:041,rel-stack,postHistory,Id,key,key,CreationDate,,,,,,,
-rel-stack:042,rel-stack,postHistory,PostId,key,key,CreationDate,,,,,,,
-rel-stack:043,rel-stack,postHistory,UserId,key,key,CreationDate,,,,,,,
-rel-stack:044,rel-stack,postHistory,CreationDate,datetime,time,CreationDate,,,,,,,
-rel-stack:045,rel-stack,postHistory,PostHistoryTypeId,int,value,CreationDate,,,,,,,
-rel-stack:046,rel-stack,postHistory,UserDisplayName,str,value,CreationDate,,,,,,,
-rel-stack:047,rel-stack,postHistory,ContentLicense,str,value,CreationDate,,,,,,,
-rel-stack:048,rel-stack,postHistory,RevisionGUID,str,value,CreationDate,,,,,,,
-rel-stack:049,rel-stack,postHistory,Text,str,value,CreationDate,,,,,,,
-rel-stack:050,rel-stack,postHistory,Comment,str,value,CreationDate,,,,,,,
-rel-event:001,rel-event,user_friends,user,key,key,,,,,,,,
-rel-event:002,rel-event,user_friends,friend,key,key,,,,,,,,
-rel-event:003,rel-event,event_interest,user,key,key,timestamp,,,,,,,
-rel-event:004,rel-event,event_interest,event,key,key,timestamp,,,,,,,
-rel-event:005,rel-event,event_interest,timestamp,datetime,time,timestamp,,,,,,,
-rel-event:006,rel-event,event_interest,invited,int,value,timestamp,,,,,,,
-rel-event:007,rel-event,event_interest,interested,int,value,timestamp,,,,,,,
-rel-event:008,rel-event,event_interest,not_interested,int,value,timestamp,,,,,,,
-rel-event:009,rel-event,event_attendees,event,key,key,start_time,,,,,,,
-rel-event:010,rel-event,event_attendees,user_id,key,key,start_time,,,,,,,
-rel-event:011,rel-event,event_attendees,start_time,datetime,time,start_time,,,,,,,
-rel-event:012,rel-event,event_attendees,status,str,value,start_time,,,,,,,
-rel-event:013,rel-event,users,user_id,key,key,joinedAt,,,,,,,
-rel-event:014,rel-event,users,joinedAt,datetime,time,joinedAt,,,,,,,
-rel-event:015,rel-event,users,birthyear,float,value,joinedAt,,,,,,,
-rel-event:016,rel-event,users,timezone,float,value,joinedAt,,,,,,,
-rel-event:017,rel-event,users,locale,str,value,joinedAt,,,,,,,
-rel-event:018,rel-event,users,gender,str,value,joinedAt,,,,,,,
-rel-event:019,rel-event,users,location,str,value,joinedAt,,,,,,,
-rel-event:020,rel-event,events,event_id,key,key,start_time,,,,,,,
-rel-event:021,rel-event,events,user_id,key,key,start_time,,,,,,,
-rel-event:022,rel-event,events,start_time,datetime,time,start_time,,,,,,,
-rel-event:023,rel-event,events,lat,float,value,start_time,,,,,,,
-rel-event:024,rel-event,events,lng,float,value,start_time,,,,,,,
-rel-event:025,rel-event,events,c_1,int,value,start_time,,,,,,,
-rel-event:026,rel-event,events,c_2,int,value,start_time,,,,,,,
-rel-event:027,rel-event,events,c_3,int,value,start_time,,,,,,,
-rel-event:028,rel-event,events,c_4,int,value,start_time,,,,,,,
-rel-event:029,rel-event,events,c_5,int,value,start_time,,,,,,,
-rel-event:030,rel-event,events,c_6,int,value,start_time,,,,,,,
-rel-event:031,rel-event,events,c_7,int,value,start_time,,,,,,,
-rel-event:032,rel-event,events,c_8,int,value,start_time,,,,,,,
-rel-event:033,rel-event,events,c_9,int,value,start_time,,,,,,,
-rel-event:034,rel-event,events,c_10,int,value,start_time,,,,,,,
-rel-event:035,rel-event,events,c_11,int,value,start_time,,,,,,,
-rel-event:036,rel-event,events,c_12,int,value,start_time,,,,,,,
-rel-event:037,rel-event,events,c_13,int,value,start_time,,,,,,,
-rel-event:038,rel-event,events,c_14,int,value,start_time,,,,,,,
-rel-event:039,rel-event,events,c_15,int,value,start_time,,,,,,,
-rel-event:040,rel-event,events,c_16,int,value,start_time,,,,,,,
-rel-event:041,rel-event,events,c_17,int,value,start_time,,,,,,,
-rel-event:042,rel-event,events,c_18,int,value,start_time,,,,,,,
-rel-event:043,rel-event,events,c_19,int,value,start_time,,,,,,,
-rel-event:044,rel-event,events,c_20,int,value,start_time,,,,,,,
-rel-event:045,rel-event,events,c_21,int,value,start_time,,,,,,,
-rel-event:046,rel-event,events,c_22,int,value,start_time,,,,,,,
-rel-event:047,rel-event,events,c_23,int,value,start_time,,,,,,,
-rel-event:048,rel-event,events,c_24,int,value,start_time,,,,,,,
-rel-event:049,rel-event,events,c_25,int,value,start_time,,,,,,,
-rel-event:050,rel-event,events,c_26,int,value,start_time,,,,,,,
-rel-event:051,rel-event,events,c_27,int,value,start_time,,,,,,,
-rel-event:052,rel-event,events,c_28,int,value,start_time,,,,,,,
-rel-event:053,rel-event,events,c_29,int,value,start_time,,,,,,,
-rel-event:054,rel-event,events,c_30,int,value,start_time,,,,,,,
-rel-event:055,rel-event,events,c_31,int,value,start_time,,,,,,,
-rel-event:056,rel-event,events,c_32,int,value,start_time,,,,,,,
-rel-event:057,rel-event,events,c_33,int,value,start_time,,,,,,,
-rel-event:058,rel-event,events,c_34,int,value,start_time,,,,,,,
-rel-event:059,rel-event,events,c_35,int,value,start_time,,,,,,,
-rel-event:060,rel-event,events,c_36,int,value,start_time,,,,,,,
-rel-event:061,rel-event,events,c_37,int,value,start_time,,,,,,,
-rel-event:062,rel-event,events,c_38,int,value,start_time,,,,,,,
-rel-event:063,rel-event,events,c_39,int,value,start_time,,,,,,,
-rel-event:064,rel-event,events,c_40,int,value,start_time,,,,,,,
-rel-event:065,rel-event,events,c_41,int,value,start_time,,,,,,,
-rel-event:066,rel-event,events,c_42,int,value,start_time,,,,,,,
-rel-event:067,rel-event,events,c_43,int,value,start_time,,,,,,,
-rel-event:068,rel-event,events,c_44,int,value,start_time,,,,,,,
-rel-event:069,rel-event,events,c_45,int,value,start_time,,,,,,,
-rel-event:070,rel-event,events,c_46,int,value,start_time,,,,,,,
-rel-event:071,rel-event,events,c_47,int,value,start_time,,,,,,,
-rel-event:072,rel-event,events,c_48,int,value,start_time,,,,,,,
-rel-event:073,rel-event,events,c_49,int,value,start_time,,,,,,,
-rel-event:074,rel-event,events,c_50,int,value,start_time,,,,,,,
-rel-event:075,rel-event,events,c_51,int,value,start_time,,,,,,,
-rel-event:076,rel-event,events,c_52,int,value,start_time,,,,,,,
-rel-event:077,rel-event,events,c_53,int,value,start_time,,,,,,,
-rel-event:078,rel-event,events,c_54,int,value,start_time,,,,,,,
-rel-event:079,rel-event,events,c_55,int,value,start_time,,,,,,,
-rel-event:080,rel-event,events,c_56,int,value,start_time,,,,,,,
-rel-event:081,rel-event,events,c_57,int,value,start_time,,,,,,,
-rel-event:082,rel-event,events,c_58,int,value,start_time,,,,,,,
-rel-event:083,rel-event,events,c_59,int,value,start_time,,,,,,,
-rel-event:084,rel-event,events,c_60,int,value,start_time,,,,,,,
-rel-event:085,rel-event,events,c_61,int,value,start_time,,,,,,,
-rel-event:086,rel-event,events,c_62,int,value,start_time,,,,,,,
-rel-event:087,rel-event,events,c_63,int,value,start_time,,,,,,,
-rel-event:088,rel-event,events,c_64,int,value,start_time,,,,,,,
-rel-event:089,rel-event,events,c_65,int,value,start_time,,,,,,,
-rel-event:090,rel-event,events,c_66,int,value,start_time,,,,,,,
-rel-event:091,rel-event,events,c_67,int,value,start_time,,,,,,,
-rel-event:092,rel-event,events,c_68,int,value,start_time,,,,,,,
-rel-event:093,rel-event,events,c_69,int,value,start_time,,,,,,,
-rel-event:094,rel-event,events,c_70,int,value,start_time,,,,,,,
-rel-event:095,rel-event,events,c_71,int,value,start_time,,,,,,,
-rel-event:096,rel-event,events,c_72,int,value,start_time,,,,,,,
-rel-event:097,rel-event,events,c_73,int,value,start_time,,,,,,,
-rel-event:098,rel-event,events,c_74,int,value,start_time,,,,,,,
-rel-event:099,rel-event,events,c_75,int,value,start_time,,,,,,,
-rel-event:100,rel-event,events,c_76,int,value,start_time,,,,,,,
-rel-event:101,rel-event,events,c_77,int,value,start_time,,,,,,,
-rel-event:102,rel-event,events,c_78,int,value,start_time,,,,,,,
-rel-event:103,rel-event,events,c_79,int,value,start_time,,,,,,,
-rel-event:104,rel-event,events,c_80,int,value,start_time,,,,,,,
-rel-event:105,rel-event,events,c_81,int,value,start_time,,,,,,,
-rel-event:106,rel-event,events,c_82,int,value,start_time,,,,,,,
-rel-event:107,rel-event,events,c_83,int,value,start_time,,,,,,,
-rel-event:108,rel-event,events,c_84,int,value,start_time,,,,,,,
-rel-event:109,rel-event,events,c_85,int,value,start_time,,,,,,,
-rel-event:110,rel-event,events,c_86,int,value,start_time,,,,,,,
-rel-event:111,rel-event,events,c_87,int,value,start_time,,,,,,,
-rel-event:112,rel-event,events,c_88,int,value,start_time,,,,,,,
-rel-event:113,rel-event,events,c_89,int,value,start_time,,,,,,,
-rel-event:114,rel-event,events,c_90,int,value,start_time,,,,,,,
-rel-event:115,rel-event,events,c_91,int,value,start_time,,,,,,,
-rel-event:116,rel-event,events,c_92,int,value,start_time,,,,,,,
-rel-event:117,rel-event,events,c_93,int,value,start_time,,,,,,,
-rel-event:118,rel-event,events,c_94,int,value,start_time,,,,,,,
-rel-event:119,rel-event,events,c_95,int,value,start_time,,,,,,,
-rel-event:120,rel-event,events,c_96,int,value,start_time,,,,,,,
-rel-event:121,rel-event,events,c_97,int,value,start_time,,,,,,,
-rel-event:122,rel-event,events,c_98,int,value,start_time,,,,,,,
-rel-event:123,rel-event,events,c_99,int,value,start_time,,,,,,,
-rel-event:124,rel-event,events,c_100,int,value,start_time,,,,,,,
-rel-event:125,rel-event,events,c_other,int,value,start_time,,,,,,,
-rel-event:126,rel-event,events,city,str,value,start_time,,,,,,,
-rel-event:127,rel-event,events,state,str,value,start_time,,,,,,,
-rel-event:128,rel-event,events,zip,str,value,start_time,,,,,,,
-rel-event:129,rel-event,events,country,str,value,start_time,,,,,,,
+rel-stack:001,rel-stack,badges,Id,key,key,Date,row_time,Date,inclusive,no,direct,high,Badge row is written at award time; no field is revised afterward.
+rel-stack:002,rel-stack,badges,UserId,key,key,Date,row_time,Date,inclusive,no,direct,high,Badge row is written at award time; no field is revised afterward.
+rel-stack:003,rel-stack,badges,Date,datetime,time,Date,row_time,Date,inclusive,no,direct,high,Badge row is written at award time; no field is revised afterward.
+rel-stack:004,rel-stack,badges,Class,int,value,Date,row_time,Date,inclusive,no,direct,high,Badge row is written at award time; no field is revised afterward.
+rel-stack:005,rel-stack,badges,Name,str,value,Date,row_time,Date,inclusive,no,direct,high,Badge row is written at award time; no field is revised afterward.
+rel-stack:006,rel-stack,badges,TagBased,bool,value,Date,row_time,Date,inclusive,no,direct,high,Badge row is written at award time; no field is revised afterward.
+rel-stack:007,rel-stack,votes,Id,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Vote row is written at CreationDate; vote type is not revised afterward in the dump.
+rel-stack:008,rel-stack,votes,UserId,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Vote row is written at CreationDate; vote type is not revised afterward in the dump.
+rel-stack:009,rel-stack,votes,PostId,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Vote row is written at CreationDate; vote type is not revised afterward in the dump.
+rel-stack:010,rel-stack,votes,CreationDate,datetime,time,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Vote row is written at CreationDate; vote type is not revised afterward in the dump.
+rel-stack:011,rel-stack,votes,VoteTypeId,int,value,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Vote row is written at CreationDate; vote type is not revised afterward in the dump.
+rel-stack:012,rel-stack,users,Id,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Immutable account identifier / defines the row time itself.
+rel-stack:013,rel-stack,users,CreationDate,datetime,time,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Immutable account identifier / defines the row time itself.
+rel-stack:014,rel-stack,users,AccountId,float,value,CreationDate,row_time,CreationDate,inclusive,no,proxy,medium,"Cross-site network account id, fixed at account linkage; no dedicated timestamp, so treated as a CreationDate proxy."
+rel-stack:015,rel-stack,users,DisplayName,str,value,CreationDate,unknown,,unknown,yes,uncheckable,high,Freely editable live profile field with no last-edit timestamp in this schema; the dump value can postdate any usage time. Exclude.
+rel-stack:016,rel-stack,users,Location,str,value,CreationDate,unknown,,unknown,yes,uncheckable,high,Freely editable live profile field with no last-edit timestamp in this schema; the dump value can postdate any usage time. Exclude.
+rel-stack:017,rel-stack,users,WebsiteUrl,str,value,CreationDate,unknown,,unknown,yes,uncheckable,high,Freely editable live profile field with no last-edit timestamp in this schema; the dump value can postdate any usage time. Exclude.
+rel-stack:018,rel-stack,users,AboutMe,str,value,CreationDate,unknown,,unknown,yes,uncheckable,high,Freely editable live profile field with no last-edit timestamp in this schema; the dump value can postdate any usage time. Exclude.
+rel-stack:019,rel-stack,comments,Id,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Comment row is written at CreationDate.
+rel-stack:020,rel-stack,comments,PostId,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Comment row is written at CreationDate.
+rel-stack:021,rel-stack,comments,UserId,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Comment row is written at CreationDate.
+rel-stack:022,rel-stack,comments,CreationDate,datetime,time,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Comment row is written at CreationDate.
+rel-stack:023,rel-stack,comments,ContentLicense,str,value,CreationDate,row_time,CreationDate,inclusive,no,direct,medium,License flag set at post time; no mechanism in this schema records a later change.
+rel-stack:024,rel-stack,comments,UserDisplayName,str,value,CreationDate,row_time,CreationDate,inclusive,unknown,proxy,medium,"Legacy display-name snapshot recorded at comment time (used for anonymous/migrated users), not the live profile field."
+rel-stack:025,rel-stack,comments,Text,str,value,CreationDate,row_time,CreationDate,inclusive,unknown,proxy,medium,"Stack Exchange allows a short, untracked edit window for comments and this schema has no LastEditDate column for them; treated as CreationDate-anchored by convention, not verified."
+rel-stack:026,rel-stack,posts,Id,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Post row is written at CreationDate.
+rel-stack:027,rel-stack,posts,OwnerUserId,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Post row is written at CreationDate.
+rel-stack:028,rel-stack,posts,ParentId,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Post row is written at CreationDate.
+rel-stack:029,rel-stack,posts,CreationDate,datetime,time,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Post row is written at CreationDate.
+rel-stack:030,rel-stack,posts,PostTypeId,int,value,CreationDate,row_time,CreationDate,inclusive,unknown,proxy,medium,Rarely reclassified after creation (e.g. migrations); no tracked change timestamp exists.
+rel-stack:031,rel-stack,posts,OwnerDisplayName,str,value,CreationDate,row_time,CreationDate,inclusive,unknown,proxy,medium,"Snapshot display name at post time (anonymous/migrated ownership), not the live profile field."
+rel-stack:032,rel-stack,posts,Title,str,value,CreationDate,unknown,,unknown,yes,uncheckable,high,"Posts are commonly edited (retitled/retagged/rewritten) after creation. The RelBench 2.1.2 loader already drops LastEditDate/LastActivityDate, so there is no way to bound how stale this value is relative to any usage time. Exclude."
+rel-stack:033,rel-stack,posts,Tags,str,value,CreationDate,unknown,,unknown,yes,uncheckable,high,"Posts are commonly edited (retitled/retagged/rewritten) after creation. The RelBench 2.1.2 loader already drops LastEditDate/LastActivityDate, so there is no way to bound how stale this value is relative to any usage time. Exclude."
+rel-stack:034,rel-stack,posts,ContentLicense,str,value,CreationDate,row_time,CreationDate,inclusive,unknown,proxy,medium,License flag set at post time; can in principle change on a later relicensing edit that is not separately timestamped here.
+rel-stack:035,rel-stack,posts,Body,str,value,CreationDate,unknown,,unknown,yes,uncheckable,high,"Posts are commonly edited (retitled/retagged/rewritten) after creation. The RelBench 2.1.2 loader already drops LastEditDate/LastActivityDate, so there is no way to bound how stale this value is relative to any usage time. Exclude."
+rel-stack:036,rel-stack,postLinks,Id,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Link row is written at CreationDate.
+rel-stack:037,rel-stack,postLinks,RelatedPostId,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Link row is written at CreationDate.
+rel-stack:038,rel-stack,postLinks,PostId,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Link row is written at CreationDate.
+rel-stack:039,rel-stack,postLinks,CreationDate,datetime,time,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Link row is written at CreationDate.
+rel-stack:040,rel-stack,postLinks,LinkTypeId,int,value,CreationDate,row_time,CreationDate,inclusive,unknown,proxy,medium,"Link type (duplicate/related) set at link creation; a later correction, if any, is not separately timestamped."
+rel-stack:041,rel-stack,postHistory,Id,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,History row is written at CreationDate of that specific revision event.
+rel-stack:042,rel-stack,postHistory,PostId,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,History row is written at CreationDate of that specific revision event.
+rel-stack:043,rel-stack,postHistory,UserId,key,key,CreationDate,row_time,CreationDate,inclusive,no,direct,high,History row is written at CreationDate of that specific revision event.
+rel-stack:044,rel-stack,postHistory,CreationDate,datetime,time,CreationDate,row_time,CreationDate,inclusive,no,direct,high,History row is written at CreationDate of that specific revision event.
+rel-stack:045,rel-stack,postHistory,PostHistoryTypeId,int,value,CreationDate,row_time,CreationDate,inclusive,no,direct,high,"Type of this historical edit event, fixed when the history row is written."
+rel-stack:046,rel-stack,postHistory,UserDisplayName,str,value,CreationDate,row_time,CreationDate,inclusive,unknown,proxy,medium,Display name of the editor at the time of this specific revision.
+rel-stack:047,rel-stack,postHistory,ContentLicense,str,value,CreationDate,row_time,CreationDate,inclusive,unknown,proxy,medium,License flag associated with this specific revision.
+rel-stack:048,rel-stack,postHistory,RevisionGUID,str,value,CreationDate,row_time,CreationDate,inclusive,no,direct,high,Groups multi-row edits belonging to one revision; fixed once written.
+rel-stack:049,rel-stack,postHistory,Text,str,value,CreationDate,row_time,CreationDate,inclusive,no,direct,high,"Holds the specific historical revision content as of this CreationDate -- unlike posts.Body this is not the current live state, so it is genuinely time-anchored."
+rel-stack:050,rel-stack,postHistory,Comment,str,value,CreationDate,row_time,CreationDate,inclusive,unknown,proxy,medium,Edit summary written once at revision time.
+rel-event:001,rel-event,user_friends,user,key,key,,unknown,,unknown,unknown,uncheckable,high,Friendship edges carry no timestamp in the source data (table_time_col is empty). There is no defensible way to bound when this edge became known. Exclude.
+rel-event:002,rel-event,user_friends,friend,key,key,,unknown,,unknown,unknown,uncheckable,high,Friendship edges carry no timestamp in the source data (table_time_col is empty). There is no defensible way to bound when this edge became known. Exclude.
+rel-event:003,rel-event,event_interest,user,key,key,timestamp,row_time,timestamp,inclusive,no,direct,high,"Keys of the interest/RSVP row, available once the row is recorded."
+rel-event:004,rel-event,event_interest,event,key,key,timestamp,row_time,timestamp,inclusive,no,direct,high,"Keys of the interest/RSVP row, available once the row is recorded."
+rel-event:005,rel-event,event_interest,timestamp,datetime,time,timestamp,row_time,timestamp,inclusive,no,direct,high,Defines the row time itself.
+rel-event:006,rel-event,event_interest,invited,int,value,timestamp,row_time,timestamp,inclusive,no,direct,high,Interest flags are recorded together with `timestamp` as a single static response row in this dataset; no separate revision history.
+rel-event:007,rel-event,event_interest,interested,int,value,timestamp,row_time,timestamp,inclusive,no,direct,high,Interest flags are recorded together with `timestamp` as a single static response row in this dataset; no separate revision history.
+rel-event:008,rel-event,event_interest,not_interested,int,value,timestamp,row_time,timestamp,inclusive,no,direct,high,Interest flags are recorded together with `timestamp` as a single static response row in this dataset; no separate revision history.
+rel-event:009,rel-event,event_attendees,event,key,key,start_time,column_time,start_time,unknown,unknown,proxy,medium,"RSVP membership must exist by start_time at the latest, but the actual response time is not recorded. start_time is used only as a conservative upper bound, not a tight availability time."
+rel-event:010,rel-event,event_attendees,user_id,key,key,start_time,column_time,start_time,unknown,unknown,proxy,medium,"RSVP membership must exist by start_time at the latest, but the actual response time is not recorded. start_time is used only as a conservative upper bound, not a tight availability time."
+rel-event:011,rel-event,event_attendees,start_time,datetime,time,start_time,row_time,start_time,inclusive,no,direct,high,Defines the row's own time reference (the event's start).
+rel-event:012,rel-event,event_attendees,status,str,value,start_time,unknown,,unknown,yes,uncheckable,high,"Attendance status (yes/no/maybe/invited) can be set or changed at any point before or around the event. The table only exposes the event's start_time, not when this particular status value was set or last changed -- do not copy the table_time_col for this column."
+rel-event:013,rel-event,users,user_id,key,key,joinedAt,row_time,joinedAt,inclusive,no,direct,high,Immutable account identifier / defines the row time itself.
+rel-event:014,rel-event,users,joinedAt,datetime,time,joinedAt,row_time,joinedAt,inclusive,no,direct,high,Immutable account identifier / defines the row time itself.
+rel-event:015,rel-event,users,birthyear,float,value,joinedAt,row_time,joinedAt,unknown,unknown,proxy,medium,"Static one-time profile snapshot in this dataset (no separate profile-edit-history table, unlike rel-stack's continuously-edited user profiles); treated as anchored to joinedAt but with reduced confidence since the export process is not documented to guarantee this."
+rel-event:016,rel-event,users,timezone,float,value,joinedAt,row_time,joinedAt,unknown,unknown,proxy,medium,"Static one-time profile snapshot in this dataset (no separate profile-edit-history table, unlike rel-stack's continuously-edited user profiles); treated as anchored to joinedAt but with reduced confidence since the export process is not documented to guarantee this."
+rel-event:017,rel-event,users,locale,str,value,joinedAt,row_time,joinedAt,unknown,unknown,proxy,medium,"Static one-time profile snapshot in this dataset (no separate profile-edit-history table, unlike rel-stack's continuously-edited user profiles); treated as anchored to joinedAt but with reduced confidence since the export process is not documented to guarantee this."
+rel-event:018,rel-event,users,gender,str,value,joinedAt,row_time,joinedAt,unknown,unknown,proxy,medium,"Static one-time profile snapshot in this dataset (no separate profile-edit-history table, unlike rel-stack's continuously-edited user profiles); treated as anchored to joinedAt but with reduced confidence since the export process is not documented to guarantee this."
+rel-event:019,rel-event,users,location,str,value,joinedAt,row_time,joinedAt,unknown,unknown,proxy,medium,"Static one-time profile snapshot in this dataset (no separate profile-edit-history table, unlike rel-stack's continuously-edited user profiles); treated as anchored to joinedAt but with reduced confidence since the export process is not documented to guarantee this."
+rel-event:020,rel-event,events,event_id,key,key,start_time,row_time,start_time,inclusive,no,direct,high,"Event listing row is written at creation, necessarily no later than start_time."
+rel-event:021,rel-event,events,user_id,key,key,start_time,row_time,start_time,inclusive,no,direct,high,"Event listing row is written at creation, necessarily no later than start_time."
+rel-event:022,rel-event,events,start_time,datetime,time,start_time,row_time,start_time,inclusive,no,direct,high,"Event listing row is written at creation, necessarily no later than start_time."
+rel-event:023,rel-event,events,lat,float,value,start_time,row_time,start_time,inclusive,no,direct,high,Event location fields set at listing creation and not expected to change; creation precedes or coincides with start_time.
+rel-event:024,rel-event,events,lng,float,value,start_time,row_time,start_time,inclusive,no,direct,high,Event location fields set at listing creation and not expected to change; creation precedes or coincides with start_time.
+rel-event:025,rel-event,events,c_1,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:026,rel-event,events,c_2,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:027,rel-event,events,c_3,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:028,rel-event,events,c_4,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:029,rel-event,events,c_5,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:030,rel-event,events,c_6,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:031,rel-event,events,c_7,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:032,rel-event,events,c_8,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:033,rel-event,events,c_9,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:034,rel-event,events,c_10,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:035,rel-event,events,c_11,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:036,rel-event,events,c_12,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:037,rel-event,events,c_13,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:038,rel-event,events,c_14,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:039,rel-event,events,c_15,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:040,rel-event,events,c_16,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:041,rel-event,events,c_17,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:042,rel-event,events,c_18,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:043,rel-event,events,c_19,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:044,rel-event,events,c_20,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:045,rel-event,events,c_21,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:046,rel-event,events,c_22,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:047,rel-event,events,c_23,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:048,rel-event,events,c_24,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:049,rel-event,events,c_25,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:050,rel-event,events,c_26,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:051,rel-event,events,c_27,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:052,rel-event,events,c_28,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:053,rel-event,events,c_29,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:054,rel-event,events,c_30,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:055,rel-event,events,c_31,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:056,rel-event,events,c_32,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:057,rel-event,events,c_33,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:058,rel-event,events,c_34,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:059,rel-event,events,c_35,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:060,rel-event,events,c_36,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:061,rel-event,events,c_37,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:062,rel-event,events,c_38,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:063,rel-event,events,c_39,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:064,rel-event,events,c_40,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:065,rel-event,events,c_41,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:066,rel-event,events,c_42,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:067,rel-event,events,c_43,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:068,rel-event,events,c_44,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:069,rel-event,events,c_45,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:070,rel-event,events,c_46,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:071,rel-event,events,c_47,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:072,rel-event,events,c_48,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:073,rel-event,events,c_49,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:074,rel-event,events,c_50,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:075,rel-event,events,c_51,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:076,rel-event,events,c_52,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:077,rel-event,events,c_53,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:078,rel-event,events,c_54,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:079,rel-event,events,c_55,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:080,rel-event,events,c_56,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:081,rel-event,events,c_57,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:082,rel-event,events,c_58,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:083,rel-event,events,c_59,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:084,rel-event,events,c_60,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:085,rel-event,events,c_61,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:086,rel-event,events,c_62,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:087,rel-event,events,c_63,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:088,rel-event,events,c_64,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:089,rel-event,events,c_65,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:090,rel-event,events,c_66,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:091,rel-event,events,c_67,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:092,rel-event,events,c_68,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:093,rel-event,events,c_69,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:094,rel-event,events,c_70,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:095,rel-event,events,c_71,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:096,rel-event,events,c_72,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:097,rel-event,events,c_73,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:098,rel-event,events,c_74,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:099,rel-event,events,c_75,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:100,rel-event,events,c_76,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:101,rel-event,events,c_77,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:102,rel-event,events,c_78,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:103,rel-event,events,c_79,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:104,rel-event,events,c_80,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:105,rel-event,events,c_81,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:106,rel-event,events,c_82,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:107,rel-event,events,c_83,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:108,rel-event,events,c_84,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:109,rel-event,events,c_85,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:110,rel-event,events,c_86,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:111,rel-event,events,c_87,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:112,rel-event,events,c_88,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:113,rel-event,events,c_89,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:114,rel-event,events,c_90,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:115,rel-event,events,c_91,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:116,rel-event,events,c_92,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:117,rel-event,events,c_93,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:118,rel-event,events,c_94,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:119,rel-event,events,c_95,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:120,rel-event,events,c_96,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:121,rel-event,events,c_97,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:122,rel-event,events,c_98,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:123,rel-event,events,c_99,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:124,rel-event,events,c_100,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:125,rel-event,events,c_other,int,value,start_time,row_time,start_time,inclusive,no,proxy,medium,"Derived word-count/topic features of the event description, fixed once the listing is created; treated as a proxy since they are not raw timestamped fields themselves."
+rel-event:126,rel-event,events,city,str,value,start_time,row_time,start_time,inclusive,no,direct,high,Event location fields set at listing creation and not expected to change; creation precedes or coincides with start_time.
+rel-event:127,rel-event,events,state,str,value,start_time,row_time,start_time,inclusive,no,direct,high,Event location fields set at listing creation and not expected to change; creation precedes or coincides with start_time.
+rel-event:128,rel-event,events,zip,str,value,start_time,row_time,start_time,inclusive,no,direct,high,Event location fields set at listing creation and not expected to change; creation precedes or coincides with start_time.
+rel-event:129,rel-event,events,country,str,value,start_time,row_time,start_time,inclusive,no,direct,high,Event location fields set at listing creation and not expected to change; creation precedes or coincides with start_time.

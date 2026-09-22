@@ -17,5 +17,12 @@
     "human_vote": false,
     "summary": "model_annotation_summary.json",
     "operational_map": "provisional_operational_map.csv"
+  },
+  "annotator_1_csv": {
+    "filled_by": "ai_pass",
+    "human_vote": false,
+    "not_blind": "same conversation had already viewed provisional_operational_map.csv before this pass was written, so it does not even satisfy this experiment's own independence_rule for a blind pass",
+    "counts_toward_human_annotations_required": false,
+    "note": "Does not occupy or satisfy either of the two required human annotator slots. A human annotator filling this same file later still counts as annotator_1."
   }
 }
