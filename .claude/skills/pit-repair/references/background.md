@@ -1,49 +1,65 @@
-# Откуда взят протокол pit-repair
+# Where the pit-repair protocol comes from
 
-Скилл переупаковывает цикл из `pilot/a2_full_fetch.py` +
-`pilot/a2_full_validate.py` (эксперимент A2) и `prestudy/oracle.py`
-(harness-v1). Ниже числа, на которые опираются оговорки в SKILL.md; все они
-из `docs/experiments/` (статус отчётов `in_review`).
+This skill repackages a loop validated by a differential-execution harness
+plus a repair loop, run against the Olist e-commerce corpus. The numbers
+below back the caveats in `SKILL.md`; full write-ups live in
+`docs/results.md`. `scripts/checker_core.py` is a standalone
+implementation inside this skill, with no dependency on the path to any
+external repository or directory such as `prestudy/`.
 
-| Эксперимент | Что | Результат |
+| Measurement | What | Result |
 |---|---|---|
-| A2 (RQ0) | F1-цикл, `z-ai/glm-5.3-flash`, до 5 итераций, M=76 | CLEAN@5 = 75/76 = 98.7%; CLEAN@1 = 65/76 |
-| A4 (RQ2б) | тот же цикл, 3 независимых повтора, 62 программы | CLEAN@5 = 182/186 = 97.8%, cluster bootstrap 95% CI [95.2%, 100%] |
-| A3 (RQ2а) | детекция чтением кода, режим F1 | recall 97.3%, FPR 12.0% |
-| A5 (RQ3) | плотность моментов и ложные срабатывания canary | witness FPR 0/30; canary FPR 4/30 = 13.3% |
-| Пилот D | F0 («проверь код») против F1 | F0 = 1/12 CLEAN, F1 = 11/12 |
+| Direct-invocation repair loop | fixed repair instruction, `z-ai/glm-5.3-flash`, up to 5 iterations, 76 programs | CLEAN@5 = 75/76 = 98.7%; CLEAN@1 = 65/76 |
+| Repeatability of the repair loop | same loop, 3 independent repeats, 62 programs | CLEAN@5 = 182/186 = 97.8%, cluster bootstrap 95% CI [95.2%, 100%] |
+| Code-reading detection | model reads the code and reports a verdict, same fixed instruction | recall 97.3%, false-positive rate 12.0% |
+| Prediction-time density and canary false positives | how many tested moments are needed, and how often canary fires on clean code | witness false-positive rate 0/30; canary false-positive rate 4/30 = 13.3% |
+| Self-check vs. named error class | "check your own code" vs. being told the error class | self-check 1/12 CLEAN, named class 11/12 |
 
-## Что именно проверяет `pit_check.py`
+## What `pit_check.py` actually checks
 
-- `oracle.truncate(db, t)`: оставляет строки с временем ≤ t по колонкам
-  `TIME_COLS` (`orders.order_purchase_timestamp`, `order_items.ts`,
-  `reviews.review_creation_date`, `payments.ts`).
-- `oracle.perturb_canary(db, t)`: в строках с временем > t подменяет
-  значения непрозрачным сентинелом (числа + 7919, даты + 10 лет за
-  горизонт, категории `__canary_sentinel__`); в self-availability каналах
-  (даты доставки и т.п.) подменяет значения, недоступные на t.
-- `oracle.frames_equal`: сравнение по столбцам с допуском 1e-9 и
-  NaN==NaN.
-- Сущности: 15 товаров, `RandomState(0)` из `labels(seed)`; таймаут 30 с
-  на вызов; песочница: только `pandas`/`numpy`, запрещены файловые,
-  сетевые и системные вызовы (тот же список, что в
-  `pilot/a2_draft_validate.py`).
+The numbers in the table above were measured on the Olist availability map
+(`references/example-availability-map.olist.json`, the `time_cols`/
+`self_availability_cols`/`gatekeeper_cols` values originally worked out
+while developing the protocol). The code itself
+(`scripts/checker_core.py`) does not bake the map in -- it's an input
+parameter, `--availability-map`; below is what that map meant on the
+corpus this was validated against:
 
-## Единственный провал A2
+- `checker_core.truncate(db, t, time_cols)`: keeps rows with time ≤ t per
+  the `time_cols` columns (in the example -- `orders.order_purchase_timestamp`,
+  `order_items.ts`, `reviews.review_creation_date`, `payments.ts`).
+- `checker_core.perturb_canary(db, t, time_cols, ...)`: in rows with time
+  > t, replaces values with an opaque sentinel (numbers +7919, dates +10
+  years past the horizon, categories → `__canary_sentinel__`); in
+  self-availability channels (in the example -- delivery dates, review
+  response) replaces values not yet available at t.
+- `checker_core.frames_equal`: per-column comparison with 1e-9 tolerance
+  and NaN==NaN.
+- Entities: 15 products (`--n-entities`), `RandomState(0)` via
+  `sample_entities(db, entity_table, entity_column, n)`; 30s timeout per
+  call; sandbox: only `pandas`/`numpy`, file/network/system calls
+  forbidden.
 
-`deepseek-v4-flash-0731#79`, UID `f1cade690ca333e8`: после пяти итераций
-F1 witness молчит, canary стабильно показывает `delivered_recency_days` на
-всех шести моментах.
+## The one holdout in the direct-invocation run
 
-## Каналы расхождения LLM-детектора с картой (A3, режим F1)
+One program (author model `deepseek-v4-flash-0731`, program uid
+`f1cade690ca333e8`): after five repair iterations the witness level stays
+silent, but canary consistently flags a delivery-recency feature at every
+one of the six tested prediction times.
 
-- изменяемый `order_status` (4 случая);
-- задержанная доступность платежа (3);
-- `review_answer_timestamp` вместо `review_creation_date` (2).
+## Where the model's code reading disagreed with the map
 
-## Дисциплина безопасности
+Measured while validating code-reading detection against the same map:
 
-Сетевой этап (получение ответа модели) и этап исполнения сгенерированного
-кода в A2 были разными процессами; перед исполнением ключ удалялся из
-окружения. `pit_check.py` воспроизводит вторую половину этого правила:
-отказывается стартовать при наличии ключа провайдера в окружении.
+- a mutable order-status field (4 cases);
+- delayed payment availability (3 cases);
+- a review-response timestamp read where the map declares the
+  review-creation timestamp (2 cases).
+
+## Safety discipline
+
+In the underlying research protocol, the network step (getting the model's
+response) and the step that executes the generated code were separate
+processes; the provider key was removed from the environment before
+execution. `pit_check.py` reproduces the second half of that rule: it
+refuses to start if a provider key is present in the environment.

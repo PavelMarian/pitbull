@@ -1,33 +1,37 @@
 #!/usr/bin/env python3
-"""pit-repair: дифференциальная проверка функции признаков на чтение будущего.
+"""pit-repair: differential check of a feature function for reading the future.
 
-Один вызов = одна итерация цикла «проверка → починка → проверка»:
+One call = one iteration of the "check -> repair -> check" loop:
 
-    pit_check.py --code get_features.py [--state pit_state.json]
+    pit_check.py --code get_features.py --db-dir DB/ --availability-map map.json \\
+                  --entity-table orders --entity-column product_id
 
-Что делает:
-  1. Отказывается работать, если в окружении есть ключ LLM-провайдера
-     (OPENROUTER_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY). Скрипт
-     исполняет непроверенный код, сгенерированный моделью; сетевой этап и
-     этап исполнения должны быть разными процессами (дисциплина A2).
-  2. Загружает код в песочнице (AST-фильтр + урезанные builtins,
-     как в pilot/a2_draft_validate.py) и вызывает get_features трижды на
-     каждом моменте: полная база / усечённая база (oracle.truncate) /
-     база с canary-возмущением (oracle.perturb_canary).
-  3. Расхождение full-vs-truncated = witness (доказательство чтения строк
-     с временем > seed_time). Расхождение full-vs-canary = canary
-     (чтение поздно доступных полей). Программа «чистая», только если оба
-     уровня молчат на всех моментах: диагностических и held-out.
-  4. Пишет историю итераций в state-файл (состав полей как в
-     pilot/a2_full_manifest.json: clean, clean_at, history[...].checks).
+What it does:
+  1. Refuses to run if an LLM provider key is present in the environment
+     (OPENROUTER_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY). This process
+     executes unvetted model-generated code; the network step and the
+     execution step must be separate processes.
+  2. Loads the code in a sandbox (AST filter + a restricted builtins set)
+     and calls get_features three times per prediction time: full database /
+     truncated database (checker_core.truncate) / canary-perturbed database
+     (checker_core.perturb_canary).
+  3. A full-vs-truncated divergence is a witness (proof the program read a
+     row timestamped later than seed_time). A full-vs-canary divergence is a
+     canary hit (reading a field that becomes available only after its own
+     row's time, e.g. a delivery date). The program is CLEAN only if both
+     levels stay silent at every tested time: development and held-out.
+  4. Writes iteration history to a state file next to the code.
 
-Коды выхода: 0 = CLEAN, 1 = LEAK (нужна починка), 2 = кандидат не
-исполнился, 3 = отказ по дисциплине безопасности / ошибка аргументов,
-4 = бюджет итераций исчерпан (статус failed).
+Exit codes: 0 = CLEAN, 1 = LEAK (needs repair), 2 = candidate didn't execute,
+3 = safety-discipline refusal / argument error, 4 = iteration budget spent.
 
-Зависимости: prestudy/oracle.py и prestudy/p3_baseline_run.py из репозитория
-PITBULL (корень ищется от расположения этого файла, либо --pitbull-root /
-PITBULL_ROOT). Данные Olist: P3_OLIST или <root>/PITFALL_olist_data.
+Dependencies: only checker_core.py, next to this script -- no repository
+root, no external database loader. You supply the database (--db-dir, a
+directory of *.csv tables) and the availability map (--availability-map, a
+JSON file naming which column times each table and which columns are
+self-available). See ../references/availability-map.schema.json and
+../references/example-availability-map.olist.json for the format and a
+worked example.
 """
 import argparse
 import ast
@@ -37,16 +41,15 @@ import json
 import os
 import sys
 import time
-import types
 from pathlib import Path
 
-FORBIDDEN_ENV = ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY")
-DEFAULT_DEV_SEEDS = ["2018-01-01", "2018-04-01", "2018-07-01"]
-DEFAULT_HELD_OUT_SEEDS = ["2017-10-01", "2018-02-01", "2018-06-01"]
-DEFAULT_MAX_ITERATIONS = 5
-N_ENTITIES = 15
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import checker_core as core  # noqa: E402
 
-# Тот же AST-фильтр, что в pilot/a2_draft_validate.py (A2/A4).
+FORBIDDEN_ENV = ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY")
+DEFAULT_MAX_ITERATIONS = 5
+DEFAULT_N_ENTITIES = 15
+
 ALLOWED_IMPORTS = {"pandas", "numpy"}
 BANNED_NAMES = {"open", "exec", "eval", "compile", "input", "breakpoint", "help", "globals",
                 "locals", "vars", "getattr", "setattr", "delattr", "__import__"}
@@ -63,37 +66,38 @@ def refuse_if_keys_in_env():
     present = [k for k in FORBIDDEN_ENV if os.environ.get(k)]
     if present:
         sys.stderr.write(
-            "pit_check: отказ. В окружении есть ключ провайдера: "
+            "pit_check: refusing. LLM provider key present in environment: "
             + ", ".join(present)
-            + ". Этот процесс исполняет сгенерированный код; запустите его в окружении "
-              "без ключей (unset ...), как требует дисциплина A2.\n")
+            + ". This process executes generated code; run it in an environment "
+              "without keys (unset ...) -- the network step and the execution step "
+              "must be separate processes.\n")
         sys.exit(3)
 
 
-def find_root(explicit):
-    candidates = []
-    if explicit:
-        candidates.append(Path(explicit))
-    if os.environ.get("PITBULL_ROOT"):
-        candidates.append(Path(os.environ["PITBULL_ROOT"]))
-    here = Path(__file__).resolve()
-    candidates.extend(here.parents)
-    for c in candidates:
-        if (c / "prestudy" / "oracle.py").exists() and (c / "prestudy" / "p3_baseline_run.py").exists():
-            return c.resolve()
-    sys.stderr.write("pit_check: не найден корень PITBULL (prestudy/oracle.py); "
-                     "укажите --pitbull-root или PITBULL_ROOT.\n")
-    sys.exit(3)
+def load_availability_map(path):
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    time_cols = raw.get("time_cols", {})
+    if not time_cols:
+        sys.stderr.write("pit_check: availability map has an empty time_cols -- "
+                          "nothing would ever be truncated.\n")
+        sys.exit(3)
+    return {
+        "time_cols": time_cols,
+        "self_availability_cols": raw.get("self_availability_cols", {}),
+        "gatekeeper_cols": raw.get("gatekeeper_cols", {}),
+        "key_hints": tuple(raw.get("key_hints", core.DEFAULT_KEY_HINTS)),
+    }
 
 
-def load_harness(root):
-    # p3_baseline_run импортирует litellm ради генерации; здесь сеть не нужна,
-    # и в окружении проверки клиента LLM быть не должно. Подменяем модуль пустышкой.
-    sys.modules.setdefault("litellm", types.ModuleType("litellm"))
-    sys.path.insert(0, str(root / "prestudy"))
-    import p3_baseline_run as H  # noqa: E402
-    from oracle import frames_equal, perturb_canary, truncate  # noqa: E402
-    return H, frames_equal, perturb_canary, truncate
+def parse_dates_from_map(avail_map):
+    """Union of time_cols and self_availability_cols per table, so load_db
+    parses exactly the columns the map declares as time-bearing."""
+    out = {}
+    for name, col in avail_map["time_cols"].items():
+        out.setdefault(name, []).append(col)
+    for name, cols in avail_map["self_availability_cols"].items():
+        out.setdefault(name, []).extend(cols)
+    return out
 
 
 def inspect_code(code):
@@ -142,27 +146,29 @@ def load_program(code, pd, np):
     return fn
 
 
-def make_checker(H, frames_equal, perturb_canary, truncate, timeout):
-    import numpy as np
-    import pandas as pd
-
+def make_checker(db, avail_map, entity_table, entity_column, n_entities, timeout):
     def entities(seed):
-        _, products, _ = H.labels(seed)
-        return np.random.RandomState(0).choice(products, size=N_ENTITIES, replace=False)
+        return core.sample_entities(db, entity_table, entity_column, n_entities, seed=0)
 
     def diff_columns(left, right):
         if left is None or right is None or not hasattr(left, "shape") or not hasattr(right, "shape"):
             return ["__shape__"] if left is not right else []
         if left.shape != right.shape or list(left.columns) != list(right.columns):
             return ["__shape__"]
-        return [col for col in left.columns if not frames_equal(left[[col]], right[[col]])]
+        return [col for col in left.columns if not core.frames_equal(left[[col]], right[[col]])]
 
     def check(fn, seed):
+        import pandas as pd
         t = pd.Timestamp(seed)
         ids = entities(seed)
-        full = H._call_with_timeout(fn, H.DB, ids, t, timeout=timeout)
-        trunc = H._call_with_timeout(fn, truncate(H.DB, t), ids, t, timeout=timeout)
-        canary = H._call_with_timeout(fn, perturb_canary(H.DB, t), ids, t, timeout=timeout)
+        full = core.call_with_timeout(fn, db, ids, t, timeout=timeout)
+        trunc_db = core.truncate(db, t, avail_map["time_cols"])
+        canary_db = core.perturb_canary(db, t, avail_map["time_cols"],
+                                         self_avail_cols=avail_map["self_availability_cols"],
+                                         gatekeeper_cols=avail_map["gatekeeper_cols"],
+                                         key_hints=avail_map["key_hints"])
+        trunc = core.call_with_timeout(fn, trunc_db, ids, t, timeout=timeout)
+        canary = core.call_with_timeout(fn, canary_db, ids, t, timeout=timeout)
         witness_cols = diff_columns(full, trunc)
         canary_cols = diff_columns(full, canary)
         return {"seed": seed, "witness": bool(witness_cols), "canary": bool(canary_cols),
@@ -189,23 +195,30 @@ def load_state(path, code, args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--code", required=True, help="файл с get_features (кандидат)")
-    parser.add_argument("--state", default=None, help="state-файл истории (по умолчанию pit_state.json рядом с кодом)")
-    parser.add_argument("--dev-seeds", default=",".join(DEFAULT_DEV_SEEDS))
-    parser.add_argument("--held-out-seeds", default=",".join(DEFAULT_HELD_OUT_SEEDS))
+    parser.add_argument("--code", required=True, help="file with get_features (the candidate)")
+    parser.add_argument("--db-dir", required=True, help="directory of *.csv tables")
+    parser.add_argument("--availability-map", required=True,
+                         help="JSON: time_cols (required), self_availability_cols, "
+                              "gatekeeper_cols, key_hints (all optional)")
+    parser.add_argument("--entity-table", required=True, help="table to sample entity ids from")
+    parser.add_argument("--entity-column", required=True, help="id column within --entity-table")
+    parser.add_argument("--n-entities", type=int, default=DEFAULT_N_ENTITIES)
+    parser.add_argument("--dev-seeds", required=True, help="comma-separated prediction times")
+    parser.add_argument("--held-out-seeds", required=True,
+                         help="comma-separated prediction times not shown in --dev-seeds' role")
+    parser.add_argument("--state", default=None, help="history state file (default: pit_state.json next to --code)")
     parser.add_argument("--max-iterations", type=int, default=DEFAULT_MAX_ITERATIONS)
-    parser.add_argument("--timeout", type=int, default=30, help="секунд на один вызов get_features")
-    parser.add_argument("--pitbull-root", default=None)
-    parser.add_argument("--json", action="store_true", help="печатать только JSON-итог")
+    parser.add_argument("--timeout", type=int, default=30, help="seconds allowed per get_features call")
+    parser.add_argument("--json", action="store_true", help="print only the final JSON summary")
     args = parser.parse_args()
     args.dev_seeds = [s for s in args.dev_seeds.split(",") if s]
     args.held_out_seeds = [s for s in args.held_out_seeds.split(",") if s]
 
     refuse_if_keys_in_env()
-    root = find_root(args.pitbull_root)
+    avail_map = load_availability_map(args.availability_map)
     code_path = Path(args.code)
     if not code_path.exists():
-        sys.stderr.write(f"pit_check: нет файла {code_path}\n")
+        sys.stderr.write(f"pit_check: no such file {code_path}\n")
         sys.exit(3)
     code = code_path.read_text(encoding="utf-8")
     state_path = Path(args.state) if args.state else code_path.with_name("pit_state.json")
@@ -214,15 +227,15 @@ def main():
     if state["status"] in ("clean", "failed"):
         summary = {"verdict": state["status"].upper(), "iteration": len(state["history"]) - 1,
                    "clean_at": state["clean_at"], "program_uid": state["program_uid"],
-                   "next_action": "цикл уже завершён; новые проверки не засчитываются"}
+                   "next_action": "loop already finished; new checks don't count"}
         print(json.dumps(summary, ensure_ascii=False))
         sys.exit(0 if state["status"] == "clean" else 4)
 
-    iteration = len(state["history"])  # 0 = исходная детекция, 1..N = кандидаты починки
-    H, frames_equal, perturb_canary, truncate = load_harness(root)
+    iteration = len(state["history"])  # 0 = initial detection, 1..N = repair candidates
+    db = core.load_db(args.db_dir, parse_dates=parse_dates_from_map(avail_map))
     import numpy as np
     import pandas as pd
-    check = make_checker(H, frames_equal, perturb_canary, truncate, args.timeout)
+    check = make_checker(db, avail_map, args.entity_table, args.entity_column, args.n_entities, args.timeout)
 
     entry = {"iteration": iteration, "candidate_sha256": sha(code), "code": code,
              "timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")}
@@ -257,20 +270,20 @@ def main():
     canary = sorted({c for r in entry.get("checks", []) for c in r["canary_columns"]})
     if entry["status"] != "ok":
         verdict, code_ = "ERROR", 2
-        nxt = (f"кандидат не исполнился ({entry['error']}); итерация {iteration}/{state['max_iterations']} "
-               f"засчитана. " + ("Устраните причину, выполните шаг починки из SKILL.md и запустите проверку снова." if state["status"] == "pending"
-                                 else "Бюджет итераций исчерпан: статус failed."))
+        nxt = (f"candidate didn't execute ({entry['error']}); iteration {iteration}/{state['max_iterations']} "
+               "counted. " + ("Fix the cause, apply the repair step from SKILL.md, and check again."
+                               if state["status"] == "pending" else "Iteration budget spent: status failed."))
     elif entry["clean"]:
         verdict, code_ = "CLEAN", 0
-        nxt = ("исходный код чист, починка не нужна." if iteration == 0
-               else f"починка подтверждена на итерации {iteration}; остановитесь.")
+        nxt = ("source is clean, no repair needed." if iteration == 0
+               else f"repair confirmed at iteration {iteration}; stop.")
     elif state["status"] == "failed":
         verdict, code_ = "FAILED", 4
-        nxt = f"утечка сохраняется после {state['max_iterations']} итераций починки; остановитесь и отчитайтесь."
+        nxt = f"leak persists after {state['max_iterations']} repair iterations; stop and report."
     else:
         verdict, code_ = "LEAK", 1
-        nxt = (f"утечка найдена; использовано {iteration}/{state['max_iterations']} итераций починки. "
-               "Перепишите get_features по инструкции починки из SKILL.md и запустите проверку снова.")
+        nxt = (f"leak found; used {iteration}/{state['max_iterations']} repair iterations. "
+               "Rewrite get_features per the repair step in SKILL.md and check again.")
     summary = {"verdict": verdict, "iteration": iteration, "program_uid": state["program_uid"],
                "witness_columns": witness, "canary_columns": canary,
                "per_seed": [{k: r[k] for k in ("seed", "split", "witness", "canary")} for r in entry.get("checks", [])],
@@ -281,9 +294,9 @@ def main():
     if not args.json:
         print(f"[pit-repair] iteration {iteration}: {verdict}")
         if witness:
-            print("  witness (доказательство чтения будущего):", ", ".join(witness))
+            print("  witness (proof of reading the future):", ", ".join(witness))
         if canary:
-            print("  canary (чтение поздно доступных полей):", ", ".join(canary))
+            print("  canary (reading a late-available field):", ", ".join(canary))
         for r in entry.get("checks", []):
             print(f"  {r['split']:8s} {r['seed']}: witness={int(r['witness'])} canary={int(r['canary'])}")
         print("  next:", nxt)

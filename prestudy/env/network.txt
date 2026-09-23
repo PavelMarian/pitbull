@@ -1,7 +1,0 @@
-200  https://relbench.stanford.edu
-200  https://huggingface.co
-200  https://data.4tu.nl
-200  https://api.github.com
-200  https://raw.githubusercontent.com
-200  https://www.kaggle.com/api/v1/datasets/list
-200  https://pypi.org/simple/relbench/

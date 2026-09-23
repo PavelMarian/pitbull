@@ -1,61 +1,78 @@
-# PITBULL — статья FSE 2027
+# PITBULL — Temporal Safety Skill for Coding Agents
 
-Репозиторий статьи «Closing the Loop: Zero-Configuration Point-in-Time Testing
-and Repair of Generated Feature Code» (проект PITBULL; имя в рукописи —
-плейсхолдер, к ревью анонимизируется). Подача: FSE 2027, **2 октября 2026**.
-Родительский проект — PITFALL (демо подано на ICDM 2026); материалы демо-эры
-лежат в `archive/` и для работы над статьёй не нужны.
+**Demo:** https://pavelmarian.github.io/pitbull/demo/ · **Video:** https://youtu.be/ST8dWf82Zxs · **Paper:** `paper/aaai27_demo/text.pdf`
 
-## С чего начать (порядок чтения, ~40 минут)
+## What it is
 
-1. **`proposals/fse2027_proposal.md`** — план ревизии 5, финальная; дальше
-   прогоны, не ревизии. Самодостаточен: тезис, ярусы A/B/C с датами отсечения,
-   RQ0–RQ3 с baseline'ами и пре-регистрированными исходами, замороженные
-   пороги (§8), календарь с зависимостями (§9), каркас статьи (§10), делёж с
-   ICLR-командой (§11).
-2. **`pilot/REPORT.md`** — что показали пилоты 1 сентября (карта 32/34,
-   плотность 0.94–1.00, canary 19/20, F0=1/12 против F1=11/12) и где код.
-3. **`critique/fse2027_rev4.md`** — финальная критика: всё в плане, но она
-   объясняет, почему план такой (циркулярность RQ2а, единица «программа»,
-   слепые пятна canary).
-4. **`proposals/lit_scan_2026-08.md`** — литература со статусами прочтения;
-   PDF ключевых работ — в `literature/`.
-5. **`proposals/principles.md`** — принципы дисциплины, на которые ссылаются
-   план и критики.
+![PITBULL loop: inputs & temporal contract, differential execution on three database views, detect & localize, agent repair, revalidate](assets/pitbull-loop.webp)
 
-## Код и данные
+PITBULL is an executable skill that catches temporal ("future") data leakage
+in agent-generated feature code, localizes it, and drives the repair to an
+execution-verified result — not a code-review opinion. Point-in-time
+correctness means every feature computed at time `t` depends only on facts
+available at `t`; models miss this on their own (1/12 self-checked, 11/12
+once told the error class), so PITBULL makes the check executable instead
+of advisory.
 
-- `prestudy/oracle.py` — ядро: три прогона (полный / усечённый / canary),
-  `is_pit_correct`, `differing_columns`, допуск. `prestudy/p3_baseline_run.py`
-  — генерация; `prestudy/p3_out/baseline/results.jsonl` — 250 генераций с
-  кодом и witness, из них 61 протекающая = основной набор статьи.
-- `pilot/pilot_a_mapinfer.py` — вывод карты доступности (эвристики v0/v1,
-  ручные карты 6 баз); `pilot/pilot_bc_density_canary.py` — сетка моментов и
-  canary; `pilot/pilot_d_repair.py` — цикл починки F0/F1/F3 через OpenRouter.
-- `rel/` — адаптеры RelBench и SQL-оракул; `audit/` — экспертный SQL
-  (15 файлов, 14 исполняемых).
-- `PITFALL_olist_data/` — Olist; `PITFALL_ext_data` — симлинк на большие базы
-  RelBench; `external/` — пакет TravisTorrent/GHALogs (абзац в Discussion).
+- **Differential witness** — run the candidate `φ(D, e, t)` on the full
+  database and on the database truncated at `t`; any divergence beyond
+  tolerance is a `LEAK`, naming the diverging columns.
+- **Canary** — late-filled fields (delivery date, review, order status) and
+  all future rows get rewritten with marker values; a reacting output is a
+  canary hit (fires on 4/30 clean controls — flagged for human judgment,
+  not auto-blocked).
+- **Repair loop, held-out gate** — on `LEAK`, the agent rewrites the program
+  under a fixed instruction naming the error class; `CLEAN` only if witness
+  and canary stay silent on all dev *and* held-out times; up to 5 repairs.
+  Full history in a state file next to the code.
 
-## Первые задачи (из §9 плана)
+## Key results
 
-1. **К 6 сентября — тег `harness-v1`**: типовой canary (возмущение по типам
-   данных, правило каналов из шапки плана) + перекалибровка допуска. Это
-   обязательство перед ICLR-командой (§11), их календарь на него завязан.
-2. **Разметка механизмов 61 программы** чтением кода (~полдня) — до RQ2б,
-   стратификация нужна при планировании, не после.
-3. **RQ0 на Olist** под per-table картой (ручная карта есть; RelBench — после
-   per-column разметки, аннотаторы сдают к 13 сентября).
+Repair model `z-ai/glm-5.3-flash` on the Olist corpus: 76 leaking programs
+(62 witness + 14 canary-only) written by two code models from a task
+description that never mentions leakage.
 
-## Грабли инфраструктуры
+| Invocation | n | CLEAN@1 | CLEAN@5 | Calls | Cost |
+|---|---|---|---|---|---|
+| Direct, 1 run | 76 | 85.5% | 98.7% | 91 | $0.12 |
+| Direct, 3 runs | 62×3 | 84.4% | 97.8% | 255 | $0.32 |
+| Agent-selected skill (OpenHarness 0.1.4) | 76 | 98.7% | 100% | 578 | $0.48 |
 
-- Версии закреплены: pandas 2.2.3 / numpy 2.2.6 (на pandas 3.x детектор
-  timestamp-колонок ведёт себя иначе — dtype `str` вместо `object`);
-  `requirements.txt` — версии демо, для чисел демо.
-- Большие parquet (rel-amazon, 6.7 ГБ) — только потоково, `pyarrow
-  iter_batches`; `pd.read_parquet` целиком уже ронял машину.
-- Тяжёлые прогоны — на nss-calc2 (18 ядер; креды `SSH_*` в `.env`, не
-  коммитить). LLM-вызовы (OpenRouter, ключ в `.env`) — только с локальной
-  машины: с remote заблокировано, обратный SSH-туннель не использовать.
-- Фиксированный learner всех AUC: LightGBM (n_estimators=300, lr=0.05,
-  random_state=0).
+Exact McNemar (direct vs. skill, same 76 programs): 0 vs. 1 discordant,
+p = 1.0 — statistically indistinguishable, while the skill closes direct
+invocation's one failure (a canary-only leak, fixed at iteration 1 under
+the skill). Also: 182/186 program–run pairs clean within 5 iterations
+across 3 independent direct runs (cluster bootstrap 95% CI [95.2%, 100%]);
+witness 0 false positives / canary 4/30 (13.3%) on clean controls. Full
+numbers and reproduction: `docs/results.md`.
+
+**Limitations:** one database, one task, one repair model, a corpus
+dominated by review leakage; hand-written availability map; `CLEAN` scoped
+to six tested times; canary flags 13% of clean programs and blocks
+acceptance pending human judgment; one skill run per program, in which the
+agent could read the checker's own source.
+
+## Install for an agent
+
+```bash
+unset OPENROUTER_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY   # execution refuses to run with an LLM key present
+
+.claude/skills/pit-repair/bin/pit-check --code get_features.py \
+  --db-dir <directory of *.csv tables> \
+  --availability-map <JSON map, see references/availability-map.md> \
+  --entity-table <table> --entity-column <column> \
+  --dev-seeds 2018-01-01,2018-04-01,2018-07-01 \
+  --held-out-seeds 2017-10-01,2018-02-01,2018-06-01
+```
+
+The skill works on any relational database given a hand-written
+availability map — it doesn't ship a default one. Claude Code / compatible
+agents pick up the skill automatically from
+`.claude/skills/pit-repair/SKILL.md` (candidate interface, protocol,
+stopping rule). For OpenHarness, symlink it into
+`<config>/skills/pit-repair` (see `pilot/d1_make_ohcfg.py`) — it does not
+read `.claude/skills/` directly. The checker is self-contained
+(`scripts/checker_core.py`, next to `pit_check.py`) — no dependency on any
+other part of this repository. Exit codes: `0` CLEAN, `1` LEAK, `2`
+candidate didn't execute, `3` safety/argument refusal, `4` iteration budget
+exhausted.
