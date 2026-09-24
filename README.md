@@ -4,7 +4,7 @@
 
 ## What it is
 
-![PITBULL loop: inputs & temporal contract, differential execution on three database views, detect & localize, agent repair, revalidate](assets/pitbull-loop.webp)
+![PITBULL loop: inputs & temporal contract, differential execution on three database views, detect & localize, agent repair, revalidate](./assets/pitbull_loop.webp)
 
 PITBULL is an executable skill that catches temporal ("future") data leakage
 in agent-generated feature code, localizes it, and drives the repair to an
@@ -70,7 +70,7 @@ availability map — it doesn't ship a default one. Claude Code / compatible
 agents pick up the skill automatically from
 `.claude/skills/pit-repair/SKILL.md` (candidate interface, protocol,
 stopping rule). For OpenHarness, symlink it into
-`<config>/skills/pit-repair` (see `pilot/d1_make_ohcfg.py`) — it does not
+`<config>/skills/pit-repair` — it does not
 read `.claude/skills/` directly. The checker is self-contained
 (`scripts/checker_core.py`, next to `pit_check.py`) — no dependency on any
 other part of this repository. Exit codes: `0` CLEAN, `1` LEAK, `2`
