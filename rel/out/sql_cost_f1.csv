@@ -1,5 +1,0 @@
-file,dataset,task,regime,n_train,n_test,pos_rate,n_features,auc,probe,probe_feature,probe_datarobot,probe_h2o,seconds,inflation_pp
-f1_driver-dnf,f1,driver-dnf,as_published,1604,702,0.705,47,0.782213,0.818401,driver_position,silent,warning,12.5,-0.3328
-f1_driver-dnf,f1,driver-dnf,corrected,1604,702,0.705,47,0.785541,0.818401,driver_position,silent,warning,11.5,0.0
-f1_driver-top3,f1,driver-top3,as_published,1353,726,0.176,47,0.905166,0.90075,constructor_position,silent,warning,10.8,0.9537
-f1_driver-top3,f1,driver-top3,corrected,1353,726,0.176,47,0.895629,0.90075,constructor_position,silent,warning,10.1,0.0

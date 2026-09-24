@@ -1,7 +1,0 @@
-task,seed,n,pos_rate,n_classes
-driver_dnf_day_granularity,1996-1998,1065,0.714,2
-driver_dnf_day_granularity,1999-2001,1099,0.709,2
-driver_dnf_day_granularity,2002-2004,1042,0.676,2
-driver_dnf_second_granularity,2008-2010,1164,0.467,2
-driver_dnf_second_granularity,2013-2015,1203,0.489,2
-driver_dnf_second_granularity,2018-2020,1180,0.51,2

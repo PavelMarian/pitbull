@@ -1,4 +1,0 @@
-table,column,time_column,rows_without_stamp,share
-flat,review_score,review_ts,942,0.0084
-flat,late,deliv_ts,2454,0.0218
-flat,delay_days,deliv_ts,2454,0.0218

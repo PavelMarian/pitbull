@@ -6,8 +6,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-.claude/*
-!.claude/commands/
 # large / regenerable
 *.db
 *.db.wal
